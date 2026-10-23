@@ -318,10 +318,10 @@ SYNC_SSH_KNOWN_HOSTS_PATH: Final[str] = _get_env(
 )
 
 # EMULATION
-DISABLE_EMULATOR_JS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_EMULATOR_JS"))
-DISABLE_RUFFLE_RS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_RUFFLE_RS"))
-DISABLE_JSDOS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_JSDOS"))
-DISABLE_PICO8: Final[bool] = safe_str_to_bool(_get_env("DISABLE_PICO8"))
+DISABLE_EMULATOR_JS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_EMULATOR_JS", "true"))
+DISABLE_RUFFLE_RS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_RUFFLE_RS", "true"))
+DISABLE_JSDOS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_JSDOS", "true"))
+DISABLE_PICO8: Final[bool] = safe_str_to_bool(_get_env("DISABLE_PICO8", "true"))
 
 # FRONTEND
 KIOSK_MODE: Final[bool] = safe_str_to_bool(_get_env("KIOSK_MODE"))

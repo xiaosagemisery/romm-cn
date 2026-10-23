@@ -123,6 +123,7 @@ from utils.m3u import generate_m3u_content, playlist_files
 from utils.nginx import FileRedirectResponse, ZipContentLine, ZipResponse
 from utils.router import APIRouter
 from utils.screenshots import continue_playing_screenshot
+from utils.translator import translate_game_metadata
 from utils.validation import ValidationError, parse_comma_separated_ids
 from utils.zip_cache import (
     BULK_CACHE_MAX_ROMS,
@@ -2269,13 +2270,31 @@ async def update_rom(
             log.error(f"Invalid screenshot URL in update_rom: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-    name_value = form_data.name if "name" in provided_fields else rom.name
+    name_value = (
+        form_data.name if "name" in provided_fields else cleaned_data.get("name", rom.name)
+    )
+    summary_value = (
+        form_data.summary
+        if "summary" in provided_fields
+        else cleaned_data.get("summary", rom.summary)
+    )
+
+    if ("name" not in provided_fields and cleaned_data.get("name")) or (
+        "summary" not in provided_fields and cleaned_data.get("summary")
+    ):
+        t_name, t_summary = await translate_game_metadata(
+            cleaned_data.get("name") if "name" not in provided_fields else None,
+            cleaned_data.get("summary") if "summary" not in provided_fields else None,
+        )
+        if "name" not in provided_fields and t_name:
+            name_value = t_name
+        if "summary" not in provided_fields and t_summary:
+            summary_value = t_summary
+
     cleaned_data.update(
         {
             "name": name_value,
-            "summary": (
-                form_data.summary if "summary" in provided_fields else rom.summary
-            ),
+            "summary": summary_value,
         }
     )
 

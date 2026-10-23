@@ -23,4 +23,3 @@ class SocketHandler:
 
 
 socket_handler = SocketHandler(path="/ws/socket.io")
-netplay_socket_handler = SocketHandler(path="/netplay/socket.io")

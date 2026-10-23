@@ -15,7 +15,6 @@ from startup import main
 
 import endpoints.sockets.activity  # noqa
 import endpoints.sockets.logs  # noqa
-import endpoints.sockets.netplay  # noqa
 import endpoints.sockets.scan  # noqa
 import endpoints.sockets.sync  # noqa
 from config import (
@@ -45,7 +44,6 @@ from endpoints.logs import router as logs_router
 from endpoints.memory_cards import router as memory_cards_router
 from endpoints.music import router as music_router
 from endpoints.music_playlists import router as music_playlists_router
-from endpoints.netplay import router as netplay_router
 from endpoints.permissions import router as permissions_router
 from endpoints.platform import router as platform_router
 from endpoints.play_sessions import router as play_sessions_router
@@ -56,7 +54,6 @@ from endpoints.screenshots import router as screenshots_router
 from endpoints.search import router as search_router
 from endpoints.states import router as states_router
 from endpoints.stats import router as stats_router
-from endpoints.streaming import router as streaming_router
 from endpoints.sync import router as sync_router
 from endpoints.tasks import router as tasks_router
 from endpoints.user import router as user_router
@@ -65,7 +62,7 @@ from handler.auth.hybrid_auth import HybridAuthBackend
 from handler.auth.middleware.csrf_middleware import CSRFMiddleware
 from handler.auth.middleware.redis_session_middleware import RedisSessionMiddleware
 from handler.middleware.upload_size_middleware import UploadSizeLimitMiddleware
-from handler.socket_handler import netplay_socket_handler, socket_handler
+from handler.socket_handler import socket_handler
 from logger.formatter import LOGGING_CONFIG
 from utils import get_version
 from utils.context import (
@@ -158,7 +155,6 @@ if not IS_PYTEST_RUN and not DISABLE_CSRF_PROTECTION:
             re.compile(r"^/api/auth/device/init/?$"),
             re.compile(r"^/api/auth/device/token/?$"),
             re.compile(r"^/ws"),
-            re.compile(r"^/netplay"),
         ],
     )
 
@@ -205,13 +201,10 @@ app.include_router(screenshots_router, prefix="/api")
 app.include_router(firmware_router, prefix="/api")
 app.include_router(collections_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
-app.include_router(netplay_router, prefix="/api")
 app.include_router(permissions_router, prefix="/api")
 app.include_router(memory_cards_router, prefix="/api")
-app.include_router(streaming_router, prefix="/api")
 
 app.mount("/ws", socket_handler.socket_app)
-app.mount("/netplay", netplay_socket_handler.socket_app)
 
 add_pagination(app)
 

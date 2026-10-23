@@ -81,6 +81,7 @@ from utils import emoji
 from utils.audio_tags import persist_embedded_cover, remove_persisted_cover
 from utils.filesystem import sanitize_filename
 from utils.platform_aliases import resolve_fs_slug, resolve_platform_slug
+from utils.translator import translate_game_metadata
 
 LOGGER_MODULE_NAME = {"module_name": "scan"}
 
@@ -1549,6 +1550,15 @@ async def scan_rom(
             )
             if ranked[0] == MetadataSource.SGDB:
                 rom_attrs["url_cover"] = sgdb_cover
+
+    if rom_attrs.get("name") or rom_attrs.get("summary"):
+        translated_name, translated_summary = await translate_game_metadata(
+            rom_attrs.get("name"), rom_attrs.get("summary")
+        )
+        if translated_name:
+            rom_attrs["name"] = translated_name
+        if translated_summary:
+            rom_attrs["summary"] = translated_summary
 
     log.info(
         f"{hl(rom_attrs['fs_name'])} identified as {hl(rom_attrs['name'], color=BLUE)} {emoji.EMOJI_ALIEN_MONSTER}",
