@@ -31,3 +31,6 @@
 - Push succeeded to `origin/codex/local-updates-20261024`.
 - No tests were run because this task only pushed an existing commit and recorded the handoff.
 - No generated artifacts.
+
+- Follow-up pushes can use `git push` because this branch already tracks its remote branch.
+
