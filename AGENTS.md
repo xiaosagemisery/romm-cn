@@ -2,6 +2,14 @@
 
 Read and follow [CLAUDE.md](CLAUDE.md) for all repository instructions.
 
+## Change documentation
+
+- For every major change relative to the fork baseline, update `README.md` and `ChangeFromUpstream.md` in the same change.
+- In `README.md`, keep a concise "Changes from the fork baseline" section with one short line per change category and identify the baseline commit.
+- In `ChangeFromUpstream.md`, identify the baseline commit and document each change category, affected files, and the specific behavior added, changed, or removed.
+- Treat feature or API additions and removals, configuration-default changes, persistence changes, and integration changes as major changes. Update both documents before considering the change complete.
+- Compare the actual diff with the baseline; do not rely on commit titles alone.
+
 ## Never run the full backend test suite locally
 
 A bare `uv run pytest` (or `pytest -vv`) over `backend/` takes 20+ minutes and burns a

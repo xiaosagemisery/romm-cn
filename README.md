@@ -45,6 +45,17 @@ RomM (ROM Manager) allows you to scan, enrich, browse and play your game collect
 
 To start using RomM, check out the [Quick Start Guide][docs-quick-start-guide] in the docs. If you are having issues with RomM, please review the page for [troubleshooting steps][docs-troubleshooting].
 
+## Changes from the fork baseline
+
+Compared with `6c3b32582594eb6f94bc858a05db78f33e84b882`:
+
+- **Streaming and netplay:** Removed their backend APIs, socket handlers, support modules, and streaming endpoint tests.
+- **Game metadata:** Added Simplified Chinese translation for scanned and automatically updated game names and summaries, with caching and original-text fallback.
+- **Emulator configuration:** Defaulted EmulatorJS, RuffleRS, JSDos, and PICO-8 to disabled when their environment variables are unset.
+- **Database parsing:** Fixed exception tuple syntax in boolean, float, and integer conversion helpers.
+
+See [ChangeFromUpstream.md](ChangeFromUpstream.md) for file-level details.
+
 ## Contributing
 
 To contribute to RomM, please check [Contribution Guide](./CONTRIBUTING.md).
