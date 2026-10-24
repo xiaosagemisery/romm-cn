@@ -4,7 +4,7 @@
   <img src=".github/resources/isotipo.png" height="180px" width="auto" alt="RomM 标志">
 
   <h3 style="font-size: 25px;">
-    一款美观、强大、可自行托管的 ROM 管理与游玩工具。
+    一款可自行托管、支持游戏元数据简体中文翻译的 ROM 管理工具。
   </h3>
 </div>
 
@@ -20,7 +20,7 @@
 
 # 概述
 
-RomM（ROM 管理器）提供简洁的响应式界面，让你能够扫描游戏收藏、补全游戏资料、浏览和游玩游戏。RomM 支持多个游戏平台、多种命名规则和自定义标签，是模拟器玩家的必备工具。
+romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、整理和浏览游戏收藏，支持多个游戏平台、多种命名规则和自定义标签。当前分支 `codex/remove-streaming-netplay-add-translator` 以游戏库管理和游戏元数据简体中文翻译为重点，已移除串流与联机后端，并将浏览器模拟器设为默认禁用（未设置相应环境变量时）。
 
 ## 功能
 
@@ -28,7 +28,7 @@ RomM（ROM 管理器）提供简洁的响应式界面，让你能够扫描游戏
 - 从 [SteamGridDB][steamgriddb-api] 获取自定义美术素材
 - 展示你在 [Retroachievements][retroachievements-api] 上的游戏成就
 - 提供 [400 多个游戏平台][docs-supported-platforms] 的元数据
-- 使用 [EmulatorJS][docs-emulatorjs] 和 [RuffleRS][docs-rufflers] 直接在浏览器中游玩游戏
+- 扫描或自动更新游戏元数据时，将获取的游戏名称和简介翻译为简体中文，支持缓存，翻译失败时保留原文
 - 与朋友共享游戏库，并限制其访问范围和操作权限
 - 提供适用于 [Playnite][playnite-app]、[Android][argosy-launcher] 和[自定义固件（CFW）][grout]的官方应用
 - 支持多碟游戏、可下载内容（DLC）、模组、改版游戏、补丁和说明书
@@ -37,13 +37,34 @@ RomM（ROM 管理器）提供简洁的响应式界面，让你能够扫描游戏
 
 ## 界面预览
 
+以下截图沿用上游项目，仅供界面参考，不代表本分支的所有功能均可用。
+
 |                                       🖥 桌面端                                        |                                                           📱 移动端                                                            |
 | :------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------: |
 | <img src=".github/resources/screenshots/preview-desktop.webp" alt="桌面端界面预览" /> | <img style="width: 325px; aspect-ratio: auto;" src=".github/resources/screenshots/preview-mobile.webp" alt="移动端界面预览" /> |
 
 ## 安装
 
-开始使用 RomM，请参阅文档中的[快速入门指南][docs-quick-start-guide]。如果使用过程中遇到问题，请参阅[故障排查步骤][docs-troubleshooting]。
+基础部署方式请参阅上游的[快速入门指南][docs-quick-start-guide]，扫描问题可参考[故障排查步骤][docs-troubleshooting]。使用本分支的修改需要基于当前分支源码构建；上游预构建镜像不包含本分支的定制改动。源码部署说明见 [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)。
+
+部署时请检查已有的 `.env`、Compose 配置和容器环境变量。`env.template` 中的四个 `DISABLE_*` 模拟器开关仍为 `false`；直接沿用这些值会启用对应的浏览器模拟器。若希望禁用，请将下表中的四个开关显式设为 `true`。
+
+## 本分支的功能状态
+
+| 功能 | 当前状态 |
+| --- | --- |
+| 游戏库管理 | 保留扫描、元数据获取、浏览、上传、更新、删除和共享等功能。 |
+| 游戏元数据翻译 | 扫描及 ROM 更新流程中自动获取的名称、简介会尝试翻译为简体中文；ROM 更新时显式提交的名称和简介保留原值。 |
+| EmulatorJS | 前端代码保留；未设置 `DISABLE_EMULATOR_JS` 时默认禁用，设为 `false` 可启用。 |
+| RuffleRS | 前端代码保留；未设置 `DISABLE_RUFFLE_RS` 时默认禁用，设为 `false` 可启用。 |
+| JSDos | 前端代码保留；未设置 `DISABLE_JSDOS` 时默认禁用，设为 `false` 可启用。 |
+| PICO-8 | 前端代码保留；未设置 `DISABLE_PICO8` 时默认禁用，设为 `false` 可启用。 |
+| 串流 | 后端 API 和处理模块已移除，当前分支不提供串流服务。 |
+| 联机 | 房间列表 API、联机 Socket.IO 服务和房间管理模块已移除，当前分支不提供该联机服务。 |
+
+前端仍保留部分串流、联机页面和调用代码，其对应后端已移除。页面或入口仍然存在并不表示功能可用，启用浏览器模拟器也不会恢复这些后端服务。
+
+元数据翻译通过 Google 的公开翻译接口进行，需要服务器能够访问 `translate.googleapis.com`。成功结果缓存在进程内存中，进程重启后缓存失效；请求失败时保留原文。此功能翻译游戏名称和简介，不会翻译 ROM 文件内容，也不会自动批量翻译数据库中已有的所有记录。
 
 ## 相对于分叉基线的改动
 
@@ -62,7 +83,7 @@ RomM（ROM 管理器）提供简洁的响应式界面，让你能够扫描游戏
 
 ## 官方应用
 
-由 RomM 团队开发和维护的应用与集成。
+以下应用与集成由上游 RomM 团队开发和维护。本分支未单独验证其兼容性。
 
 - [Argosy][argosy-launcher]，作者 [@tmgast](https://github.com/tmgast)：用于安装和启动游戏的原生 Android 客户端。
 - [Grout][grout]，作者 [@BrandonKowalski](https://github.com/BrandonKowalski)：直接在基于 Linux 的复古掌机上，从你的 RomM 实例下载和管理游戏。支持：Allium、Batocera、Knulli、MinUI、muOS、NextUI、Onion、ROCKNIX、Spruce、TrimUI。
@@ -70,7 +91,7 @@ RomM（ROM 管理器）提供简洁的响应式界面，让你能够扫描游戏
 
 ## 社区项目
 
-以下项目由社区成员维护。请注意，RomM 团队不会定期审查这些项目的源代码。
+以下项目由上游社区成员维护，本分支未单独验证其兼容性。请注意，RomM 团队不会定期审查这些项目的源代码。
 
 ### 移动端
 
@@ -132,8 +153,6 @@ RomM（ROM 管理器）提供简洁的响应式界面，让你能够扫描游戏
 
 [docs-quick-start-guide]: https://docs.romm.app/latest/Getting-Started/Quick-Start-Guide/
 [docs-supported-platforms]: https://docs.romm.app/latest/Platforms-and-Players/Supported-Platforms/
-[docs-emulatorjs]: https://docs.romm.app/latest/Platforms-and-Players/EmulatorJS-Player/
-[docs-rufflers]: https://docs.romm.app/latest/Platforms-and-Players/RuffleRS-Player/
 [docs-troubleshooting]: https://docs.romm.app/latest/Troubleshooting/Scanning-Issues/
 [docs-tag-support]: https://docs.romm.app/latest/Getting-Started/Folder-Structure/#tag-support
 
