@@ -789,3 +789,116 @@ class TestSmartCollectionEndpoints:
         refreshed = db_collection_handler.get_smart_collection(smart_collection.id)
         assert refreshed is not None
         assert refreshed.rom_ids == [rom.id]
+
+
+class TestCollectionVisibilityInRomFilters:
+    """The ROM endpoints take a collection id as a filter, so they must apply
+    the same ownership rule as the collection endpoints."""
+
+    @staticmethod
+    def _listed_ids(client, token: str, **params) -> set[int]:
+        response = client.get(
+            "/api/roms",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        return {item["id"] for item in response.json()["items"]}
+
+    def test_listing_by_another_users_private_collection_returns_nothing(
+        self,
+        client,
+        access_token: str,
+        other_user_token: str,
+        collection: Collection,
+        rom: Rom,
+    ):
+        db_collection_handler.add_roms_to_collection(collection.id, [rom.id])
+
+        owner = self._listed_ids(client, access_token, collection_id=collection.id)
+        other = self._listed_ids(client, other_user_token, collection_id=collection.id)
+
+        assert owner == {rom.id}
+        assert other == set()
+
+    def test_random_pick_from_another_users_private_collection_returns_null(
+        self,
+        client,
+        other_user_token: str,
+        collection: Collection,
+        rom: Rom,
+    ):
+        db_collection_handler.add_roms_to_collection(collection.id, [rom.id])
+
+        response = client.get(
+            "/api/roms/random",
+            params={"collection_id": collection.id},
+            headers={"Authorization": f"Bearer {other_user_token}"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() is None
+
+    def test_creating_a_smart_collection_scoped_to_another_users_private_collection(
+        self, client, other_user_token: str, collection: Collection
+    ):
+        response = client.post(
+            "/api/collections/smart",
+            data={
+                "name": "Borrowed",
+                "filter_criteria": json.dumps({"collection_id": collection.id}),
+            },
+            headers={"Authorization": f"Bearer {other_user_token}"},
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_creating_a_smart_collection_scoped_to_a_shared_collection(
+        self, client, other_user_token: str, collection: Collection, rom: Rom
+    ):
+        db_collection_handler.add_roms_to_collection(collection.id, [rom.id])
+        db_collection_handler.update_collection(
+            collection.id,
+            {"name": collection.name, "description": "", "is_public": True},
+            [rom.id],
+        )
+
+        response = client.post(
+            "/api/collections/smart",
+            data={
+                "name": "Borrowed",
+                "filter_criteria": json.dumps({"collection_id": collection.id}),
+            },
+            headers={"Authorization": f"Bearer {other_user_token}"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["rom_ids"] == [rom.id]
+
+    def test_editing_a_smart_collection_keeps_a_scope_the_owner_has_lost(
+        self,
+        client,
+        other_user_token: str,
+        editor_user: User,
+        collection: Collection,
+    ):
+        smart_collection = db_collection_handler.add_smart_collection(
+            SmartCollection(
+                name="Lost scope",
+                description="",
+                user_id=editor_user.id,
+                filter_criteria={"collection_id": collection.id},
+            )
+        )
+
+        response = client.put(
+            f"/api/collections/smart/{smart_collection.id}",
+            data={
+                "name": "Renamed",
+                "filter_criteria": json.dumps({"collection_id": collection.id}),
+            },
+            headers={"Authorization": f"Bearer {other_user_token}"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["name"] == "Renamed"

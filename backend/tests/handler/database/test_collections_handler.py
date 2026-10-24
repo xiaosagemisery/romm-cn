@@ -149,7 +149,9 @@ def test_filter_roms_by_collection(platform: Platform, admin_user: User):
         collection.id, [rom.id for rom in in_collection]
     )
 
-    roms = db_rom_handler.get_roms_scalar(collection_id=collection.id)
+    roms = db_rom_handler.get_roms_scalar(
+        collection_id=collection.id, user_id=admin_user.id
+    )
 
     assert {rom.id for rom in roms} == {rom.id for rom in in_collection}
     assert outside.id not in {rom.id for rom in roms}

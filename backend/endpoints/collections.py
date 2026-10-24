@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 from datetime import datetime
 from io import BytesIO
 from typing import Annotated, TypeVar
@@ -14,7 +15,10 @@ from endpoints.responses.collection import (
     SmartCollectionSchema,
     VirtualCollectionSchema,
 )
-from endpoints.roms import refresh_affected_smart_collections
+from endpoints.roms import (
+    refresh_affected_smart_collections,
+    refresh_scoped_smart_collections,
+)
 from exceptions.endpoint_exceptions import (
     CollectionAlreadyExistsException,
     CollectionNotFoundInDatabaseException,
@@ -80,6 +84,27 @@ def _hide_collection_roms(
             s.rom_ids = visible
             s.rom_count = len(visible)
     return schemas
+
+
+def _criteria_collection_id(criteria: object) -> int | None:
+    if not isinstance(criteria, Mapping):
+        return None
+    try:
+        return int(criteria.get("collection_id") or 0) or None
+    except (TypeError, ValueError):
+        return None
+
+
+def _check_criteria_collection(
+    criteria: object, user_id: int, kept_id: int | None = None
+) -> None:
+    """Refuse criteria newly scoped to a collection the owner can't see."""
+    collection_id = _criteria_collection_id(criteria)
+    if not collection_id or collection_id == kept_id:
+        return
+    collection = db_collection_handler.get_collection(collection_id)
+    if not collection or (collection.user_id != user_id and not collection.is_public):
+        raise CollectionNotFoundInDatabaseException(collection_id)
 
 
 @protected_route(router.post, "", [Scope.COLLECTIONS_WRITE])
@@ -182,6 +207,7 @@ async def add_smart_collection(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid JSON for filter_criteria field",
         ) from e
+    _check_criteria_collection(parsed_filter_criteria, request.user.id)
 
     cleaned_data = {
         "name": name,
@@ -523,9 +549,18 @@ async def update_collection(
                     log.error(f"Invalid cover URL in update_collection: {str(e)}")
                     raise HTTPException(status_code=400, detail=str(e)) from e
 
+    was_public = collection.is_public
+    before_ids = set(collection.rom_ids)
     updated_collection = db_collection_handler.update_collection(
         id, cleaned_data, parsed_rom_ids
     )
+    if was_public != cleaned_data["is_public"]:
+        refresh_scoped_smart_collections(id)
+    after_ids = set(updated_collection.rom_ids)
+    if before_ids != after_ids:
+        refresh_affected_smart_collections(
+            sorted(before_ids ^ after_ids), membership_only=True
+        )
 
     return CollectionSchema.model_validate(updated_collection)
 
@@ -632,6 +667,13 @@ async def update_smart_collection(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid JSON for filter_criteria field",
             ) from e
+        # The form resends the stored scope on every edit; the ROM filters
+        # already match nothing for one the owner has since lost.
+        _check_criteria_collection(
+            parsed_filter_criteria,
+            request.user.id,
+            kept_id=_criteria_collection_id(smart_collection.filter_criteria),
+        )
 
     cleaned_data = {
         "name": name if name is not None else smart_collection.name,
@@ -674,6 +716,7 @@ async def delete_collection(
 
     log.info(f"Deleting {hl(collection.name, color=BLUE)} from database")
     db_collection_handler.delete_collection(id)
+    refresh_scoped_smart_collections(id)
 
     try:
         await fs_resource_handler.remove_directory(collection.fs_resources_path)

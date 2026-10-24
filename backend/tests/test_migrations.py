@@ -4,16 +4,24 @@ The test database is built from the migrations, so an index declared in one but
 not the other goes unnoticed until autogenerate proposes dropping it.
 """
 
+import importlib.util
+from pathlib import Path
+from types import ModuleType
+
 import pytest
 import sqlalchemy as sa
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import Table, UniqueConstraint
 
 import models
+from handler.database import db_collection_handler
 from handler.database.base_handler import sync_engine
 from models.base import BaseModel
+from models.collection import Collection, SmartCollection
 from models.rom import compute_full_path_hash
+from models.user import User
 from utils.database import (
     AUTOGENERATE_EXEMPT_INDEX_NAMES,
     POSTGRESQL_FK_INDEXES,
@@ -101,3 +109,56 @@ def test_the_migrated_full_path_digest_matches_the_models(fs_path: str, fs_name:
         ).scalar_one()
 
     assert digest == compute_full_path_hash(fs_path, fs_name)
+
+
+def _load_migration(filename: str) -> ModuleType:
+    path = Path(__file__).parent.parent / "alembic" / "versions" / filename
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_cross_user_smart_scopes_revision_empties_only_those_caches(
+    admin_user: User, editor_user: User
+):
+    migration = _load_migration("0152_cross_user_smart_scopes.py")
+    private, public = (
+        db_collection_handler.add_collection(
+            Collection(
+                name=name, description="", user_id=admin_user.id, is_public=is_public
+            )
+        )
+        for name, is_public in (("Secret", False), ("Shared", True))
+    )
+    borrowed, own, borrowed_public = (
+        db_collection_handler.add_smart_collection(
+            SmartCollection(
+                name=f"Scoped {index}",
+                user_id=owner.id,
+                rom_ids=[1, 2],
+                path_covers_small=["cover"],
+                filter_criteria={"collection_id": scope.id},
+            )
+        )
+        for index, (owner, scope) in enumerate(
+            (
+                (editor_user, private),
+                (admin_user, private),
+                (editor_user, public),
+            )
+        )
+    )
+
+    with sync_engine.begin() as connection:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+
+    cleared = db_collection_handler.get_smart_collection(borrowed.id)
+    assert cleared is not None
+    assert (cleared.rom_ids, cleared.path_covers_small) == ([], [])
+    for kept_id in (own.id, borrowed_public.id):
+        kept = db_collection_handler.get_smart_collection(kept_id)
+        assert kept is not None
+        assert (kept.rom_ids, kept.path_covers_small) == ([1, 2], ["cover"])
