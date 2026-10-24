@@ -154,7 +154,7 @@ def test_largest_member_hashing_terminates_switches_before_the_member():
         patch.object(archives.subprocess, "run", return_value=listing),
         patch.object(archives.subprocess, "Popen", popen),
     ):
-        assert archives._process_largest_7z_member(Path("/fake/game.7z"), MagicMock())
+        assert archives.hash_largest_7z_member(Path("/fake/game.7z"), MagicMock())
 
     command = popen.call_args[0][0]
     assert command[-2:] == ["--", "-x"]
