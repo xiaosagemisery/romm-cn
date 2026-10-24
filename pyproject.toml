@@ -19,6 +19,7 @@ dependencies = [
   "alembic ~= 1.16",
   "anyio ~= 4.4",
   "authlib ~= 1.6.12",
+  "certifi >= 2026.10.19",
   "colorama ~= 0.4",
   "cryptography>=49,<51",
   "defusedxml ~= 0.7",
@@ -141,6 +142,8 @@ DEP002 = [ # DEP002 rule: Project should not contain unused dependencies
 [tool.uv]
 package = false
 exclude-newer = "7 days"
+# certifi 2026.10.19 distrusts the compromised eMudhra intermediates; drop once it ages past the cooldown.
+exclude-newer-package = { certifi = false }
 
 [tool.ty.environment]
 root = ["./backend"]
