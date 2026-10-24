@@ -20,7 +20,7 @@
 
 # 概述
 
-romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、整理和浏览游戏收藏，支持多个游戏平台、多种命名规则和自定义标签。当前分支 `codex/remove-streaming-netplay-add-translator` 以游戏库管理和游戏元数据简体中文翻译为重点，已移除串流与联机后端，并将浏览器模拟器设为默认禁用（未设置相应环境变量时）。
+romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、整理和浏览游戏收藏，支持多个游戏平台、多种命名规则和自定义标签。本分支以游戏库管理和游戏元数据简体中文翻译为重点。
 
 ## 功能
 
@@ -47,22 +47,12 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 基础部署方式请参阅上游的[快速入门指南][docs-quick-start-guide]，扫描问题可参考[故障排查步骤][docs-troubleshooting]。使用本分支的修改需要基于当前分支源码构建；上游预构建镜像不包含本分支的定制改动。源码部署说明见 [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)。
 
-部署时请检查已有的 `.env`、Compose 配置和容器环境变量。`env.template` 中的四个 `DISABLE_*` 模拟器开关仍为 `false`；直接沿用这些值会启用对应的浏览器模拟器。若希望禁用，请将下表中的四个开关显式设为 `true`。
-
 ## 本分支的功能状态
 
 | 功能 | 当前状态 |
 | --- | --- |
 | 游戏库管理 | 保留扫描、元数据获取、浏览、上传、更新、删除和共享等功能。 |
 | 游戏元数据翻译 | 扫描及 ROM 更新流程中自动获取的名称、简介会尝试翻译为简体中文；ROM 更新时显式提交的名称和简介保留原值。 |
-| EmulatorJS | 前端代码保留；未设置 `DISABLE_EMULATOR_JS` 时默认禁用，设为 `false` 可启用。 |
-| RuffleRS | 前端代码保留；未设置 `DISABLE_RUFFLE_RS` 时默认禁用，设为 `false` 可启用。 |
-| JSDos | 前端代码保留；未设置 `DISABLE_JSDOS` 时默认禁用，设为 `false` 可启用。 |
-| PICO-8 | 前端代码保留；未设置 `DISABLE_PICO8` 时默认禁用，设为 `false` 可启用。 |
-| 串流 | 后端 API 和处理模块已移除，当前分支不提供串流服务。 |
-| 联机 | 房间列表 API、联机 Socket.IO 服务和房间管理模块已移除，当前分支不提供该联机服务。 |
-
-前端仍保留部分串流、联机页面和调用代码，其对应后端已移除。页面或入口仍然存在并不表示功能可用，启用浏览器模拟器也不会恢复这些后端服务。
 
 元数据翻译通过 Google 的公开翻译接口进行，需要服务器能够访问 `translate.googleapis.com`。成功结果缓存在进程内存中，进程重启后缓存失效；请求失败时保留原文。此功能翻译游戏名称和简介，不会翻译 ROM 文件内容，也不会自动批量翻译数据库中已有的所有记录。
 
@@ -70,9 +60,7 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 与分叉基线提交 `6c3b32582594eb6f94bc858a05db78f33e84b882` 相比：
 
-- **串流与联机：** 移除了相关后端 API、套接字处理程序、配套模块，以及串流接口测试。
 - **游戏元数据：** 为扫描及自动更新时获取的游戏名称和简介新增简体中文翻译，支持缓存，翻译失败时保留原文。
-- **模拟器配置：** 未设置相应环境变量时，默认禁用 EmulatorJS、RuffleRS、JSDos 和 PICO-8。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。
 
 各文件的具体改动请参阅 [ChangeFromUpstream.md](ChangeFromUpstream.md)。
@@ -99,7 +87,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 ### 桌面端
 
-- [RetroArch Sync][romm-retroarch-sync]：由 [@Covin90](https://github.com/Covin90) 开发，用于在 RetroArch 与 RomM 之间同步游戏库。
 - [RomMate][rommate]：由 [@brenoprata10](https://github.com/brenoprata10) 开发，用于浏览游戏收藏的桌面应用。
 - [romm-client][romm-client]：由 [@chaun14](https://github.com/chaun14) 开发的桌面客户端。
 - [Freegosy][freegosy]：由 [@abduznik](https://github.com/abduznik) 开发的一体化游戏管理工具。
@@ -129,10 +116,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 以下是一些你可能感兴趣的项目：
 
-- [EmulatorJS](https://emulatorjs.org/)： 可嵌入网页的浏览器模拟器
-- [RetroDECK](https://retrodeck.net/)： 在 SteamOS 和 Linux 上畅玩复古游戏
-- [ES-DE Frontend](https://es-de.org/)： 适用于 Linux、macOS 和 Windows 的模拟器前端
-- [Gaseous](https://github.com/gaseous-project/gaseous-server)： 另一款内置网页模拟器的 ROM 管理工具
 - [Retrom](https://github.com/JMBeresford/retrom)： 集中式游戏库与游戏收藏管理服务
 - [Drop](https://droposs.org/)： 为无数字版权管理（DRM）限制的游戏提供类似 Steam 的体验
 - [LanCommander](https://lancommander.app/)： 面向 PC 游戏的数字游戏平台
@@ -170,7 +153,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 [ggrequestz]: https://github.com/XTREEMMAK/ggrequestz
 [syncthing-sync]: https://github.com/amn-96/romm_syncthing_sync
 [romm-client]: https://github.com/chaun14/romm-client
-[romm-retroarch-sync]: https://github.com/Covin90/romm-retroarch-sync
 [rommate]: https://github.com/brenoprata10/rommate
 [freegosy]: https://github.com/abduznik/freegosy
 [grout]: https://github.com/rommapp/grout
