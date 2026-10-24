@@ -15,7 +15,7 @@ dependencies = [
   "SQLAlchemy[mariadb-connector,mysql-connector,postgresql-psycopg] ~= 2.0",
   "Unidecode ~= 1.3",
   "aiohttp ~= 3.14",
-  "asyncssh ~= 2.23",
+  "asyncssh ~= 2.24",
   "alembic ~= 1.16",
   "anyio ~= 4.4",
   "authlib ~= 1.6.12",
@@ -38,7 +38,7 @@ dependencies = [
   "opentelemetry-instrumentation-httpx ~= 0.56",
   "opentelemetry-instrumentation-redis ~= 0.56",
   "opentelemetry-instrumentation-sqlalchemy ~= 0.56",
-  "pillow~=12.3",
+  "pillow~=13.0",
   "psycopg[c] ~= 3.2",
   "pydantic ~= 2.11",
   "pydash ~= 8.0",
@@ -139,8 +139,9 @@ DEP002 = [ # DEP002 rule: Project should not contain unused dependencies
 [tool.uv]
 package = false
 exclude-newer = "7 days"
-# certifi 2026.10.19 distrusts the compromised eMudhra intermediates; drop once it ages past the cooldown.
-exclude-newer-package = { certifi = false }
+# Security fixes newer than the cooldown: certifi 2026.10.19 (eMudhra distrust), pillow 13.0.0
+# (GHSA-8g5g-8vmr-9782). Drop each once it ages past the cooldown.
+exclude-newer-package = { certifi = false, pillow = false }
 
 [tool.ty.environment]
 root = ["./backend"]
