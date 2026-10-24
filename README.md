@@ -65,7 +65,7 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 - **游戏元数据：** 为扫描及自动更新时获取的游戏名称和简介新增简体中文翻译，支持缓存，翻译失败时保留原文。
 - **模拟器与存档数据：** 移除前后端中所有与模拟器相关的代码，包括播放器、存档、即时存档、截图（ROM 截图保留）、固件、游玩记录、记忆卡和设备存档同步，并新增迁移 `0129` 删除相关数据表；`config.yml` 中的 `emulatorjs`、`streaming` 配置段和 `filesystem.structure.firmware` 会被忽略。
-- **README：** 移除「社区项目」「支持本项目」「友好项目」三个章节及其链接。
+- **README：** 移除「社区项目」「支持本项目」「友好项目」「支持方」四个章节及其链接。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。
 
 各文件的具体改动请参阅 [ChangeFromUpstream.md](ChangeFromUpstream.md)。
@@ -81,17 +81,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 - [Argosy][argosy-launcher]，作者 [@tmgast](https://github.com/tmgast)：用于安装和启动游戏的原生 Android 客户端。
 - [Grout][grout]，作者 [@BrandonKowalski](https://github.com/BrandonKowalski)：直接在基于 Linux 的复古掌机上，从你的 RomM 实例下载和管理游戏。支持：Allium、Batocera、Knulli、MinUI、muOS、NextUI、Onion、ROCKNIX、Spruce、TrimUI。
 - [Playnite 插件][playnite-app]，作者 [@gantoine](https://github.com/gantoine)：适用于 Playnite 的游戏库插件。
-
-## 支持方
-
-以下公司通过免费提供工具来支持我们：
-
-<div align="center">
-  <div dir="auto">
-    <a href="https://www.greptile.com/?utm_source=oss_badge&amp;utm_medium=readme&amp;utm_campaign=greptile_for_open_source" target="_blank" rel="noopener noreferrer"><img src=".github/resources/greptile-badge.svg" alt="Greptile" width="250" height="58"/></a>
-    <a href="https://www.aikido.dev/" target="_blank" rel="noopener noreferrer"><img src=".github/resources/aikido-badge.svg" alt="Aikido" width="250" height="58"/></a>
-  </div>
-</div>
 
 <!-- 文档链接 -->
 
