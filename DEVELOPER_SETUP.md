@@ -94,6 +94,8 @@ cp ./bin64/RAHasher /usr/bin/RAHasher
 
 #### - Install python dependencies
 
+`scripts/dev-setup.sh` installs the pinned uv, Python, and Node versions plus the backend and frontend dependencies in one step, and is safe to rerun. On systems without `apt-get`, install the MariaDB and PostgreSQL client headers yourself first. To do it by hand instead, follow the steps below.
+
 You'll need uv installed
 
 <https://docs.astral.sh/uv/getting-started/installation/>
@@ -125,6 +127,27 @@ cd backend
 uv run python3 main.py
 ```
 
+#### - Run the task workers
+
+A manual task run is refused, and a scheduled job stays queued, until an RQ worker listens on its queue; scans have a worker of their own. Each command is a foreground process, so run them in separate terminals. `-c config` reads the Redis connection from the same `REDIS_*` settings in `.env` the backend uses.
+
+```sh
+cd backend
+uv run rq worker -c config --worker-class handler.rq_worker.RomMWorker --with-scheduler high default low
+```
+
+```sh
+cd backend
+uv run rq worker -c config --worker-class handler.rq_worker.RomMWorker --with-scheduler scans
+```
+
+`--with-scheduler` releases delayed jobs, such as the rescans the filesystem watcher waits out, so each worker needs it. The recurring schedule is registered by the RQ cron process, which the workers then execute:
+
+```sh
+cd backend
+uv run rq cron -c config tasks.cron_config
+```
+
 ### Setting up the frontend
 
 #### - Install node.js dependencies
@@ -135,12 +158,13 @@ cd frontend
 npm install
 ```
 
-#### - Create symlink to library and resources
+#### - Create symlink to resources
+
+Vite serves cover art, screenshots and manuals from `assets/romm/resources`. The link target resolves from the link's own folder, hence the three levels up:
 
 ```sh
-mkdir assets/romm
-ln -s ../romm_mock/resources assets/romm/resources
-ln -s ../romm_mock/assets assets/romm/assets
+mkdir -p assets/romm
+ln -s ../../../romm_mock/resources assets/romm/resources
 ```
 
 #### - Run the frontend
@@ -148,6 +172,23 @@ ln -s ../romm_mock/assets assets/romm/assets
 ```sh
 npm run dev
 ```
+
+#### - Storybook (v2 components)
+
+Component docs and visual QA for `frontend/src/` (port 6006):
+
+```sh
+npm run storybook
+npm run storybook:test   # play() + axe on every v2 story, in headless Chromium
+```
+
+`storybook:test` (and `npm run test`, which includes it) needs Playwright's Chromium: run `npx playwright install chromium` once.
+
+For responsive layouts, use the viewport toolbar presets from `.storybook/rommViewports.ts`.
+
+#### - Optional: local frontend against a remote RomM
+
+To run `npm run dev` or `npm run preview` against another RomM instance (for example a home server with a full library), set `DEV_PROXY_TARGET` in the repo-root `.env` to its origin, such as `https://romm.example.com`. Vite then proxies `/api`, `/ws` and `/assets/romm` there instead of the local backend. Leave it empty to keep the default `http://127.0.0.1:${DEV_PORT}`. The remote's TLS certificate must be valid. Sign in with a username and password: OIDC login does not work through the proxy, because the identity provider redirects to the remote's `OIDC_REDIRECT_URI`, so the session never reaches localhost.
 
 ## Setting up the linter
 
@@ -164,6 +205,13 @@ Alternative installation methods can be found [in their docs](https://docs.trunk
 ```sh
 trunk fmt
 trunk check
+```
+
+Type checking runs separately from Trunk, against the project's own environment. CI type-checks the whole backend on every backend change; to run it locally:
+
+```sh
+cd backend
+uv run mypy --config-file ../.trunk/configs/mypy.ini .
 ```
 
 **Failing to install and run the linter will result in a failed CI check, which won't allow us to merge your PR.**
@@ -184,7 +232,8 @@ _Migrations will be run automatically when running the tests._
 cd backend
 # path or test file can be passed as argument to test only a subset
 uv run pytest [path/file]
-# or run the following command to run all tests
-# the -vv switch increases the verbosity of the output, providing more detailed information during test execution.
-uv run pytest -vv
+# or run the following command to run all tests, one worker per CPU core
+uv run pytest -n auto
 ```
+
+_Each `-n` worker gets its own database (`romm_test_gw0`, `romm_test_gw1`, ...), created on demand; `setup.sql` grants the test user the rights to create them. On MariaDB, a new worker database is copied from `romm_test_template_<digest>`, which the run migrates once and keeps for later runs. The digest covers `alembic/`, `models/` and `utils/`, so editing any of them builds a new template. To migrate from scratch, drop both the worker databases and the template. On a machine with many cores, cap the workers with `--maxprocesses 4` (CI's count) to keep the load on the database down. A serial run of the whole suite takes 20+ minutes. Drop `-n auto` when debugging with `--pdb` or `-s`, which don't work under parallel workers._

@@ -1,5 +1,31 @@
+from tests.factories import make_platform
+
 from handler.database import db_platform_handler
 from models.platform import Platform
+
+
+def test_lookup_finds_a_folder_renamed_only_in_case():
+    """A rescan must reuse the row, not add a second platform beside it."""
+    stored = make_platform("n64", fs_slug="nintendo 64")
+
+    found = db_platform_handler.get_platform_by_fs_slug("Nintendo 64")
+
+    assert found is not None
+    assert found.id == stored.id
+
+
+def test_lookup_returns_the_exactly_named_folder_when_one_exists():
+    """The exact spelling is tried first, for backends that can tell them apart.
+
+    MariaDB and MySQL match case-insensitively by collation, so only the
+    exactly-named row is asserted here; PostgreSQL additionally distinguishes
+    the sibling.
+    """
+    exact = make_platform("psx", name="PlayStation")
+
+    found = db_platform_handler.get_platform_by_fs_slug("psx")
+    assert found is not None
+    assert found.id == exact.id
 
 
 def test_rescan_preserves_user_authored_fields(platform):
@@ -25,7 +51,7 @@ def test_rescan_preserves_user_authored_fields(platform):
     )
     scanned.id = platform.id
 
-    merged = db_platform_handler.add_platform(scanned)
+    merged = db_platform_handler.add_platform(scanned)  # noqa: TID251
 
     assert merged.custom_name == "Sega - Genesis/ Mega Drive (Unofficial)"
     assert merged.description == "Aftermarket only"

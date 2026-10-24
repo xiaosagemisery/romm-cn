@@ -143,11 +143,11 @@ def ensure_zipfile_writable() -> None:
         pass
 
     @functools.wraps(current)
-    def _get_compressor(compress_type, compresslevel=None):
+    def _get_compressor(compress_type: int, compresslevel: int | None = None) -> object:
         return current(compress_type)
 
     _get_compressor._romm_compresslevel_safe = True  # type: ignore[attr-defined]
-    zipfile._get_compressor = _get_compressor  # type: ignore[attr-defined,assignment]
+    zipfile._get_compressor = _get_compressor  # type: ignore[attr-defined]
 
 
 def build_cached_zip(

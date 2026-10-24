@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from handler import metadata
 from handler.scan_handler import (
     MetadataSource,
+    get_enabled_metadata_sources,
     get_priority_ordered_metadata_sources,
     scene_apply_sources,
 )
@@ -39,6 +41,16 @@ def test_per_field_override_reorders_only_that_field():
     assert cover == [MetadataSource.SS, MetadataSource.IGDB]
     # ...while screenshots keep the shared artwork order (igdb first).
     assert screenshots == [MetadataSource.IGDB, MetadataSource.SS]
+
+
+def test_a_source_listed_twice_keeps_its_first_position():
+    """A repeated config entry must not hand a provider two slots."""
+    config = _fake_config(url_cover=["sgdb", "steam", "sgdb"])
+    available = [MetadataSource.STEAM, MetadataSource.SGDB]
+    with patch("handler.scan_handler.cm.get_config", return_value=config):
+        ordered = get_priority_ordered_metadata_sources(available, "url_cover")
+
+    assert ordered == [MetadataSource.SGDB, MetadataSource.STEAM]
 
 
 def test_sources_absent_from_priority_are_appended():
@@ -112,3 +124,16 @@ def test_persisted_scene_lock_survives_an_empty_scene_lookup():
 def test_scene_lock_keeps_this_scans_match():
     available = [MetadataSource.IGDB, MetadataSource.DEMOZOO]
     assert scene_apply_sources(available, scene_locked=True) == [MetadataSource.DEMOZOO]
+
+
+def test_enabled_metadata_sources_follow_provider_config(mocker):
+    for name, handler in vars(metadata).items():
+        if name.startswith("meta_") and hasattr(handler, "is_enabled"):
+            mocker.patch.object(handler, "is_enabled", return_value=False)
+    for handler in (metadata.meta_ss_handler, metadata.meta_libretro_handler):
+        mocker.patch.object(handler, "is_enabled", return_value=True)
+
+    assert get_enabled_metadata_sources() == [
+        MetadataSource.SS,
+        MetadataSource.LIBRETRO,
+    ]

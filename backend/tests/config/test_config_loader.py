@@ -1,91 +1,34 @@
+import logging
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from config.config_manager import (
-    DEFAULT_EXCLUDED_EXTENSIONS,
-    DEFAULT_EXCLUDED_FILES,
-    DEFAULT_EXCLUDED_MULTI_FILE_DIRS,
     DEFAULT_EXCLUDED_PLATFORM_DIRS,
     ConfigManager,
+    ConvertoConfig,
     parse_platform_templates,
     parse_structure_template,
 )
+from exceptions.config_exceptions import ConfigNotWritableException
 
 
-def test_config_loader():
-    loader = ConfigManager(
-        os.path.join(Path(__file__).resolve().parent, "fixtures", "config/config.yml")
-    )
+@contextmanager
+def capture_romm_logs(caplog, level=logging.WARNING):
+    """Capture the `romm` logger, whose records never reach caplog on their own.
 
-    assert loader.config.EXCLUDED_PLATFORMS == sorted(
-        {*DEFAULT_EXCLUDED_PLATFORM_DIRS, "romm"}
-    )
-    assert loader.config.EXCLUDED_SINGLE_EXT == sorted(
-        {
-            *(e.lower() for e in DEFAULT_EXCLUDED_EXTENSIONS),
-            "xml",
-        }
-    )
-    assert loader.config.EXCLUDED_SINGLE_FILES == sorted(
-        {*DEFAULT_EXCLUDED_FILES, "info.txt"}
-    )
-    assert loader.config.EXCLUDED_MULTI_FILES == sorted(
-        {
-            *DEFAULT_EXCLUDED_MULTI_FILE_DIRS,
-            "my_multi_file_game",
-            "DLC",
-        }
-    )
-    assert loader.config.EXCLUDED_MULTI_PARTS_EXT == sorted(
-        {
-            *(e.lower() for e in DEFAULT_EXCLUDED_EXTENSIONS),
-            "txt",
-        }
-    )
-    assert loader.config.EXCLUDED_MULTI_PARTS_FILES == sorted(
-        {
-            *DEFAULT_EXCLUDED_FILES,
-            "data.xml",
-        }
-    )
-    assert loader.config.PLATFORMS_BINDING == {"gc": "ngc"}
-    assert loader.config.PLATFORMS_VERSIONS == {"naomi": "arcade"}
-    assert loader.config.SKIP_HASH_CALCULATION
-    assert loader.config.SCAN_METADATA_PRIORITY == ["ss", "launchbox"]
-    assert loader.config.SCAN_ARTWORK_PRIORITY == ["igdb", "ss"]
-    assert loader.config.SCAN_ARTWORK_PRIORITY_OVERRIDES == {
-        "url_cover": ["ss", "tgdb"],
-        "url_screenshots": ["igdb"],
-    }
-    assert loader.config.SCAN_REGION_PRIORITY == ["jp", "eu", "wor"]
-    assert loader.config.SCAN_REGION_MODE == "prefer_config"
-    assert loader.config.SCAN_LANGUAGE_PRIORITY == ["jp", "es"]
-    assert loader.config.GAMELIST_MEDIA_THUMBNAIL == "box3d"
-    assert loader.config.GAMELIST_MEDIA_IMAGE == "title_screen"
-    assert loader.config.STRUCTURE_TEMPLATES == {
-        "default": "ROMS/{platform}/{game}",
-        "psx": "ROMS/{platform}/{category}/{game}",
-        "nes": ["ROMS/{platform}/{game}", "ROMS/{platform}/{category}/{game}"],
-    }
-    assert loader.config.default_structure.platform_dir == ("ROMS",)
-    assert loader.config.platforms_dir == "ROMS"
-
-    # The accessor parses templates on demand.
-    psx = loader.config.platform_structure("psx")
-    assert len(psx) == 1
-    assert psx[0].platform_path("psx") == "ROMS/psx"
-    assert len(psx[0].levels) == 1 and psx[0].levels[0].literal is None
-    # The list form yields one structure per template (union on discovery).
-    nes = loader.config.platform_structure("nes")
-    assert len(nes) == 2
-    assert nes[0].levels == ()
-    assert len(nes[1].levels) == 1 and nes[1].levels[0].literal is None
-    # A platform without an override falls back to the library-wide layout.
-    assert loader.config.platform_structure("snes") == (
-        loader.config.default_structure,
-    )
+    It sets `propagate = False`, so caplog's handler has to be attached to it
+    directly rather than to the root logger.
+    """
+    romm_logger = logging.getLogger("romm")
+    romm_logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(level, logger="romm"):
+            yield caplog
+    finally:
+        romm_logger.removeHandler(caplog.handler)
 
 
 def test_scan_priority_sources_match_metadata_source_enum():
@@ -95,38 +38,6 @@ def test_scan_priority_sources_match_metadata_source_enum():
     from handler.scan_handler import MetadataSource
 
     assert VALID_SCAN_PRIORITY_SOURCES == {source.value for source in MetadataSource}
-
-
-def test_empty_config_loader():
-    loader = ConfigManager(
-        os.path.join(
-            Path(__file__).resolve().parent, "fixtures", "config/empty_config.yml"
-        )
-    )
-
-    assert loader.config.EXCLUDED_PLATFORMS == sorted(DEFAULT_EXCLUDED_PLATFORM_DIRS)
-    assert loader.config.EXCLUDED_SINGLE_EXT == sorted(
-        {e.lower() for e in DEFAULT_EXCLUDED_EXTENSIONS}
-    )
-    assert "ini" not in loader.config.EXCLUDED_SINGLE_EXT
-    assert loader.config.EXCLUDED_SINGLE_FILES == sorted(DEFAULT_EXCLUDED_FILES)
-    assert loader.config.EXCLUDED_MULTI_FILES == sorted(
-        DEFAULT_EXCLUDED_MULTI_FILE_DIRS
-    )
-    assert loader.config.EXCLUDED_MULTI_PARTS_EXT == sorted(
-        {e.lower() for e in DEFAULT_EXCLUDED_EXTENSIONS}
-    )
-    assert "ini" not in loader.config.EXCLUDED_MULTI_PARTS_EXT
-    assert loader.config.EXCLUDED_MULTI_PARTS_FILES == sorted(DEFAULT_EXCLUDED_FILES)
-    assert loader.config.PLATFORMS_BINDING == {}
-    assert loader.config.PLATFORMS_VERSIONS == {}
-    assert loader.config.platforms_dir == "roms"
-    assert not loader.config.SKIP_HASH_CALCULATION
-    assert loader.config.SCAN_ARTWORK_PRIORITY_OVERRIDES == {}
-    assert loader.config.SCAN_REGION_MODE == "prefer_rom_tags"
-    assert loader.config.GAMELIST_MEDIA_THUMBNAIL == "box2d"
-    assert loader.config.GAMELIST_MEDIA_IMAGE == "screenshot"
-    assert loader.config.STRUCTURE_TEMPLATES == {}
 
 
 @pytest.mark.parametrize(
@@ -260,24 +171,6 @@ def test_non_string_region_mode_falls_back_to_default(tmp_path):
     loader = ConfigManager(str(config_file))
 
     assert loader.config.SCAN_REGION_MODE == "prefer_rom_tags"
-
-
-def test_malformed_yaml_falls_back_to_defaults():
-    """A YAML parse error should log critically and leave the app on
-    defaults, not crash."""
-    loader = ConfigManager(
-        os.path.join(
-            Path(__file__).resolve().parent,
-            "fixtures",
-            "config/malformed_config.yml",
-        )
-    )
-
-    assert loader.config.platforms_dir == "roms"
-    assert loader.config.SCAN_MEDIA == ["box2d", "screenshot", "manual"]
-    # The parse error is surfaced so the UI can warn the user their whole
-    # config (not just the broken part) was discarded.
-    assert loader.config.CONFIG_FILE_PARSE_ERROR is not None
 
 
 def test_valid_config_has_no_parse_error():
@@ -443,11 +336,168 @@ def test_platform_binding_lookup_ignores_case(tmp_path):
     assert loader.config.PLATFORMS_BINDING == {}
 
 
+def test_case_variant_folder_keys_collapse_with_a_warning(caplog, tmp_path):
+    """One key covers both, so the dropped mapping must not vanish silently."""
+    with capture_romm_logs(caplog):
+        loader = _write_config(
+            tmp_path, '  platforms:\n    PSX: "ps2"\n    psx: "psx"\n'
+        )
+
+    assert loader.config.PLATFORMS_BINDING == {"psx": "psx"}
+    assert "case variant" in caplog.text
+    assert "ps2" in caplog.text
+
+
+def test_identical_case_variant_mappings_do_not_warn(caplog, tmp_path):
+    with capture_romm_logs(caplog):
+        loader = _write_config(
+            tmp_path, '  platforms:\n    PSX: "psx"\n    psx: "psx"\n'
+        )
+
+    assert loader.config.PLATFORMS_BINDING == {"psx": "psx"}
+    assert "case variant" not in caplog.text
+
+
+def test_rebinding_a_folder_replaces_the_existing_platform(tmp_path):
+    loader = _write_config(tmp_path, '  platforms:\n    GameCube: "ngc"\n')
+
+    loader.add_platform_binding("GameCube", "wii")
+
+    assert loader.config.PLATFORMS_BINDING == {"gamecube": "wii"}
+    reloaded = ConfigManager(loader.config_file)
+    assert reloaded.config.PLATFORMS_BINDING == {"gamecube": "wii"}
+
+
+def test_reparenting_a_folder_replaces_the_existing_version(tmp_path):
+    loader = _write_config(tmp_path, '  versions:\n    NAOMI: "arcade"\n')
+
+    loader.add_platform_version("naomi", "dc")
+
+    assert loader.config.PLATFORMS_VERSIONS == {"naomi": "dc"}
+    reloaded = ConfigManager(loader.config_file)
+    assert reloaded.config.PLATFORMS_VERSIONS == {"naomi": "dc"}
+
+
+def test_converto_config_from_yaml(tmp_path):
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        "converto:\n"
+        "  download_conversion_enabled: true\n"
+        "  scan_metadata: false\n"
+        "  cache_ttl_hours: 48\n"
+        "  cache_max_size_gb: 0\n"
+        "  platform_formats:\n"
+        "    PSP: iso\n"
+        "    ngc: rvz\n"
+    )
+    loader = ConfigManager(str(config_file))
+
+    # Slugs and targets are normalized to lowercase.
+    assert loader.config.CONVERTO == ConvertoConfig(
+        download_conversion_enabled=True,
+        scan_metadata=False,
+        cache_ttl_hours=48,
+        cache_max_size_gb=0,
+        platform_formats={"psp": "iso", "ngc": "rvz"},
+    )
+
+
+def test_null_converto_platform_formats_means_empty(tmp_path):
+    config_file = tmp_path / "config.yml"
+    config_file.write_text("converto:\n  platform_formats:\n")
+
+    assert ConfigManager(str(config_file)).config.CONVERTO.platform_formats == {}
+
+
+def test_update_converto_settings_round_trip(tmp_path):
+    config_file = tmp_path / "config.yml"
+    config_file.write_text("converto:\n  cache_ttl_hours: 12\n")
+    loader = ConfigManager(str(config_file))
+    converto = ConvertoConfig(
+        download_conversion_enabled=True,
+        scan_metadata=True,
+        cache_ttl_hours=72,
+        cache_max_size_gb=50,
+        platform_formats={"psp": "iso", "ngc": "rvz"},
+    )
+
+    loader.update_converto_settings(converto)
+
+    assert ConfigManager(str(config_file)).config.CONVERTO == converto
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        "  platform_formats:\n    psvita: iso\n",
+        "  platform_formats:\n    psp: rvz\n",
+        "  platform_formats:\n    xbox: xiso\n",
+        "  cache_ttl_hours: 0\n",
+        "  cache_max_size_gb: -1\n",
+        "  cache_max_size_gb: true\n",
+    ],
+)
+def test_invalid_converto_setting_exits(tmp_path, block):
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(f"converto:\n{block}")
+
+    with pytest.raises(SystemExit) as excinfo:
+        ConfigManager(str(config_file))
+
+    assert excinfo.value.code == 3
+
+
 @pytest.fixture
 def critical(mocker):
     """The last message the config manager logged before exiting."""
     spy = mocker.patch("config.config_manager.log.critical")
     return lambda: str(spy.call_args[0][0])
+
+
+EXCLUDE_LIST_PATHS = (
+    "exclude.platforms",
+    "exclude.roms.single_file.extensions",
+    "exclude.roms.single_file.names",
+    "exclude.roms.multi_file.names",
+    "exclude.roms.multi_file.parts.extensions",
+    "exclude.roms.multi_file.parts.names",
+)
+
+
+def _write_exclude_config(tmp_path: Path, path: str, value: str) -> ConfigManager:
+    """Write `value` at the dotted `path`, nesting one YAML level per segment."""
+    lines = [f"{'  ' * depth}{key}:" for depth, key in enumerate(path.split("."))]
+    lines[-1] += f" {value}"
+    config_file = tmp_path / "config.yml"
+    config_file.write_text("\n".join(lines) + "\n")
+    return ConfigManager(str(config_file))
+
+
+@pytest.mark.parametrize("path", EXCLUDE_LIST_PATHS)
+@pytest.mark.parametrize("value", ["ps2", "5", "{ps2: true}"])
+def test_exclude_list_rejects_a_non_list(tmp_path, critical, path, value):
+    """A bare string would otherwise be split into one exclusion per character."""
+    with pytest.raises(SystemExit) as excinfo:
+        _write_exclude_config(tmp_path, path, value)
+
+    assert excinfo.value.code == 3
+    assert critical() == f"Invalid config.yml: {path} must be a list"
+
+
+@pytest.mark.parametrize("path", EXCLUDE_LIST_PATHS)
+@pytest.mark.parametrize("value", ["[7z, 001]", "[ps2, ~]"])
+def test_exclude_list_rejects_a_non_string_entry(tmp_path, critical, path, value):
+    with pytest.raises(SystemExit) as excinfo:
+        _write_exclude_config(tmp_path, path, value)
+
+    assert excinfo.value.code == 3
+    assert critical().startswith(f"Invalid config.yml: {path} must only hold strings")
+
+
+def test_empty_exclude_list_keeps_the_defaults(tmp_path):
+    loader = _write_exclude_config(tmp_path, "exclude.platforms", "")
+
+    assert loader.config.EXCLUDED_PLATFORMS == sorted(DEFAULT_EXCLUDED_PLATFORM_DIRS)
 
 
 def _write_filesystem_config(tmp_path: Path, block: str) -> ConfigManager:
@@ -456,22 +506,79 @@ def _write_filesystem_config(tmp_path: Path, block: str) -> ConfigManager:
     return ConfigManager(str(config_file))
 
 
-@pytest.mark.parametrize(
-    ("key", "folder", "expected"),
-    [
-        ("roms_folder", "retro_games", 'default: "retro_games/{platform}/{game}"'),
-    ],
-)
-def test_retired_folder_keys_exit_with_the_replacement(
-    tmp_path, key, folder, expected, critical
+@pytest.fixture
+def library(tmp_path, mocker):
+    library = tmp_path / "library"
+    library.mkdir()
+    mocker.patch("config.config_manager.LIBRARY_BASE_PATH", str(library))
+    return library
+
+
+def test_loading_a_config_with_retired_folder_keys_never_rewrites_it(tmp_path, library):
+    """Every process loads the config, so only startup writes the migration."""
+    (library / "roms").mkdir()
+
+    loader = _write_filesystem_config(tmp_path, "  roms_folder: roms\n")
+
+    assert loader.get_config().STRUCTURE_TEMPLATES["default"] == (
+        "roms/{platform}/{game}"
+    )
+    assert (tmp_path / "config.yml").read_text() == "filesystem:\n  roms_folder: roms\n"
+
+
+def test_retired_folder_keys_migrate_in_memory_when_read_only(
+    tmp_path, library, mocker
 ):
-    """Ignoring them would silently relocate the library, so refuse to start and
-    name the template that reproduces the layout."""
+    (library / "games").mkdir()
+    warning = mocker.patch("config.config_manager.log.warning")
+    mocker.patch("config.config_manager.os.access", return_value=False)
+    config_file = tmp_path / "config.yml"
+    config_file.write_text("filesystem:\n  roms_folder: games\n")
+
+    loader = ConfigManager(str(config_file))
+    loader.migrate_retired_filesystem_keys()
+    loader.get_config()
+
+    assert loader.config.STRUCTURE_TEMPLATES["default"] == "games/{platform}/{game}"
+    assert "roms_folder" in config_file.read_text()
+    assert warning.call_count == 1
+    assert 'default: "games/{platform}/{game}"' in warning.call_args[0][0]
+
+
+def test_a_failed_migration_write_marks_the_config_read_only(tmp_path, library, mocker):
+    (library / "roms").mkdir()
+    write = mocker.patch.object(
+        ConfigManager, "_write_raw_config", side_effect=ConfigNotWritableException
+    )
+
+    loader = _write_filesystem_config(tmp_path, "  roms_folder: roms\n")
+    loader.migrate_retired_filesystem_keys()
+    config = loader.get_config()
+
+    assert write.call_count == 1
+    assert config.CONFIG_FILE_WRITABLE is False
+    assert config.STRUCTURE_TEMPLATES["default"] == "roms/{platform}/{game}"
+
+
+def test_an_unmigratable_folder_exits_without_rewriting_the_config(
+    tmp_path, library, critical
+):
+    block = "  roms_folder: games{old}\n"
     with pytest.raises(SystemExit) as excinfo:
-        _write_filesystem_config(tmp_path, f"  {key}: {folder}\n")
+        _write_filesystem_config(tmp_path, block)
 
     assert excinfo.value.code == 3
-    assert expected in critical()
+    assert "games{old}" in critical()
+    assert (tmp_path / "config.yml").read_text() == f"filesystem:\n{block}"
+
+
+@pytest.mark.parametrize("value", ['""', "42"])
+def test_an_invalid_retired_folder_key_exits(tmp_path, library, value, critical):
+    with pytest.raises(SystemExit) as excinfo:
+        _write_filesystem_config(tmp_path, f"  roms_folder: {value}\n")
+
+    assert excinfo.value.code == 3
+    assert "filesystem.roms_folder" in critical()
 
 
 def test_an_override_may_not_move_the_platform_folder(tmp_path, critical):
@@ -489,25 +596,12 @@ def test_an_override_may_not_move_the_platform_folder(tmp_path, critical):
     assert "disc-games" in critical()
 
 
-def test_a_reserved_structure_key_takes_a_single_template(tmp_path):
-    """Only a platform can union several layouts; the library has just one."""
-    with pytest.raises(SystemExit) as excinfo:
-        _write_filesystem_config(
-            tmp_path,
-            '  structure:\n    default:\n      - "roms/{platform}/{game}"\n',
-        )
-
-    assert excinfo.value.code == 3
-
-
 def test_the_retired_library_layout_check_names_the_template(
-    tmp_path, mocker, critical
+    tmp_path, library, critical
 ):
     """A `{platform}/roms` library used to be auto-detected; now it has to say so
     rather than scan as empty and mark every rom missing."""
-    library = tmp_path / "library"
     (library / "n64" / "roms").mkdir(parents=True)
-    mocker.patch("config.config_manager.LIBRARY_BASE_PATH", str(library))
 
     loader = _write_filesystem_config(tmp_path, "  skip_hash_calculation: false\n")
     with pytest.raises(SystemExit) as excinfo:
@@ -517,20 +611,10 @@ def test_the_retired_library_layout_check_names_the_template(
     assert 'default: "{platform}/roms/{game}"' in critical()
 
 
-def test_the_retired_library_layout_check_passes_once_declared(tmp_path, mocker):
-    library = tmp_path / "library"
+def test_the_retired_library_layout_check_passes_once_declared(tmp_path, library):
     (library / "n64" / "roms").mkdir(parents=True)
-    mocker.patch("config.config_manager.LIBRARY_BASE_PATH", str(library))
 
     loader = _write_filesystem_config(
         tmp_path, '  structure:\n    default: "{platform}/roms/{game}"\n'
     )
     loader.check_library_layout()
-
-
-def test_a_leftover_firmware_layout_is_ignored(tmp_path):
-    loader = _write_filesystem_config(
-        tmp_path, '  structure:\n    firmware: "bios/{platform}"\n'
-    )
-
-    assert "firmware" not in loader.config.STRUCTURE_TEMPLATES

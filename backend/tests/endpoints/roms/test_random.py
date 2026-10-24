@@ -8,21 +8,19 @@ offset walk, no full count).
 """
 
 from collections import Counter
-from typing import Iterator
 from unittest.mock import patch
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from tests.factories import make_platform, make_rom
 
 from handler.database import (
     db_collection_handler,
-    db_platform_handler,
     db_rom_handler,
     roms_handler,
 )
-from handler.database.base_handler import sync_engine, sync_session
+from handler.database.base_handler import sync_session
 from models.collection import Collection
 from models.permission import HiddenEntity, PermEntity
 from models.platform import Platform
@@ -30,45 +28,9 @@ from models.rom import Rom
 from models.user import User
 
 
-def _add_rom(platform: Platform, name: str) -> Rom:
-    return db_rom_handler.add_rom(
-        Rom(
-            platform_id=platform.id,
-            name=name,
-            slug=name,
-            fs_name=f"{name}.zip",
-            fs_name_no_tags=name,
-            fs_name_no_ext=name,
-            fs_extension="zip",
-            fs_path=f"{platform.slug}/roms",
-        )
-    )
-
-
 @pytest.fixture
 def other_platform() -> Platform:
-    return db_platform_handler.add_platform(
-        Platform(
-            name="other_platform",
-            slug="other_platform_slug",
-            fs_slug="other_platform_slug",
-        )
-    )
-
-
-@pytest.fixture
-def captured_sql() -> Iterator[list[str]]:
-    """Every statement the engine runs while the fixture is active."""
-    statements: list[str] = []
-
-    def before_cursor_execute(conn, cursor, statement, parameters, context, many):
-        statements.append(statement)
-
-    event.listen(sync_engine, "before_cursor_execute", before_cursor_execute)
-    try:
-        yield statements
-    finally:
-        event.remove(sync_engine, "before_cursor_execute", before_cursor_execute)
+    return make_platform("other_platform_slug", name="other_platform")
 
 
 def test_get_random_rom_returns_a_rom(
@@ -108,7 +70,7 @@ def test_get_random_rom_reaches_every_rom(
     client: TestClient, access_token: str, rom: Rom, platform: Platform
 ) -> None:
     """Sampling must cover the whole set, not park on one end of it."""
-    ids = {rom.id} | {_add_rom(platform, f"rom_{i}").id for i in range(4)}
+    ids = {rom.id} | {make_rom(platform, f"rom_{i}").id for i in range(4)}
 
     seen: Counter[int] = Counter()
     for _ in range(120):
@@ -129,7 +91,7 @@ def test_get_random_rom_scoped_to_platform(
     platform: Platform,
     other_platform: Platform,
 ) -> None:
-    other_ids = {_add_rom(other_platform, f"other_{i}").id for i in range(3)}
+    other_ids = {make_rom(other_platform, f"other_{i}").id for i in range(3)}
 
     for _ in range(20):
         response = client.get(
@@ -155,8 +117,8 @@ def test_get_random_rom_scoped_to_collection(
     rom: Rom,
     platform: Platform,
 ) -> None:
-    in_collection = _add_rom(platform, "in_collection")
-    _add_rom(platform, "out_of_collection")
+    in_collection = make_rom(platform, "in_collection")
+    make_rom(platform, "out_of_collection")
 
     collection = db_collection_handler.add_collection(
         Collection(name="Picks", description="", user_id=admin_user.id)
@@ -198,7 +160,7 @@ def test_get_random_rom_skips_hidden_roms(
     platform: Platform,
 ) -> None:
     """Admin-hidden roms are out of scope for the pick, like any other list."""
-    visible = _add_rom(platform, "visible_rom")
+    visible = make_rom(platform, "visible_rom")
     with sync_session.begin() as session:
         session.add(
             HiddenEntity(
@@ -230,7 +192,7 @@ def test_get_random_rom_rechecks_visibility_after_fetching(
     """
     # A visible rom so the pick resolves an id, otherwise the empty scope
     # returns null on its own and the fetch is never reached.
-    _add_rom(platform, "visible_rom")
+    make_rom(platform, "visible_rom")
     with sync_session.begin() as session:
         session.add(
             HiddenEntity(
@@ -254,7 +216,7 @@ def test_get_random_rom_does_not_page_or_count(
     access_token: str,
     rom: Rom,
     platform: Platform,
-    captured_sql: list[str],
+    executed_statements: list[str],
 ) -> None:
     """The point of the endpoint: cost that doesn't grow with the library.
 
@@ -264,8 +226,8 @@ def test_get_random_rom_does_not_page_or_count(
     land it a hit.
     """
     for i in range(5):
-        _add_rom(platform, f"rom_{i}")
-    captured_sql.clear()
+        make_rom(platform, f"rom_{i}")
+    executed_statements.clear()
 
     with (
         patch.object(
@@ -284,7 +246,7 @@ def test_get_random_rom_does_not_page_or_count(
         get_rom_count.assert_not_called()
         get_rom_id_index.assert_not_called()
 
-    rom_queries = [sql for sql in captured_sql if " roms" in sql.lower()]
+    rom_queries = [sql for sql in executed_statements if " roms" in sql.lower()]
     assert rom_queries, "expected the pick to query the roms table"
     assert not [sql for sql in rom_queries if "offset" in sql.lower()]
 
@@ -297,7 +259,7 @@ def test_get_random_rom_falls_back_when_sampling_misses(
     Sampling zero keys stands in for the real cases: a narrow filter, or an id
     space left sparse by deletions.
     """
-    ids = {rom.id} | {_add_rom(platform, f"rom_{i}").id for i in range(4)}
+    ids = {rom.id} | {make_rom(platform, f"rom_{i}").id for i in range(4)}
 
     seen: set[int] = set()
     with patch.object(roms_handler, "RANDOM_ID_SAMPLE_SIZE", 0):

@@ -1,18 +1,20 @@
+import dataclasses
 import enum
 import functools
 import glob
 import json
 import os
+import posixpath
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Self, TextIO
 
-import pydash
 import yaml
 from sqlalchemy import URL
 from yaml.loader import SafeLoader
 
+from adapters.services.rom_converto import normalize_platform_formats
 from config import (
     DB_HOST,
     DB_NAME,
@@ -29,6 +31,7 @@ from exceptions.config_exceptions import ConfigNotWritableException
 from logger.formatter import BLUE
 from logger.formatter import highlight as hl
 from logger.logger import log
+from utils.database import get_nested
 
 # Macros of a library structure template. `{platform}` is the platform folder and
 # `{game}` is the terminal, marking where the game itself begins.
@@ -40,6 +43,10 @@ _STRUCTURE_RESERVED_ROOT: Final = "library"
 # Keys of `filesystem.structure` that name a layout rather than a platform.
 STRUCTURE_DEFAULT_KEY: Final = "default"
 RESERVED_STRUCTURE_KEYS: Final = frozenset({STRUCTURE_DEFAULT_KEY})
+RETIRED_STRUCTURE_FIRMWARE_KEY: Final = "firmware"
+
+# Folder-name keys 5.2 wrote to config.yml, with the default each one had.
+RETIRED_FOLDER_KEYS: Final = {"roms_folder": "roms", "firmware_folder": "bios"}
 
 STRUCTURE_DOCS_URL: Final = (
     "https://docs.romm.app/latest/getting-started/folder-structure/"
@@ -202,6 +209,20 @@ def parse_platform_templates(
     )
 
 
+def _platform_first_layout(folder: str) -> bool | None:
+    """Whether the library keeps `folder` inside each platform folder.
+
+    `<folder>` at the library root wins when both layouts exist. Returns ``None``
+    when neither does, as in an empty or not yet mounted library.
+    """
+    if os.path.isdir(os.path.join(LIBRARY_BASE_PATH, folder)):
+        return False
+    pattern = os.path.join(LIBRARY_BASE_PATH, "*", glob.escape(folder))
+    if any(os.path.isdir(match) for match in glob.iglob(pattern)):
+        return True
+    return None
+
+
 ROMM_USER_CONFIG_PATH: Final = f"{ROMM_BASE_PATH}/config"
 ROMM_USER_CONFIG_FILE: Final = f"{ROMM_USER_CONFIG_PATH}/config.yml"
 SQLITE_DB_BASE_PATH: Final = f"{ROMM_BASE_PATH}/database"
@@ -356,6 +377,23 @@ VALID_SCAN_PRIORITY_SOURCES = frozenset(
 VALID_SCAN_REGION_MODES = frozenset({"prefer_rom_tags", "prefer_config"})
 
 
+@dataclasses.dataclass
+class ConvertoConfig:
+    download_conversion_enabled: bool = False
+    scan_metadata: bool = True
+    cache_ttl_hours: int = 24
+    # 0 leaves the cache unbounded.
+    cache_max_size_gb: int = 20
+    platform_formats: dict[str, str] = dataclasses.field(default_factory=dict)
+
+
+# The smallest value each integer converto.* setting accepts.
+CONVERTO_INT_MINIMUMS: Final[dict[str, int]] = {
+    "cache_ttl_hours": 1,
+    "cache_max_size_gb": 0,
+}
+
+
 class Config:
     CONFIG_FILE_MOUNTED: bool
     CONFIG_FILE_WRITABLE: bool
@@ -383,8 +421,9 @@ class Config:
     SCAN_MEDIA: list[str]
     GAMELIST_MEDIA_THUMBNAIL: MetadataMediaType
     GAMELIST_MEDIA_IMAGE: MetadataMediaType
+    CONVERTO: ConvertoConfig
 
-    def __init__(self, **entries):
+    def __init__(self, **entries: Any) -> None:
         self.__dict__.update(entries)
 
     def _raw_template(self, key: str, fallback: str) -> str:
@@ -432,20 +471,22 @@ class ConfigManager:
     """
 
     _self = None
-    _raw_config: dict = {}
+    _raw_config: dict[str, Any] = {}
     _config_file_mounted: bool = False
     _config_file_writable: bool = False
     _config_file_parse_error: str | None = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         if cls._self is None:
             cls._self = super().__new__(cls, *args, **kwargs)
 
         return cls._self
 
     # Tests require custom config path
-    def __init__(self, config_file: str = ROMM_USER_CONFIG_FILE):
+    def __init__(self, config_file: str = ROMM_USER_CONFIG_FILE) -> None:
         self.config_file = config_file
+        self._retired_layout_detected: bool | None = None
+        self._platform_first_layouts: dict[str, bool] = {}
 
         try:
             # Check if the config file is mounted
@@ -466,7 +507,7 @@ class ConfigManager:
             self._parse_config()
             self._validate_config()
 
-    def _safe_load_yaml(self, cf) -> dict:
+    def _safe_load_yaml(self, cf: TextIO) -> dict[str, Any]:
         """Load YAML, falling back to an empty config on syntax errors so the
         app can still boot with defaults rather than crashing."""
         try:
@@ -549,8 +590,26 @@ class ConfigManager:
             query=query,
         )
 
-    def _parse_config(self):
+    def _raw_exclude_list(self, path: str) -> list[str]:
+        """Read a user exclude list, exiting on anything but a list of strings."""
+        value = get_nested(self._raw_config, path)
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            log.critical(f"Invalid config.yml: {path} must be a list")
+            sys.exit(3)
+        # YAML reads an unquoted 001 or 1942 as a number.
+        if not all(isinstance(item, str) for item in value):
+            log.critical(
+                f"Invalid config.yml: {path} must only hold strings, "
+                "quote numeric entries such as '001'"
+            )
+            sys.exit(3)
+        return value
+
+    def _parse_config(self) -> None:
         """Parses each entry in the config.yml"""
+        self._retired_layout_detected = self._translate_retired_filesystem_keys()
 
         self.config = Config(
             CONFIG_FILE_MOUNTED=self._config_file_mounted,
@@ -559,7 +618,7 @@ class ConfigManager:
             EXCLUDED_PLATFORMS=sorted(
                 {
                     *DEFAULT_EXCLUDED_PLATFORM_DIRS,
-                    *pydash.get(self._raw_config, "exclude.platforms", []),
+                    *self._raw_exclude_list("exclude.platforms"),
                 }
             ),
             EXCLUDED_SINGLE_EXT=sorted(
@@ -567,10 +626,8 @@ class ConfigManager:
                     *(e.lower() for e in DEFAULT_EXCLUDED_EXTENSIONS),
                     *(
                         e.lower()
-                        for e in pydash.get(
-                            self._raw_config,
-                            "exclude.roms.single_file.extensions",
-                            [],
+                        for e in self._raw_exclude_list(
+                            "exclude.roms.single_file.extensions"
                         )
                     ),
                 }
@@ -578,21 +635,13 @@ class ConfigManager:
             EXCLUDED_SINGLE_FILES=sorted(
                 {
                     *DEFAULT_EXCLUDED_FILES,
-                    *pydash.get(
-                        self._raw_config,
-                        "exclude.roms.single_file.names",
-                        [],
-                    ),
+                    *self._raw_exclude_list("exclude.roms.single_file.names"),
                 }
             ),
             EXCLUDED_MULTI_FILES=sorted(
                 {
                     *DEFAULT_EXCLUDED_MULTI_FILE_DIRS,
-                    *pydash.get(
-                        self._raw_config,
-                        "exclude.roms.multi_file.names",
-                        [],
-                    ),
+                    *self._raw_exclude_list("exclude.roms.multi_file.names"),
                 }
             ),
             EXCLUDED_MULTI_PARTS_EXT=sorted(
@@ -600,10 +649,8 @@ class ConfigManager:
                     *(e.lower() for e in DEFAULT_EXCLUDED_EXTENSIONS),
                     *(
                         e.lower()
-                        for e in pydash.get(
-                            self._raw_config,
-                            "exclude.roms.multi_file.parts.extensions",
-                            [],
+                        for e in self._raw_exclude_list(
+                            "exclude.roms.multi_file.parts.extensions"
                         )
                     ),
                 }
@@ -611,27 +658,23 @@ class ConfigManager:
             EXCLUDED_MULTI_PARTS_FILES=sorted(
                 {
                     *DEFAULT_EXCLUDED_FILES,
-                    *pydash.get(
-                        self._raw_config,
-                        "exclude.roms.multi_file.parts.names",
-                        [],
-                    ),
+                    *self._raw_exclude_list("exclude.roms.multi_file.parts.names"),
                 }
             ),
-            PLATFORMS_BINDING=pydash.get(self._raw_config, "system.platforms", {})
+            PLATFORMS_BINDING=get_nested(self._raw_config, "system.platforms", {})
             or {},
-            PLATFORMS_VERSIONS=pydash.get(self._raw_config, "system.versions", {})
+            PLATFORMS_VERSIONS=get_nested(self._raw_config, "system.versions", {})
             or {},
-            SKIP_HASH_CALCULATION=pydash.get(
+            SKIP_HASH_CALCULATION=get_nested(
                 self._raw_config, "filesystem.skip_hash_calculation", False
             ),
-            SKIP_TITLE_ID_EXTRACTION=pydash.get(
+            SKIP_TITLE_ID_EXTRACTION=get_nested(
                 self._raw_config, "filesystem.skip_title_id_extraction", False
             ),
-            EMBED_SWITCH_TITLE_IDS=pydash.get(
+            EMBED_SWITCH_TITLE_IDS=get_nested(
                 self._raw_config, "filesystem.embed_switch_title_ids", False
             ),
-            SCAN_METADATA_PRIORITY=pydash.get(
+            SCAN_METADATA_PRIORITY=get_nested(
                 self._raw_config,
                 "scan.priority.metadata",
                 [
@@ -651,7 +694,7 @@ class ConfigManager:
                     "csdb",
                 ],
             ),
-            SCAN_ARTWORK_PRIORITY=pydash.get(
+            SCAN_ARTWORK_PRIORITY=get_nested(
                 self._raw_config,
                 "scan.priority.artwork",
                 [
@@ -676,25 +719,25 @@ class ConfigManager:
             SCAN_ARTWORK_PRIORITY_OVERRIDES={
                 field: override
                 for key, field in ARTWORK_PRIORITY_KEYS.items()
-                if (override := pydash.get(self._raw_config, f"scan.priority.{key}"))
+                if (override := get_nested(self._raw_config, f"scan.priority.{key}"))
                 is not None
             },
-            SCAN_REGION_PRIORITY=pydash.get(
+            SCAN_REGION_PRIORITY=get_nested(
                 self._raw_config,
                 "scan.priority.region",
                 ["us", "wor", "ss", "eu", "jp"],
             ),
-            SCAN_REGION_MODE=pydash.get(
+            SCAN_REGION_MODE=get_nested(
                 self._raw_config,
                 "scan.priority.region_mode",
                 "prefer_rom_tags",
             ),
-            SCAN_LANGUAGE_PRIORITY=pydash.get(
+            SCAN_LANGUAGE_PRIORITY=get_nested(
                 self._raw_config,
                 "scan.priority.language",
                 ["en"],
             ),
-            SCAN_MEDIA=pydash.get(
+            SCAN_MEDIA=get_nested(
                 self._raw_config,
                 "scan.media",
                 [
@@ -703,71 +746,174 @@ class ConfigManager:
                     "manual",
                 ],
             ),
-            GAMELIST_AUTO_EXPORT_ON_SCAN=pydash.get(
+            GAMELIST_AUTO_EXPORT_ON_SCAN=get_nested(
                 self._raw_config, "scan.gamelist.export", False
             ),
-            GAMELIST_MEDIA_THUMBNAIL=pydash.get(
+            GAMELIST_MEDIA_THUMBNAIL=get_nested(
                 self._raw_config,
                 "scan.gamelist.media.thumbnail",
                 MetadataMediaType.BOX2D,
             ),
-            GAMELIST_MEDIA_IMAGE=pydash.get(
+            GAMELIST_MEDIA_IMAGE=get_nested(
                 self._raw_config,
                 "scan.gamelist.media.image",
                 MetadataMediaType.SCREENSHOT,
             ),
-            PEGASUS_AUTO_EXPORT_ON_SCAN=pydash.get(
+            PEGASUS_AUTO_EXPORT_ON_SCAN=get_nested(
                 self._raw_config, "scan.pegasus.export", False
             ),
-            STRUCTURE_TEMPLATES=pydash.get(
+            CONVERTO=ConvertoConfig(
+                **{
+                    key: get_nested(self._raw_config, f"converto.{key}", default)
+                    for key, default in dataclasses.asdict(ConvertoConfig()).items()
+                }
+            ),
+            STRUCTURE_TEMPLATES=get_nested(
                 self._raw_config, "filesystem.structure", {}
             ),
         )
 
     def _validated_platform_map(self, raw: Any, config_key: str) -> dict[str, str]:
-        """Check a folder name to slug mapping.
+        """Check a mapping of platform or folder names to non-empty strings.
 
-        Folder names are lowercased so lookups can ignore case.
+        Keys are lowercased so lookups can ignore case.
         """
         if not isinstance(raw, dict):
             log.critical(f"Invalid config.yml: {config_key} must be a dictionary")
             sys.exit(3)
 
         normalized: dict[str, str] = {}
-        for fs_slug, slug in raw.items():
-            if not isinstance(slug, str) or not slug:
+        for key, value in raw.items():
+            if not isinstance(value, str) or not value:
                 log.critical(
-                    f"Invalid config.yml: {config_key}.{fs_slug} must be a non-empty string"
+                    f"Invalid config.yml: {config_key}.{key} must be a non-empty string"
                 )
                 sys.exit(3)
-            normalized[str(fs_slug).lower()] = slug
+            folded = str(key).lower()
+            # One key covers `PSX` and `psx` alike, so a second spelling of the
+            # same folder silently replaces the first.
+            if folded in normalized and normalized[folded] != value:
+                log.warning(
+                    f"{config_key}.{key} replaces a case variant of the same "
+                    f"folder name: {hl(normalized[folded])} is dropped for "
+                    f"{hl(value)}, since folder names are matched "
+                    "case-insensitively"
+                )
+            normalized[folded] = value
 
         return normalized
 
-    def _check_retired_filesystem_keys(self) -> None:
-        """Exit if config.yml still sets a folder name that a template replaced.
+    def _detect_platform_first(self, folder: str) -> bool | None:
+        # get_config() reparses on every call, and a found layout doesn't flip.
+        if folder not in self._platform_first_layouts:
+            detected = _platform_first_layout(folder)
+            if detected is None:
+                return None
+            self._platform_first_layouts[folder] = detected
+        return self._platform_first_layouts[folder]
 
-        Ignoring one would relocate the library under the user.
+    def _translate_retired_filesystem_keys(self) -> bool | None:
+        """Replace, in memory, the folder-name keys 5.2 saved on every settings
+        change with the templates that reproduce the layout 5.2 resolved them to.
+
+        Returns:
+            ``None`` when there was nothing to translate, otherwise whether the
+            library showed which layout it uses.
         """
-        retired = {
-            "filesystem.roms_folder": (
-                STRUCTURE_DEFAULT_KEY,
-                lambda folder: f"{folder}/{{platform}}/{{game}}",
-            ),
+        filesystem = get_nested(self._raw_config, "filesystem")
+        if not isinstance(filesystem, dict) or not (
+            RETIRED_FOLDER_KEYS & filesystem.keys()
+        ):
+            return None
+        structure = filesystem.setdefault("structure", {})
+        if not isinstance(structure, dict):
+            return None
+
+        roms_folder, firmware_folder = (
+            filesystem.pop(key, default) for key, default in RETIRED_FOLDER_KEYS.items()
+        )
+        for key, folder in zip(
+            RETIRED_FOLDER_KEYS, (roms_folder, firmware_folder), strict=False
+        ):
+            if not isinstance(folder, str) or not folder:
+                log.critical(
+                    f"Invalid config.yml: filesystem.{key} must be a non-empty string"
+                )
+                sys.exit(3)
+        if firmware_folder != RETIRED_FOLDER_KEYS["firmware_folder"]:
+            log.warning(
+                "config.yml: filesystem.firmware_folder is no longer used and is ignored"
+            )
+
+        # Validation folds structure keys to lowercase, so `Default` is declared too.
+        undeclared = RESERVED_STRUCTURE_KEYS - {str(key).lower() for key in structure}
+        if not undeclared:
+            return True
+        platform_first = self._detect_platform_first(roms_folder)
+
+        def place(folder: str) -> str:
+            # A `.` folder is the library root, which a template spells as no section.
+            return posixpath.normpath(
+                f"{{platform}}/{folder}" if platform_first else f"{folder}/{{platform}}"
+            )
+
+        templates = {
+            STRUCTURE_DEFAULT_KEY: f"{place(roms_folder)}/{{game}}",
         }
-        for key, (structure_key, to_template) in retired.items():
-            folder = pydash.get(self._raw_config, key)
-            if folder is None:
-                continue
+        # Templates have no escape for braces, so some folder names can't migrate.
+        try:
+            parse_structure_template(templates[STRUCTURE_DEFAULT_KEY])
+        except ValueError as exc:
             log.critical(
-                f"Invalid config.yml: {key} is no longer supported. Replace it "
-                f"with the equivalent layout:\n\n"
-                f"  filesystem:\n"
-                f"    structure:\n"
-                f'      {structure_key}: "{to_template(folder)}"\n\n'
+                "Invalid config.yml: filesystem.roms_folder can't be migrated "
+                "to a layout "
+                f"template ({exc}). Rename the folder or set filesystem.structure. "
                 f"See {STRUCTURE_DOCS_URL}."
             )
             sys.exit(3)
+
+        structure.update({key: templates[key] for key in undeclared})
+        return platform_first is not None
+
+    def migrate_retired_filesystem_keys(self) -> None:
+        """Write the layout that replaces the retired folder keys to config.yml."""
+        config = self.get_config()
+        if self._retired_layout_detected is None:
+            return
+
+        layout = "\n".join(
+            f'      {key}: "{config.STRUCTURE_TEMPLATES[key]}"'
+            for key in (STRUCTURE_DEFAULT_KEY,)
+        )
+        if not self._retired_layout_detected:
+            log.warning(
+                "The library is empty or not mounted, so filesystem.roms_folder is "
+                "migrated in memory only, as:\n\n"
+                f"  filesystem:\n    structure:\n{layout}\n\n"
+                "config.yml is updated on the first startup that finds the library."
+            )
+            return
+
+        try:
+            if not config.CONFIG_FILE_WRITABLE:
+                raise ConfigNotWritableException
+            self._write_raw_config()
+        except ConfigNotWritableException:
+            self._config_file_writable = False
+            log.warning(
+                "config.yml is read-only, so filesystem.roms_folder is migrated in "
+                "memory only. Replace "
+                f"them with the equivalent layout:\n\n"
+                f"  filesystem:\n    structure:\n{layout}\n\n"
+                f"See {STRUCTURE_DOCS_URL}."
+            )
+            return
+
+        log.info(
+            "Migrated filesystem.roms_folder "
+            f"in config.yml to the equivalent layout:\n\n"
+            f"  filesystem:\n    structure:\n{layout}\n"
+        )
 
     def check_library_layout(self) -> None:
         """Exit if the library is laid out as `{platform}/roms` with no template.
@@ -777,11 +923,7 @@ class ConfigManager:
         """
         if STRUCTURE_DEFAULT_KEY in self.config.STRUCTURE_TEMPLATES:
             return
-        if os.path.isdir(os.path.join(LIBRARY_BASE_PATH, "roms")):
-            return
-
-        pattern = os.path.join(LIBRARY_BASE_PATH, "*", "roms")
-        if not any(os.path.isdir(match) for match in glob.iglob(pattern)):
+        if not _platform_first_layout("roms"):
             return
 
         log.critical(
@@ -790,48 +932,13 @@ class ConfigManager:
             "  filesystem:\n"
             "    structure:\n"
             '      default: "{platform}/roms/{game}"\n'
+            "\n"
             f"See {STRUCTURE_DOCS_URL}."
         )
         sys.exit(3)
 
-    def _validate_config(self):
+    def _validate_config(self) -> None:
         """Validates the config.yml file"""
-        self._check_retired_filesystem_keys()
-
-        if not isinstance(self.config.EXCLUDED_PLATFORMS, list):
-            log.critical("Invalid config.yml: exclude.platforms must be a list")
-            sys.exit(3)
-
-        if not isinstance(self.config.EXCLUDED_SINGLE_EXT, list):
-            log.critical(
-                "Invalid config.yml: exclude.roms.single_file.extensions must be a list"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EXCLUDED_SINGLE_FILES, list):
-            log.critical(
-                "Invalid config.yml: exclude.roms.single_file.names must be a list"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EXCLUDED_MULTI_FILES, list):
-            log.critical(
-                "Invalid config.yml: exclude.roms.multi_file.names must be a list"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EXCLUDED_MULTI_PARTS_EXT, list):
-            log.critical(
-                "Invalid config.yml: exclude.roms.multi_file.parts.extensions must be a list"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EXCLUDED_MULTI_PARTS_FILES, list):
-            log.critical(
-                "Invalid config.yml: exclude.roms.multi_file.parts.names must be a list"
-            )
-            sys.exit(3)
-
         if not isinstance(self.config.GAMELIST_AUTO_EXPORT_ON_SCAN, bool):
             log.critical("Invalid config.yml: scan.gamelist.export must be a boolean")
             sys.exit(3)
@@ -906,10 +1013,9 @@ class ConfigManager:
             str(fs_slug).lower(): value
             for fs_slug, value in self.config.STRUCTURE_TEMPLATES.items()
         }
-        if self.config.STRUCTURE_TEMPLATES.pop("firmware", None) is not None:
+        if self.config.STRUCTURE_TEMPLATES.pop(RETIRED_STRUCTURE_FIRMWARE_KEY, None):
             log.warning(
-                "config.yml: filesystem.structure.firmware is no longer used and "
-                "is ignored"
+                "config.yml: filesystem.structure.firmware is no longer used and is ignored"
             )
         for key, value in self.config.STRUCTURE_TEMPLATES.items():
             is_str = isinstance(value, str)
@@ -1005,6 +1111,35 @@ class ConfigManager:
             )
             self.config.GAMELIST_MEDIA_IMAGE = MetadataMediaType.SCREENSHOT
 
+        if not isinstance(self.config.CONVERTO.download_conversion_enabled, bool):
+            log.critical(
+                "Invalid config.yml: converto.download_conversion_enabled must be a boolean"
+            )
+            sys.exit(3)
+
+        if not isinstance(self.config.CONVERTO.scan_metadata, bool):
+            log.critical("Invalid config.yml: converto.scan_metadata must be a boolean")
+            sys.exit(3)
+
+        for key, minimum in CONVERTO_INT_MINIMUMS.items():
+            value = getattr(self.config.CONVERTO, key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+                log.critical(
+                    f"Invalid config.yml: converto.{key} must be an integer >= {minimum}"
+                )
+                sys.exit(3)
+
+        try:
+            self.config.CONVERTO.platform_formats = normalize_platform_formats(
+                self._validated_platform_map(
+                    self.config.CONVERTO.platform_formats or {},
+                    "converto.platform_formats",
+                )
+            )
+        except ValueError as exc:
+            log.critical(f"Invalid config.yml: converto.platform_formats: {exc}")
+            sys.exit(3)
+
     def get_config(self) -> Config:
         try:
             with open(self.config_file, "r") as config_file:
@@ -1076,8 +1211,12 @@ class ConfigManager:
                     "export": self.config.PEGASUS_AUTO_EXPORT_ON_SCAN,
                 },
             },
+            "converto": dataclasses.asdict(self.config.CONVERTO),
         }
 
+        self._write_raw_config()
+
+    def _write_raw_config(self) -> None:
         try:
             # Ensure the config directory exists
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
@@ -1091,9 +1230,11 @@ class ConfigManager:
     def add_platform_binding(self, fs_slug: str, slug: str) -> None:
         fs_slug = fs_slug.lower()
         platform_bindings = self.config.PLATFORMS_BINDING
-        if fs_slug in platform_bindings:
-            log.warning(f"Binding for {hl(fs_slug)} already exists")
+        bound = platform_bindings.get(fs_slug)
+        if bound == slug:
             return None
+        if bound:
+            log.info(f"Rebinding {hl(fs_slug)} from {hl(bound)} to {hl(slug)}")
 
         platform_bindings[fs_slug] = slug
         self.config.PLATFORMS_BINDING = platform_bindings
@@ -1113,9 +1254,11 @@ class ConfigManager:
     def add_platform_version(self, fs_slug: str, slug: str) -> None:
         fs_slug = fs_slug.lower()
         platform_versions = self.config.PLATFORMS_VERSIONS
-        if fs_slug in platform_versions:
-            log.warning(f"Version for {hl(fs_slug)} already exists")
+        parent = platform_versions.get(fs_slug)
+        if parent == slug:
             return None
+        if parent:
+            log.info(f"Reparenting {hl(fs_slug)} from {hl(parent)} to {hl(slug)}")
 
         platform_versions[fs_slug] = slug
         self.config.PLATFORMS_VERSIONS = platform_versions
@@ -1132,7 +1275,9 @@ class ConfigManager:
         self.config.PLATFORMS_VERSIONS = platform_versions
         self._update_config_file()
 
-    def add_exclusion(self, exclusion_type: ExclusionType, exclusion_value: str):
+    def add_exclusion(
+        self, exclusion_type: ExclusionType, exclusion_value: str
+    ) -> None:
         config_item = self.config.__getattribute__(exclusion_type)
         if exclusion_value in config_item:
             log.warning(
@@ -1144,7 +1289,9 @@ class ConfigManager:
         self.config.__setattr__(exclusion_type, config_item)
         self._update_config_file()
 
-    def remove_exclusion(self, exclusion_type: ExclusionType, exclusion_value: str):
+    def remove_exclusion(
+        self, exclusion_type: ExclusionType, exclusion_value: str
+    ) -> None:
         config_item = self.config.__getattribute__(exclusion_type)
 
         try:
@@ -1191,6 +1338,11 @@ class ConfigManager:
         self.config.GAMELIST_MEDIA_THUMBNAIL = MetadataMediaType(gamelist_thumbnail)
         self.config.GAMELIST_MEDIA_IMAGE = MetadataMediaType(gamelist_image)
         self.config.PEGASUS_AUTO_EXPORT_ON_SCAN = pegasus_export
+        self._update_config_file()
+
+    def update_converto_settings(self, converto: ConvertoConfig) -> None:
+        """Replace the whole converto.* section and persist it to config.yml."""
+        self.config.CONVERTO = converto
         self._update_config_file()
 
 

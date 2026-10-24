@@ -22,6 +22,16 @@ def _get_env(var: str, fallback: str | None = None) -> str | None:
     return val.strip() if val else val
 
 
+def _get_env_list(var: str, fallback: str | None = None) -> list[str]:
+    """Parse a comma-separated env var into its non-empty, stripped values, in order."""
+    return [v.strip() for v in (_get_env(var, fallback) or "").split(",") if v.strip()]
+
+
+def _get_env_set(var: str, fallback: str | None = None) -> frozenset[str]:
+    """Parse a comma-separated env var into its set of non-empty, stripped values."""
+    return frozenset(_get_env_list(var, fallback))
+
+
 ROMM_BASE_URL: Final[str] = _get_env("ROMM_BASE_URL", "http://0.0.0.0")
 ROMM_PORT: Final[int] = safe_int(_get_env("ROMM_PORT"), 8080)
 
@@ -37,7 +47,10 @@ ROMM_TMP_PATH: Final[str | None] = _get_env("ROMM_TMP_PATH")
 LIBRARY_BASE_PATH: Final[str] = f"{ROMM_BASE_PATH}/library"
 RESOURCES_BASE_PATH: Final[str] = f"{ROMM_BASE_PATH}/resources"
 ASSETS_BASE_PATH: Final[str] = f"{ROMM_BASE_PATH}/assets"
-ZIP_CACHE_PATH: Final[str] = f"{ROMM_BASE_PATH}/cache/zips"
+CACHE_BASE_PATH: Final[str] = (
+    f"{ROMM_TMP_PATH or '/tmp/romm'}/cache"  # trunk-ignore(bandit/B108)
+)
+ZIP_CACHE_PATH: Final[str] = f"{CACHE_BASE_PATH}/zips"
 FRONTEND_RESOURCES_PATH: Final[str] = "/assets/romm/resources"
 
 # ROM UPLOADS
@@ -63,6 +76,19 @@ ROM_PATCHER_MAX_FILE_SIZE_BYTES: Final[int] = safe_int(
 ROM_PATCHER_MAX_CONCURRENCY: Final[int] = max(
     1, safe_int(_get_env("ROM_PATCHER_MAX_CONCURRENCY"), 2)
 )
+
+# ROM CONVERTO
+ROM_CONVERTO_ENABLED: Final[bool] = safe_str_to_bool(_get_env("ROM_CONVERTO_ENABLED"))
+# Seconds per rom-converto CLI operation.
+ROM_CONVERTO_TIMEOUT: Final[int] = max(
+    1, safe_int(_get_env("ROM_CONVERTO_TIMEOUT"), 600)
+)
+# Concurrent conversion subprocesses per process (each web and RQ worker).
+ROM_CONVERTO_MAX_CONCURRENCY: Final[int] = max(
+    1, safe_int(_get_env("ROM_CONVERTO_MAX_CONCURRENCY"), 2)
+)
+# Disk cache for converted downloads, under the tree nginx serves at /cache/.
+ROM_CONVERTO_CACHE_PATH: Final[str] = f"{CACHE_BASE_PATH}/converts"
 
 # DATABASE
 DB_HOST: Final[str | None] = _get_env("DB_HOST")
@@ -190,11 +216,20 @@ DISABLE_USERPASS_LOGIN: Final[bool] = safe_str_to_bool(
     _get_env("DISABLE_USERPASS_LOGIN")
 )
 
-ROMM_CORS_ALLOWED_ORIGINS: Final[list[str]] = [
-    o.strip()
-    for o in (_get_env("ROMM_CORS_ALLOWED_ORIGINS") or "").split(",")
-    if o.strip()
-]
+# EMAIL, for notification channels and password reset links; off until a host and a sender are set
+SMTP_HOST: Final[str] = _get_env("SMTP_HOST", "")
+SMTP_PORT: Final[int] = safe_int(_get_env("SMTP_PORT"), 587)
+SMTP_USERNAME: Final[str] = _get_env("SMTP_USERNAME", "")
+SMTP_PASSWORD: Final[str] = _get_env("SMTP_PASSWORD", "")
+SMTP_FROM: Final[str] = _get_env("SMTP_FROM", "")
+# `tls` is implicit TLS, usually on port 465; any other value leaves email off.
+SMTP_SECURITY_MODES: Final = ("starttls", "tls", "none")
+SMTP_SECURITY: Final[str] = _get_env("SMTP_SECURITY", "starttls").strip().lower()
+EMAIL_ENABLED: Final[bool] = bool(
+    SMTP_HOST and SMTP_FROM and SMTP_SECURITY in SMTP_SECURITY_MODES
+)
+
+ROMM_CORS_ALLOWED_ORIGINS: Final[list[str]] = _get_env_list("ROMM_CORS_ALLOWED_ORIGINS")
 
 
 def cors_allow_credentials(origins: list[str]) -> bool:
@@ -224,9 +259,9 @@ OIDC_REDIRECT_URI: Final[str] = _get_env("OIDC_REDIRECT_URI", "")
 OIDC_SERVER_APPLICATION_URL: Final[str] = _get_env("OIDC_SERVER_APPLICATION_URL", "")
 OIDC_SERVER_METADATA_URL: Final[str | None] = _get_env("OIDC_SERVER_METADATA_URL")
 OIDC_CLAIM_ROLES: Final[str] = _get_env("OIDC_CLAIM_ROLES", "")
-OIDC_ROLE_VIEWER: Final[str | None] = _get_env("OIDC_ROLE_VIEWER")
-OIDC_ROLE_EDITOR: Final[str | None] = _get_env("OIDC_ROLE_EDITOR")
-OIDC_ROLE_ADMIN: Final[str | None] = _get_env("OIDC_ROLE_ADMIN")
+OIDC_ROLE_VIEWER: Final[frozenset[str]] = _get_env_set("OIDC_ROLE_VIEWER")
+OIDC_ROLE_EDITOR: Final[frozenset[str]] = _get_env_set("OIDC_ROLE_EDITOR")
+OIDC_ROLE_ADMIN: Final[frozenset[str]] = _get_env_set("OIDC_ROLE_ADMIN")
 OIDC_TLS_CACERTFILE: Final[str | None] = _get_env("OIDC_TLS_CACERTFILE")
 OIDC_USERNAME_ATTRIBUTE: Final[str] = _get_env(
     "OIDC_USERNAME_ATTRIBUTE", "preferred_username"
@@ -280,6 +315,20 @@ SCHEDULED_CONVERT_IMAGES_TO_WEBP_CRON: Final[str] = _get_env(
     "SCHEDULED_CONVERT_IMAGES_TO_WEBP_CRON",
     "0 4 * * *",  # At 4:00 AM every day
 )
+ENABLE_SCHEDULED_CLEANUP_UPLOAD_TMP: Final[bool] = safe_str_to_bool(
+    _get_env("ENABLE_SCHEDULED_CLEANUP_UPLOAD_TMP", "true")
+)
+SCHEDULED_CLEANUP_UPLOAD_TMP_CRON: Final[str] = _get_env(
+    "SCHEDULED_CLEANUP_UPLOAD_TMP_CRON",
+    "0 * * * *",  # Every hour
+)
+ENABLE_SCHEDULED_CLEANUP_ZIP_CACHE: Final[bool] = safe_str_to_bool(
+    _get_env("ENABLE_SCHEDULED_CLEANUP_ZIP_CACHE", "true")
+)
+SCHEDULED_CLEANUP_ZIP_CACHE_CRON: Final[str] = _get_env(
+    "SCHEDULED_CLEANUP_ZIP_CACHE_CRON",
+    "0 4 * * *",  # At 4:00 AM every day
+)
 ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES: Final[bool] = safe_str_to_bool(
     _get_env("ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES")
 )
@@ -302,6 +351,12 @@ ENABLE_SCHEDULED_BUILD_RECOMMENDATIONS: Final[bool] = safe_str_to_bool(
 SCHEDULED_BUILD_RECOMMENDATIONS_CRON: Final[str] = _get_env(
     "SCHEDULED_BUILD_RECOMMENDATIONS_CRON",
     "30 5 * * *",  # At 5:30 AM every day, after the nightly scan and metadata tasks
+)
+
+# AUDIT LOG
+# Days an audit event is kept; 0 keeps every event.
+AUDIT_LOG_RETENTION_DAYS: Final[int] = safe_int(
+    _get_env("AUDIT_LOG_RETENTION_DAYS"), 90
 )
 
 # FRONTEND

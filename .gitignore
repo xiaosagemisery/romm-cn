@@ -41,10 +41,13 @@ __pycache__
 # database
 mariadb
 *.sqlite
+dump.rdb
 
 # used to mock the library/config/mounts/etc while testing
 frontend/assets/romm
 romm_mock
+
+frontend/assets/gme
 
 # virtualenv
 .venv
@@ -52,6 +55,7 @@ romm_mock
 # testing
 backend/romm_test/resources
 backend/romm_test/logs
+backend/romm_test/assets
 .pytest_cache
 .hypothesis
 /romm_test
@@ -79,9 +83,11 @@ switch_product_ids.json
 # Local dev scripts
 /dev.sh
 
-# Playwright (e2e) artifacts
-frontend/playwright/.auth/
-frontend/test-results/
-frontend/playwright-report/
+# Playwright (e2e) artifacts and local settings
+frontend/e2e/.output/
+frontend/e2e/.env
 frontend/blob-report/
 frontend/.last-run.json
+
+# mypy
+.mypy_cache

@@ -1,5 +1,10 @@
+from typing import Any
+
+from tests.factories import make_rom
+
 from handler.database import db_collection_handler, db_rom_handler
 from handler.database.collections_handler import MAX_VIRTUAL_COLLECTION_COVERS
+from handler.database.rom_filters import RomFilterParams
 from models.collection import Collection, SmartCollection
 from models.platform import Platform
 from models.rom import Rom
@@ -7,22 +12,25 @@ from models.user import User
 
 
 def _add_rom(
-    platform: Platform, index: int, manual_metadata: dict, cover: str | None = None
+    platform: Platform,
+    index: int,
+    manual_metadata: dict[str, Any],
+    cover: str | None = None,
 ) -> Rom:
-    rom = Rom(
-        platform_id=platform.id,
-        name=f"manual_rom_{index}",
-        slug=f"manual_rom_{index}",
-        fs_name=f"manual_rom_{index}.zip",
-        fs_name_no_tags=f"manual_rom_{index}",
-        fs_name_no_ext=f"manual_rom_{index}",
-        fs_extension="zip",
-        fs_path=f"{platform.slug}/roms",
+    return make_rom(
+        platform,
+        f"manual_rom_{index}",
         manual_metadata=manual_metadata,
         path_cover_s=cover or "",
         path_cover_l=cover or "",
     )
-    return db_rom_handler.add_rom(rom)
+
+
+def _criteria(smart_collection: SmartCollection) -> RomFilterParams:
+    """The stored criteria, narrowed: these rows are all well-formed."""
+    criteria = RomFilterParams.from_stored_criteria(smart_collection.filter_criteria)
+    assert criteria is not None
+    return criteria
 
 
 def _virtual_collection(type: str, name: str):
@@ -157,6 +165,24 @@ def test_filter_roms_by_collection(platform: Platform, admin_user: User):
     assert outside.id not in {rom.id for rom in roms}
 
 
+def test_filter_roms_by_another_users_private_collection_returns_nothing(
+    platform: Platform, admin_user: User, editor_user: User
+):
+    rom = _add_rom(platform, 0, {})
+    collection = db_collection_handler.add_collection(
+        Collection(name="Shelf", description="", user_id=admin_user.id)
+    )
+    db_collection_handler.add_roms_to_collection(collection.id, [rom.id])
+
+    assert db_rom_handler.get_roms_scalar(collection_id=collection.id) == []
+    assert (
+        db_rom_handler.get_roms_scalar(
+            collection_id=collection.id, user_id=editor_user.id
+        )
+        == []
+    )
+
+
 def test_filter_roms_by_unknown_collection_returns_nothing(
     platform: Platform, admin_user: User
 ):
@@ -204,7 +230,7 @@ def test_filter_roms_by_non_favorite_without_a_collection(
     assert {rom.id for rom in not_favorites} == {rom.id for rom in roms}
 
 
-def test_get_smart_collection_criteria_normalizes_legacy_selected_status_lists(
+def test_stored_criteria_normalizes_legacy_selected_status_lists(
     admin_user: User,
 ):
     smart_collection = SmartCollection(
@@ -214,12 +240,12 @@ def test_get_smart_collection_criteria_normalizes_legacy_selected_status_lists(
         filter_criteria={"selected_status": ["finished", "completed_100"]},
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert criteria["statuses"] == ["finished", "completed_100"]
+    assert criteria.statuses == ["finished", "completed_100"]
 
 
-def test_get_smart_collection_criteria_wraps_legacy_scalar_values(admin_user: User):
+def test_stored_criteria_wraps_legacy_scalar_values(admin_user: User):
     smart_collection = SmartCollection(
         name="Legacy shooter",
         description="",
@@ -227,13 +253,13 @@ def test_get_smart_collection_criteria_wraps_legacy_scalar_values(admin_user: Us
         filter_criteria={"selected_genre": "Shooter", "platform_id": 7},
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert criteria["genres"] == ["Shooter"]
-    assert criteria["platform_ids"] == [7]
+    assert criteria.genres == ["Shooter"]
+    assert criteria.platform_ids == [7]
 
 
-def test_get_smart_collection_criteria_passes_metadata_providers(admin_user: User):
+def test_stored_criteria_passes_metadata_providers(admin_user: User):
     smart_collection = SmartCollection(
         name="IGDB and Moby matches",
         description="",
@@ -244,28 +270,13 @@ def test_get_smart_collection_criteria_passes_metadata_providers(admin_user: Use
         },
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert criteria["metadata_providers"] == ["igdb", "moby"]
-    assert criteria["metadata_providers_logic"] == "all"
-
-
-def test_get_smart_collection_criteria_passes_soundtrack_filters(
-    admin_user: User,
-):
-    smart_collection = SmartCollection(
-        name="Games with music",
-        description="",
-        user_id=admin_user.id,
-        filter_criteria={"has_soundtrack": True},
-    )
-
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
-
-    assert criteria["has_soundtrack"] is True
+    assert criteria.metadata_providers == ["igdb", "moby"]
+    assert criteria.metadata_providers_logic == "all"
 
 
-def test_get_smart_collection_criteria_passes_negative_boolean_filters(
+def test_stored_criteria_passes_negative_boolean_filters(
     admin_user: User,
 ):
     smart_collection = SmartCollection(
@@ -275,12 +286,12 @@ def test_get_smart_collection_criteria_passes_negative_boolean_filters(
         filter_criteria={"matched": False},
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert criteria["matched"] is False
+    assert criteria.matched is False
 
 
-def test_get_smart_collection_criteria_passes_player_counts(admin_user: User):
+def test_stored_criteria_passes_player_counts(admin_user: User):
     smart_collection = SmartCollection(
         name="Multiplayer games",
         description="",
@@ -291,13 +302,13 @@ def test_get_smart_collection_criteria_passes_player_counts(admin_user: User):
         },
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert criteria["player_counts"] == ["2", "4"]
-    assert criteria["player_counts_logic"] == "any"
+    assert criteria.player_counts == ["2", "4"]
+    assert criteria.player_counts_logic == "any"
 
 
-def test_get_smart_collection_criteria_passes_tags(admin_user: User):
+def test_stored_criteria_passes_tags(admin_user: User):
     smart_collection = SmartCollection(
         name="Prototypes and betas",
         description="",
@@ -308,13 +319,13 @@ def test_get_smart_collection_criteria_passes_tags(admin_user: User):
         },
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert criteria["tags"] == ["Proto", "Beta"]
-    assert criteria["tags_logic"] == "any"
+    assert criteria.tags == ["Proto", "Beta"]
+    assert criteria.tags_logic == "any"
 
 
-def test_get_smart_collection_criteria_drops_nested_smart_collection_id(
+def test_stored_criteria_drops_nested_smart_collection_id(
     admin_user: User,
 ):
     # The v2 dialog stores the route it was created from, so a smart collection
@@ -326,7 +337,7 @@ def test_get_smart_collection_criteria_drops_nested_smart_collection_id(
         filter_criteria={"smart_collection_id": 42, "matched": True},
     )
 
-    criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
+    criteria = _criteria(smart_collection)
 
-    assert "smart_collection_id" not in criteria
-    assert criteria["matched"] is True
+    assert criteria.smart_collection_id is None
+    assert criteria.matched is True

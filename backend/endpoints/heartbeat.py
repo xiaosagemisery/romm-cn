@@ -6,11 +6,13 @@ from typing import Final
 from anyio import Path as AnyioPath
 from fastapi import HTTPException, Request, status
 
+from adapters.services.rom_converto import rom_converto_service
 from adapters.services.sigil import SigilService
 from config import (
     DISABLE_LOGS_VIEWER,
     DISABLE_SETUP_WIZARD,
     DISABLE_USERPASS_LOGIN,
+    EMAIL_ENABLED,
     ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP,
     ENABLE_SCHEDULED_RESCAN,
     ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA,
@@ -28,8 +30,14 @@ from config import (
 )
 from config.config_manager import config_manager as cm
 from decorators.auth import protected_route
-from endpoints.responses.heartbeat import HeartbeatResponse
+from endpoints.responses.heartbeat import (
+    HeartbeatResponse,
+    SetupExistingPlatform,
+    SetupLibraryResponse,
+    SetupPlatformsResponse,
+)
 from exceptions.fs_exceptions import PlatformAlreadyExistsException
+from handler.auth.base_handler import reset_link_base_url
 from handler.auth.constants import Scope
 from handler.database import db_stats_handler, db_user_handler
 from handler.filesystem import fs_platform_handler
@@ -55,7 +63,7 @@ from handler.metadata import (
 from handler.redis_handler import sync_cache
 from handler.scan_handler import MetadataSource
 from logger.logger import log
-from utils import get_version
+from utils import get_git_branch, get_version
 from utils.platforms import get_supported_platforms
 from utils.rate_limit import enforce_rate_limit, get_client_ip
 from utils.router import APIRouter
@@ -105,9 +113,11 @@ async def heartbeat() -> HeartbeatResponse:
     tgdb_enabled = meta_tgdb_handler.is_enabled()
     libretro_enabled = meta_libretro_handler.is_enabled()
 
+    version = get_version()
     return {
         "SYSTEM": {
-            "VERSION": get_version(),
+            "VERSION": version,
+            "GIT_BRANCH": get_git_branch() if version == "development" else None,
             "SHOW_SETUP_WIZARD": len(db_user_handler.get_admin_users()) == 0
             and not DISABLE_SETUP_WIZARD,
         },
@@ -161,6 +171,11 @@ async def heartbeat() -> HeartbeatResponse:
             "PROVIDER": OIDC_PROVIDER,
             "RP_INITIATED_LOGOUT": OIDC_RP_INITIATED_LOGOUT,
         },
+        "NOTIFICATIONS": {
+            "EMAIL_ENABLED": EMAIL_ENABLED,
+            "EMAILS_RESET_LINKS": reset_link_base_url() is not None,
+        },
+        "CONVERTO": {"ENABLED": await rom_converto_service.is_enabled()},
         "TASKS": {
             "ENABLE_SCHEDULED_RESCAN": ENABLE_SCHEDULED_RESCAN,
             "SCHEDULED_RESCAN_CRON": SCHEDULED_RESCAN_CRON,
@@ -251,22 +266,18 @@ async def _probe_metadata_source(metadata_source: MetadataSource) -> bool:
     "/setup/library",
     [],
 )
-async def get_setup_library_info(request: Request):
+async def get_setup_library_info(request: Request) -> SetupLibraryResponse:
     """Get library structure information for setup wizard.
 
     Only accessible during initial setup (no admin users) or with authentication.
 
     Returns:
-        - library_ready: whether the configured platforms folder exists on disk
-        - library_structure: the configured `filesystem.structure.default` template
-        - existing_platforms: list of objects with fs_slug and rom_count
-        - supported_platforms: list of all supported platforms with metadata
+        SetupLibraryResponse: The library folder state and the platforms to offer.
     """
 
     # Check authentication - only allow public access if no admin users
     # If admin users exist, this would need authentication (but won't be called during setup)
 
-    # If there are admin users already, enforce the USERS_WRITE scope.
     if (
         Scope.PLATFORMS_READ not in request.auth.scopes
         and len(db_user_handler.get_admin_users()) > 0
@@ -298,7 +309,7 @@ async def get_setup_library_info(request: Request):
         existing_platform_slugs = []
 
     # Build existing platforms with rom counts
-    existing_platforms = []
+    existing_platforms: list[SetupExistingPlatform] = []
     if library_ready and existing_platform_slugs:
         for fs_slug in existing_platform_slugs:
             rom_count = 0
@@ -350,7 +361,9 @@ async def get_setup_library_info(request: Request):
     [],
     status_code=status.HTTP_201_CREATED,
 )
-async def create_setup_platforms(request: Request, platform_slugs: list[str]):
+async def create_setup_platforms(
+    request: Request, platform_slugs: list[str]
+) -> SetupPlatformsResponse:
     """Create platform folders during setup wizard.
 
     Only accessible during initial setup (no admin users) or with authentication.
@@ -359,12 +372,9 @@ async def create_setup_platforms(request: Request, platform_slugs: list[str]):
         platform_slugs: List of platform fs_slugs to create
 
     Returns:
-        - success: bool
-        - created_count: number of platforms created
-        - message: success or error message
+        SetupPlatformsResponse: How many platform folders were created.
     """
 
-    # If there are admin users already, enforce the USERS_WRITE scope.
     if (
         Scope.PLATFORMS_WRITE not in request.auth.scopes
         and len(db_user_handler.get_admin_users()) > 0

@@ -7,15 +7,14 @@ day-of-year semantics are pinned in `tests/handler/database/test_roms_released_d
 """
 
 from datetime import date, datetime, timezone
-from typing import Iterator
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from tests.factories import make_platform, make_rom
 
-from handler.database import db_platform_handler, db_rom_handler
-from handler.database.base_handler import sync_engine, sync_session
+from handler.database import db_rom_handler
+from handler.database.base_handler import sync_session
 from models.permission import HiddenEntity, PermEntity
 from models.platform import Platform
 from models.rom import Rom
@@ -28,18 +27,7 @@ def _dated_rom(platform: Platform, name: str, released: date) -> Rom:
     The generated column is derived from the provider blobs, and IGDB reports
     seconds, so that is what goes in (0098 multiplies it up to milliseconds).
     """
-    rom = db_rom_handler.add_rom(
-        Rom(
-            platform_id=platform.id,
-            name=name,
-            slug=name,
-            fs_name=f"{name}.zip",
-            fs_name_no_tags=name,
-            fs_name_no_ext=name,
-            fs_extension="zip",
-            fs_path=f"{platform.slug}/roms",
-        )
-    )
+    rom = make_rom(platform, name)
     seconds = int(
         datetime(
             released.year, released.month, released.day, tzinfo=timezone.utc
@@ -52,28 +40,7 @@ def _dated_rom(platform: Platform, name: str, released: date) -> Rom:
 
 @pytest.fixture
 def other_platform() -> Platform:
-    return db_platform_handler.add_platform(
-        Platform(
-            name="other_platform",
-            slug="other_platform_slug",
-            fs_slug="other_platform_slug",
-        )
-    )
-
-
-@pytest.fixture
-def captured_sql() -> Iterator[list[str]]:
-    """Every statement the engine runs while the fixture is active."""
-    statements: list[str] = []
-
-    def before_cursor_execute(conn, cursor, statement, parameters, context, many):
-        statements.append(statement)
-
-    event.listen(sync_engine, "before_cursor_execute", before_cursor_execute)
-    try:
-        yield statements
-    finally:
-        event.remove(sync_engine, "before_cursor_execute", before_cursor_execute)
+    return make_platform("other_platform_slug", name="other_platform")
 
 
 def _get(client: TestClient, token: str, **params):
@@ -211,7 +178,7 @@ def test_rejects_malformed_days(
     """A typo fails loudly rather than quietly matching nothing."""
     assert (
         _get(client, access_token, released_days=released_days).status_code
-        == status.HTTP_422_UNPROCESSABLE_ENTITY
+        == status.HTTP_422_UNPROCESSABLE_CONTENT
     )
 
 
@@ -229,7 +196,7 @@ def test_rejects_more_days_than_the_ceiling(
         access_token,
         released_days=[f"{month}-1" for month in range(1, 13)] + ["1-2"],
     )
-    assert too_many.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert too_many.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 def test_pages_the_day_without_shipping_all_of_it(
@@ -342,17 +309,17 @@ def test_the_day_lookup_stays_on_the_index(
     client: TestClient,
     access_token: str,
     platform: Platform,
-    captured_sql: list[str],
+    executed_statements: list[str],
 ) -> None:
     """The point of the range union: no SQL date function on the indexed column."""
     for year in range(1990, 1996):
         _dated_rom(platform, f"rom_{year}", date(year, 9, 8))
-    captured_sql.clear()
+    executed_statements.clear()
 
     response = _get(client, access_token, released_days="9-8", limit=1)
     assert response.status_code == status.HTTP_200_OK
 
-    rom_queries = [sql for sql in captured_sql if " roms" in sql.lower()]
+    rom_queries = [sql for sql in executed_statements if " roms" in sql.lower()]
     assert rom_queries, "expected the lookup to query the roms table"
     assert not [
         sql

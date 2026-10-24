@@ -103,7 +103,7 @@ def detect_mime_type(file_path: os.PathLike[str] | str) -> str:
     try:
         with _MIME_DETECTOR_LOCK:
             return _MIME_DETECTOR.from_file(file_path)
-    except (OSError, magic.MagicException):
+    except OSError, magic.MagicException:
         return ""
 
 
@@ -128,7 +128,7 @@ def read_zip_file(file: str | os.PathLike[str] | IO[bytes]) -> Iterator[bytes]:
             with z.open(largest_file, "r") as f:
                 while chunk := f.read(FILE_READ_CHUNK_SIZE):
                     yield chunk
-    except (zipfile.BadZipFile, RuntimeError, OSError):
+    except zipfile.BadZipFile, RuntimeError, OSError:
         if isinstance(file, Path):
             for chunk in read_basic_file(file):
                 yield chunk
@@ -143,10 +143,12 @@ def read_tar_file(
 
             # Find the largest file among regular files only
             largest_file = max(regular_files, key=lambda x: x.size)
-            with f.extractfile(largest_file) as ef:  # type: ignore
-                with ef:
-                    while chunk := ef.read(FILE_READ_CHUNK_SIZE):
-                        yield chunk
+            ef = f.extractfile(largest_file)
+            if ef is None:
+                return
+            with ef:
+                while chunk := ef.read(FILE_READ_CHUNK_SIZE):
+                    yield chunk
     except tarfile.ReadError:
         for chunk in read_basic_file(file_path):
             yield chunk
@@ -759,7 +761,7 @@ def is_chd_file(file_path: Path) -> bool:
     try:
         with _MIME_DETECTOR_LOCK:
             return _MIME_DETECTOR.from_file(file_path) == CHD_MIME_TYPE
-    except (OSError, magic.MagicException):
+    except OSError, magic.MagicException:
         return False
 
 

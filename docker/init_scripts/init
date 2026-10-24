@@ -13,6 +13,8 @@ ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES="${ENABLE_SCHEDULED_CLEANUP_ORPHANED
 ENABLE_SCHEDULED_RESCAN="${ENABLE_SCHEDULED_RESCAN:="false"}"
 ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA="${ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA:="false"}"
 ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB="${ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB:="false"}"
+# The values the backend's safe_str_to_bool reads as true, matched lowercased.
+TRUTHY_PATTERN='^(1|true|yes|on)$'
 
 # if REDIS_HOST is set, we assume that an external redis is used
 REDIS_HOST="${REDIS_HOST:=""}"
@@ -114,7 +116,9 @@ wait_for_gunicorn() {
 	warn_log "Gunicorn did not become ready after waiting ${wait_seconds}s!"
 }
 
-# Runs our main process and creates a corresponding PID file
+# Runs our main process and creates a corresponding PID file.
+# WEB_SERVER_KEEPALIVE must outlive nginx's upstream idle timeout (60s), or the
+# pooled connection is reaped before nginx can reuse it.
 start_bin_gunicorn() {
 	# Wire LOGLEVEL into Gunicorn's logging config so it respects the env var.
 	local gunicorn_level="${LOGLEVEL^^}"
@@ -135,11 +139,12 @@ start_bin_gunicorn() {
 	"${wrap[@]}" gunicorn \
 		--bind=0.0.0.0:"${DEV_PORT:-5000}" \
 		--pid=/tmp/gunicorn.pid \
-		--forwarded-allow-ips="*" \
+		--no-control-socket \
+		--forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,fc00::/7}" \
 		--worker-class uvicorn_worker.UvicornWorker \
 		--workers "${WEB_SERVER_CONCURRENCY:-4}" \
 		--timeout "${WEB_SERVER_TIMEOUT:-300}" \
-		--keep-alive "${WEB_SERVER_KEEPALIVE:-2}" \
+		--keep-alive "${WEB_SERVER_KEEPALIVE:-65}" \
 		--max-requests "${WEB_SERVER_MAX_REQUESTS:-1000}" \
 		--max-requests-jitter "${WEB_SERVER_MAX_REQUESTS_JITTER:-100}" \
 		--worker-connections "${WEB_SERVER_WORKER_CONNECTIONS:-1000}" \
@@ -160,7 +165,7 @@ start_bin_nginx() {
 		nginx -g 'user romm;'
 	fi
 
-	: "${ROMM_BASE_URL:=http://0.0.0.0:8080}"
+	: "${ROMM_BASE_URL:=http://0.0.0.0:${ROMM_PORT:-8080}}"
 	info_log "🚀 RomM is now available at ${ROMM_BASE_URL}"
 }
 
@@ -224,12 +229,11 @@ start_bin_valkey-server() {
 # --url, which would put it on a world-readable command line. REDIS_SSL is a
 # boolean to the app, so "false" and "0" mean plaintext.
 build_redis_url() {
-	local scheme userinfo="" ssl="${REDIS_SSL-}"
+	local scheme="redis" userinfo="" ssl="${REDIS_SSL-}"
 
-	case "${ssl,,}" in
-	1 | true | yes | on) scheme="rediss" ;;
-	*) scheme="redis" ;;
-	esac
+	if [[ ${ssl,,} =~ ${TRUTHY_PATTERN} ]]; then
+		scheme="rediss"
+	fi
 
 	if [[ -n ${REDIS_PASSWORD-} ]]; then
 		userinfo="${REDIS_USERNAME-}:${REDIS_PASSWORD}@"
@@ -252,6 +256,7 @@ start_bin_rq_cron() {
 		RQ_REDIS_URL="${redis_url}" \
 		rq cron \
 		--path /backend \
+		--connection-class handler.redis_handler.RomMRedis \
 		--logging-level "${LOGLEVEL}" \
 		tasks.cron_config &
 	echo "$!" >/tmp/rq_cron.pid
@@ -260,13 +265,13 @@ start_bin_rq_cron() {
 # Commands to start RQ worker
 start_bin_rq_worker() {
 	info_log "Starting RQ worker"
-	start_rq_worker rq_worker high default low
+	start_rq_worker rq_worker RomMWorker high default low
 }
 
 # Scans get a worker of their own, see SCAN_QUEUE_NAME.
 start_bin_rq_scan_worker() {
 	info_log "Starting RQ scan worker"
-	start_rq_worker rq_scan_worker scans
+	start_rq_worker rq_scan_worker RomMWorker scans
 }
 
 # Set PYTHONPATH so RQ can find the tasks module.
@@ -277,7 +282,8 @@ start_bin_rq_scan_worker() {
 # wait out their delay.
 start_rq_worker() {
 	local name="$1"
-	shift
+	local worker_class="$2"
+	shift 2
 
 	local redis_url
 	redis_url="$(build_redis_url)"
@@ -286,12 +292,14 @@ start_rq_worker() {
 		RQ_REDIS_URL="${redis_url}" \
 		rq worker \
 		--path /backend \
-		--worker-class handler.rq_worker.RomMWorker \
-		--pid "/tmp/${name}.pid" \
+		--worker-class "handler.rq_worker.${worker_class}" \
+		--connection-class handler.redis_handler.RomMRedis \
 		--results-ttl "${TASK_RESULT_TTL:-86400}" \
 		--logging_level "${LOGLEVEL}" \
 		--with-scheduler \
 		"$@" &
+	# RQ writes --pid only after importing the worker class, too late for the watchdog.
+	echo "$!" >"/tmp/${name}.pid"
 }
 
 start_bin_watcher() {
@@ -400,7 +408,7 @@ while ! ((exited)); do
 	watchdog_process_pid rq_scan_worker
 
 	# only start the watcher if enabled
-	if [[ ${ENABLE_RESCAN_ON_FILESYSTEM_CHANGE} == "true" ]]; then
+	if [[ ${ENABLE_RESCAN_ON_FILESYSTEM_CHANGE,,} =~ ${TRUTHY_PATTERN} ]]; then
 		watchdog_process_pid watcher
 	fi
 

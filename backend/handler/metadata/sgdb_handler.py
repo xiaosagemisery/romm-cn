@@ -6,26 +6,7 @@ from adapters.services.steamgriddb_types import SGDBDimension, SGDBGame, SGDBTyp
 from config import STEAMGRIDDB_API_KEY
 from logger.logger import log
 
-from .base_handler import MetadataHandler
-
-
-class SGDBResource(TypedDict):
-    thumb: str
-    url: str
-    type: str
-    width: int
-    height: int
-    style: str
-    author: str
-    score: int
-    nsfw: bool
-    humor: bool
-    epilepsy: bool
-
-
-class SGDBResult(TypedDict):
-    name: str
-    resources: list[SGDBResource]
+from .base_handler import CoverResource, CoverResult, MetadataHandler
 
 
 class SGDBRom(TypedDict):
@@ -43,16 +24,10 @@ class SGDBBaseHandler(MetadataHandler):
         return bool(STEAMGRIDDB_API_KEY)
 
     async def heartbeat(self) -> bool:
-        if not self.is_enabled():
-            return False
+        async def probe() -> bool:
+            return bool(await self.sgdb_service.get_game_by_id(1))
 
-        try:
-            response = await self.sgdb_service.get_game_by_id(1)
-        except Exception as e:
-            log.error("Error checking SteamGridDB API: %s", e)
-            return False
-
-        return bool(response)
+        return await self._heartbeat("SteamGridDB API", probe)
 
     async def get_rom_by_id(self, sgdb_id: int) -> SGDBRom:
         """Get ROM details by SteamGridDB ID."""
@@ -86,7 +61,7 @@ class SGDBBaseHandler(MetadataHandler):
             log.warning(f"Failed to fetch ROM by SteamGridDB ID {sgdb_id}: {e}")
             raise
 
-    async def get_details(self, search_term: str) -> list[SGDBResult]:
+    async def get_details(self, search_term: str) -> list[CoverResult]:
         if not self.is_enabled():
             return []
 
@@ -183,7 +158,7 @@ class SGDBBaseHandler(MetadataHandler):
         is_nsfw: bool | Literal["any"] | None = None,
         is_humor: bool | Literal["any"] | None = None,
         is_epilepsy: bool | Literal["any"] | None = None,
-    ) -> SGDBResult:
+    ) -> CoverResult:
         game_covers = [
             cover
             async for cover in self.sgdb_service.iter_grids_for_game(
@@ -198,12 +173,12 @@ class SGDBBaseHandler(MetadataHandler):
             if not cover.get("lock")
         ]
         if not game_covers:
-            return SGDBResult(name=game_name, resources=[])
+            return CoverResult(name=game_name, resources=[])
 
-        return SGDBResult(
+        return CoverResult(
             name=game_name,
             resources=[
-                SGDBResource(
+                CoverResource(
                     thumb=cover["thumb"],
                     url=cover["url"],
                     type="animated" if cover["thumb"].endswith(".webm") else "static",

@@ -1,6 +1,7 @@
 """Guards the cross-origin defaults the API is served with."""
 
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI
@@ -16,7 +17,7 @@ LISTED_ORIGIN = "https://romm.example"
 
 
 def _cors_middleware() -> Middleware:
-    return next(m for m in app.user_middleware if m.cls is CORSMiddleware)
+    return next(m for m in app.user_middleware if cast(object, m.cls) is CORSMiddleware)
 
 
 def _scratch_app(**kwargs: Any) -> TestClient:
@@ -32,9 +33,9 @@ def _scratch_app(**kwargs: Any) -> TestClient:
 
 def test_a_wildcard_origin_is_never_paired_with_credentials() -> None:
     cors = _cors_middleware()
-    assert not (
-        cors.kwargs["allow_credentials"] and "*" in cors.kwargs["allow_origins"]
-    ), (
+    origins = cors.kwargs["allow_origins"]
+    assert isinstance(origins, Sequence)
+    assert not (cors.kwargs["allow_credentials"] and "*" in origins), (
         "Starlette answers a wildcard with the caller's own Origin and "
         "Access-Control-Allow-Credentials, granting every site credentialed access"
     )

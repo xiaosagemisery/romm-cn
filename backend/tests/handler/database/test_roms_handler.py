@@ -4,22 +4,47 @@ Bulk `update()` bypasses the ORM `@validates` hooks, so `update_rom` keeps
 the columns derived from `name` / `fs_name` / `fs_path` in sync explicitly.
 """
 
-import pytest
-from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.exc import IntegrityError
+import re
+import struct
+from collections.abc import Iterator
+from datetime import datetime, timezone
+from typing import Any
+from unittest.mock import MagicMock
 
-from handler.database import (
-    db_platform_handler,
-    db_rom_handler,
+import pytest
+from sqlalchemy import event
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.engine import Dialect
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from tests.factories import (
+    make_esrb_rated_rom,
+    make_platform,
+    make_rom,
+)
+from tests.sql_dialects import MARIADB_DIALECT, POSTGRESQL_DIALECT, compile_sql
+
+from config import ROMM_DB_DRIVER
+from decorators.database import INJECTED_SESSION
+from exceptions.database_exceptions import RomFileOwnerChangedError
+from handler.auth.rom_visibility import RomVisibilityFilter
+from handler.database import db_rom_handler
+from handler.database.base_handler import sync_engine
+from handler.database.roms_handler import (
+    _filter_values_cache_version,
 )
 from models.platform import Platform
 from models.rom import (
+    HAS_FILE_ON_DISK_FILTERS,
     Rom,
     RomFile,
     RomFileCategory,
+    RomUserStatus,
     TrackMeta,
     compute_full_path_hash,
 )
+from models.user import User
+from utils.database import ROMS_FS_NAME_NO_EXT_LOWER_INDEX
 
 
 class TestUpdateRomDerivedColumns:
@@ -35,7 +60,7 @@ class TestUpdateRomDerivedColumns:
         assert updated.fs_name == "Sonic (Europe).md"
         assert updated.fs_name_no_tags == "Sonic"
         assert updated.fs_name_no_ext == "Sonic (Europe)"
-        # The extension is resynced too — the rename endpoint used to omit it.
+        # The extension is resynced too; the rename endpoint used to omit it.
         assert updated.fs_extension == "md"
 
     def test_update_either_path_half_resyncs_the_digest(self, rom: Rom):
@@ -71,17 +96,18 @@ class TestUpdateRomDerivedColumns:
         assert updated.name == "The New Name 2"
         assert updated.name_sort_key == "pinned"
 
+    def test_update_metadata_resyncs_min_age(self, rom: Rom):
+        rated = db_rom_handler.update_rom(
+            rom.id,
+            {"ss_metadata": {"age_ratings": [{"category": "PEGI", "rating": "16"}]}},
+        )
+        assert rated.min_age == 16
 
-def _make_rom(platform: Platform, fs_name: str) -> Rom:
-    return Rom(
-        platform_id=platform.id,
-        fs_name=fs_name,
-        fs_path=f"{platform.slug}/roms",
-        name=fs_name,
-        url_cover="",
-        url_manual="",
-        url_screenshots=[],
-    )
+        # The source the caller left out comes from the stored row.
+        overridden = db_rom_handler.update_rom(
+            rom.id, {"manual_metadata": {"age_ratings": ["ESRB:E10"]}}
+        )
+        assert overridden.min_age == 10
 
 
 class TestAddRomMergesScannedTags:
@@ -118,7 +144,7 @@ class TestAddRomMergesScannedTags:
             },
         )
 
-        db_rom_handler.add_rom(self._scanned(rom))
+        db_rom_handler.add_rom(self._scanned(rom))  # noqa: TID251
 
         stored = db_rom_handler.get_rom(rom.id)
         assert stored is not None
@@ -131,7 +157,7 @@ class TestAddRomMergesScannedTags:
     def test_columns_the_scan_omits_are_left_alone(self, rom: Rom):
         db_rom_handler.update_rom(rom.id, {"summary": "kept", "slug": "kept-slug"})
 
-        db_rom_handler.add_rom(self._scanned(rom))
+        db_rom_handler.add_rom(self._scanned(rom))  # noqa: TID251
 
         stored = db_rom_handler.get_rom(rom.id)
         assert stored is not None
@@ -146,27 +172,34 @@ class TestUniquePlatformFullPath:
     creating duplicate library entries."""
 
     def test_duplicate_platform_full_path_rejected(self, platform: Platform):
-        db_rom_handler.add_rom(_make_rom(platform, "Patched Game.gba"))
+        make_rom(platform, "Patched Game", fs_extension="gba")
 
         with pytest.raises(IntegrityError):
-            db_rom_handler.add_rom(_make_rom(platform, "Patched Game.gba"))
+            make_rom(platform, "Patched Game", fs_extension="gba")
 
     def test_same_fs_name_in_another_folder_allowed(self, platform: Platform):
         """What a custom library structure makes ordinary, and what the old
         (platform_id, fs_name) index forbade."""
-        root = db_rom_handler.add_rom(_make_rom(platform, "Patched Game.gba"))
-        nested = _make_rom(platform, "Patched Game.gba")
-        nested.fs_path = f"{platform.slug}/roms/Hacks"
+        root = make_rom(platform, "Patched Game", fs_extension="gba")
+        nested = make_rom(
+            platform,
+            "Patched Game",
+            fs_extension="gba",
+            fs_path=f"{platform.slug}/roms/Hacks",
+        )
 
-        assert db_rom_handler.add_rom(nested).id != root.id
+        assert nested.id != root.id
 
     def test_moving_a_rom_onto_an_occupied_path_is_rejected(self, platform: Platform):
         """`update_rom` bypasses the ORM, so it has to resync the digest the
         unique index reads or the collision goes unnoticed."""
-        db_rom_handler.add_rom(_make_rom(platform, "Patched Game.gba"))
-        moved = _make_rom(platform, "Other Game.gba")
-        moved.fs_path = f"{platform.slug}/roms/Hacks"
-        moved = db_rom_handler.add_rom(moved)
+        make_rom(platform, "Patched Game", fs_extension="gba")
+        moved = make_rom(
+            platform,
+            "Other Game",
+            fs_extension="gba",
+            fs_path=f"{platform.slug}/roms/Hacks",
+        )
 
         with pytest.raises(IntegrityError):
             db_rom_handler.update_rom(
@@ -175,14 +208,39 @@ class TestUniquePlatformFullPath:
             )
 
     def test_same_fs_name_other_platform_allowed(self, platform: Platform):
-        other = db_platform_handler.add_platform(
-            Platform(name="other", slug="other_slug", fs_slug="other_slug")
-        )
+        other = make_platform("other_slug", name="other")
 
-        first = db_rom_handler.add_rom(_make_rom(platform, "Patched Game.gba"))
-        second = db_rom_handler.add_rom(_make_rom(other, "Patched Game.gba"))
+        first = make_rom(platform, "Patched Game", fs_extension="gba")
+        second = make_rom(other, "Patched Game", fs_extension="gba")
 
         assert first.id != second.id
+
+
+class TestGetRomsByFsNamesNoExt:
+    def test_matches_a_name_in_another_case(self, rom: Rom):
+        assert [
+            r.id for r in db_rom_handler.get_roms_by_fs_names_no_ext(["TEST_ROM"])
+        ] == [rom.id]
+
+    def test_lowercased_index_exists_only_on_postgresql(self):
+        """The drift check exempts it, so nothing else would notice it missing."""
+        with sync_engine.connect() as connection:
+            names = {i["name"] for i in sa_inspect(connection).get_indexes("roms")}
+        assert (ROMS_FS_NAME_NO_EXT_LOWER_INDEX in names) == (
+            ROMM_DB_DRIVER == "postgresql"
+        )
+
+
+class TestHasSavesStatesFilter:
+    """The has-saves / has-states filters match a user's own assets plus other
+    users' public (community) ones, mirroring the shared-assets visibility."""
+
+    def _rom_ids(self, **kwargs) -> set[int]:
+        return {r.id for r in db_rom_handler.get_roms_scalar(**kwargs)}
+
+    # ---- saves ----
+
+    # ---- states ----
 
 
 def _scanned_file(
@@ -228,7 +286,7 @@ class TestHasSoundtrackFilter:
     def test_has_soundtrack_true_matches_only_roms_with_tracks(
         self, rom: Rom, platform: Platform
     ):
-        other = db_rom_handler.add_rom(_make_rom(platform, "No Music.gba"))
+        other = make_rom(platform, "No Music", fs_extension="gba")
         self._with_soundtrack(rom)
 
         ids = {r.id for r in db_rom_handler.get_roms_scalar(has_soundtrack=True)}
@@ -239,13 +297,140 @@ class TestHasSoundtrackFilter:
     def test_has_soundtrack_false_excludes_roms_with_tracks(
         self, rom: Rom, platform: Platform
     ):
-        other = db_rom_handler.add_rom(_make_rom(platform, "No Music.gba"))
+        other = make_rom(platform, "No Music", fs_extension="gba")
         self._with_soundtrack(rom)
 
         ids = {r.id for r in db_rom_handler.get_roms_scalar(has_soundtrack=False)}
 
         assert rom.id not in ids
         assert other.id in ids
+
+
+class TestGetRomIds:
+    """Pin `get_rom_ids` to `get_roms_scalar`: same ids, same order."""
+
+    def _physical_game(self, platform: Platform) -> Rom:
+        return make_rom(
+            platform,
+            "Physical Game",
+            fs_extension="",
+            fs_path=f"{platform.slug}/roms/.physical",
+            is_physical=True,
+        )
+
+    def test_matches_the_orm_accessor_for_every_scope_that_uses_it(
+        self,
+        rom: Rom,
+        platform: Platform,
+        other_platform: Platform,
+        admin_user: User,
+    ) -> None:
+        """Pin the two accessors to each other rather than to a fixed list."""
+        make_rom(other_platform, "Other Platform", fs_extension="gba")
+        self._physical_game(platform)
+
+        for scope in (
+            {},
+            {"user_id": admin_user.id},
+            {"platform_ids": [platform.id]},
+            {
+                "visibility": RomVisibilityFilter(
+                    hidden_platform_ids=frozenset({other_platform.id})
+                )
+            },
+            {"visibility": RomVisibilityFilter(hidden_rom_ids=frozenset({rom.id}))},
+            {"order_by": "name", "order_dir": "desc"},
+            {"platform_ids": [platform.id], **HAS_FILE_ON_DISK_FILTERS},
+        ):
+            assert db_rom_handler.get_rom_ids(**scope) == [
+                r.id for r in db_rom_handler.get_roms_scalar(**scope)
+            ], scope
+
+    def test_hidden_rom_drops_out(
+        self, rom: Rom, second_rom: Rom, platform: Platform
+    ) -> None:
+        ids = db_rom_handler.get_rom_ids(
+            platform_ids=[platform.id],
+            visibility=RomVisibilityFilter(hidden_rom_ids=frozenset({rom.id})),
+        )
+
+        assert rom.id not in ids
+        assert second_rom.id in ids
+
+    def test_physical_game_drops_out(self, rom: Rom, platform: Platform) -> None:
+        physical = self._physical_game(platform)
+
+        ids = db_rom_handler.get_rom_ids(
+            platform_ids=[platform.id], **HAS_FILE_ON_DISK_FILTERS
+        )
+
+        assert physical.id not in ids
+        assert rom.id in ids
+
+
+class TestGetHiddenRomIdsAmong:
+    def test_reports_roms_hidden_directly_or_by_platform(
+        self, rom: Rom, second_rom: Rom, other_platform: Platform
+    ) -> None:
+        on_hidden_platform = make_rom(other_platform, "Elsewhere")
+        visibility = RomVisibilityFilter(
+            hidden_platform_ids=frozenset({other_platform.id}),
+            hidden_rom_ids=frozenset({rom.id}),
+        )
+
+        hidden = db_rom_handler.get_hidden_rom_ids_among(
+            [rom.id, second_rom.id, on_hidden_platform.id], visibility
+        )
+
+        assert hidden == {rom.id, on_hidden_platform.id}
+
+    def test_reports_a_direct_hide_whose_rom_is_gone(
+        self, rom: Rom, other_platform: Platform
+    ) -> None:
+        visibility = RomVisibilityFilter(
+            hidden_platform_ids=frozenset({other_platform.id}),
+            hidden_rom_ids=frozenset({999_999}),
+        )
+
+        hidden = db_rom_handler.get_hidden_rom_ids_among(
+            [rom.id, 999_999, 999_998], visibility
+        )
+
+        assert hidden == {999_999}
+
+    def test_unrestricted_hides_nothing(self, rom: Rom) -> None:
+        assert (
+            db_rom_handler.get_hidden_rom_ids_among([rom.id], RomVisibilityFilter())
+            == set()
+        )
+
+    def test_reports_roms_the_age_rule_hides(self, platform: Platform) -> None:
+        mature = make_esrb_rated_rom(platform, "Mature", "M")
+        teen = make_esrb_rated_rom(platform, "Teen", "T")
+        unrated = make_rom(platform, "Unrated")
+        visibility = RomVisibilityFilter(age_limit=13, hide_unrated_roms=True)
+
+        hidden = db_rom_handler.get_hidden_rom_ids_among(
+            [mature.id, teen.id, unrated.id], visibility
+        )
+
+        # The unrated row proves the negated clause is NULL-safe.
+        assert hidden == {mature.id, unrated.id}
+
+
+class TestAgeLimitedListing:
+    def test_lists_only_roms_within_the_limit(self, platform: Platform) -> None:
+        mature = make_esrb_rated_rom(platform, "Mature", "M")
+        everyone = make_esrb_rated_rom(platform, "Everyone", "E")
+        unrated = make_rom(platform, "Unrated")
+
+        ids = db_rom_handler.get_rom_ids(
+            platform_ids=[platform.id],
+            visibility=RomVisibilityFilter(age_limit=12),
+        )
+
+        assert set(ids) == {everyone.id, unrated.id}
+        assert mature.id not in ids
 
 
 class TestSyncRomFiles:
@@ -268,6 +453,125 @@ class TestSyncRomFiles:
         assert reloaded is not None
         assert reloaded.file_size_bytes == 200
         assert reloaded.sha1_hash == "new-sha1"
+
+    @pytest.mark.parametrize(
+        ("inspected", "size", "mtime", "sigil_title_id", "keep_metadata"),
+        [
+            pytest.param(False, 200, 1000.0, None, True, id="unchanged-keeps-metadata"),
+            pytest.param(False, 300, 1000.0, None, False, id="size-change-clears"),
+            pytest.param(False, 200, 2000.0, None, False, id="mtime-change-clears"),
+            pytest.param(True, 200, 1000.0, None, False, id="inspected-clears"),
+            pytest.param(
+                False,
+                300,
+                1000.0,
+                "0100ABCD12345000",
+                False,
+                id="changed-writes-sigil-id-and-clears-metadata",
+            ),
+            pytest.param(
+                False,
+                200,
+                1000.0,
+                "0100ABCD12345000",
+                True,
+                id="unchanged-writes-sigil-id-and-keeps-metadata",
+            ),
+        ],
+    )
+    def test_converto_metadata_tracks_content_and_inspection(
+        self,
+        rom: Rom,
+        inspected: bool,
+        size: int,
+        mtime: float,
+        sigil_title_id: str | None,
+        keep_metadata: bool,
+    ):
+        metadata = {"title_id": "0100ABCD12340000", "title_version": 65536}
+        (first,) = _sync(rom, [_scanned_file(rom, "a.bin")])
+        scanned = _scanned_file(rom, "a.bin", size=200)
+        scanned.last_modified = 1000.0
+        for column, value in metadata.items():
+            setattr(scanned, column, value)
+        scanned.converto_read_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        (second,) = _sync(rom, [scanned])
+
+        assert second.id == first.id
+        stored = db_rom_handler.get_rom_file_by_id(first.id)
+        assert stored is not None
+        assert {column: getattr(stored, column) for column in metadata} == metadata
+
+        scanned = _scanned_file(rom, "a.bin", size=size, sha1=None)
+        scanned.last_modified = mtime
+        scanned.title_id = sigil_title_id
+        if inspected:
+            scanned.converto_read_at = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        db_rom_handler.sync_rom_files(rom.id, [scanned])
+
+        stored = db_rom_handler.get_rom_file_by_id(first.id)
+        assert stored is not None
+        assert stored.file_size_bytes == size
+        assert stored.last_modified == mtime
+        expected = dict(metadata) if keep_metadata else dict.fromkeys(metadata)
+        if sigil_title_id is not None:
+            expected["title_id"] = sigil_title_id
+        assert {column: getattr(stored, column) for column in metadata} == expected
+        assert (stored.converto_read_at is not None) == (keep_metadata or inspected)
+
+    @pytest.mark.parametrize(
+        ("stored_mtime", "scanned_mtime", "matching_hashes"),
+        [
+            pytest.param(
+                struct.unpack("f", struct.pack("f", 1700000000.123))[0],
+                1700000000.123,
+                False,
+                id="legacy-single-precision-mtime",
+            ),
+            pytest.param(1000.0, 2000.0, True, id="matching-content-with-new-mtime"),
+        ],
+    )
+    def test_unread_title_ids_survive_equivalent_content(
+        self,
+        rom: Rom,
+        stored_mtime: float,
+        scanned_mtime: float,
+        matching_hashes: bool,
+    ):
+        metadata = {"title_id": "SCUS-94163", "title_version": 1}
+        scanned = _scanned_file(
+            rom, "game.chd", sha1="sha1" if matching_hashes else None
+        )
+        scanned.last_modified = stored_mtime
+        for column, value in metadata.items():
+            setattr(scanned, column, value)
+        (first,) = _sync(rom, [scanned])
+        scanned = _scanned_file(
+            rom, "game.chd", sha1="sha1" if matching_hashes else None
+        )
+        scanned.last_modified = scanned_mtime
+
+        db_rom_handler.sync_rom_files(rom.id, [scanned])
+
+        stored = db_rom_handler.get_rom_file_by_id(first.id)
+        assert stored is not None
+        assert stored.last_modified == scanned_mtime
+        assert {column: getattr(stored, column) for column in metadata} == metadata
+
+    def test_new_hashes_clear_unread_title_ids_despite_a_kept_mtime(self, rom: Rom):
+        scanned = _scanned_file(rom, "game.chd")
+        scanned.last_modified = 1000.0
+        scanned.title_id = "SCUS-94163"
+        (first,) = _sync(rom, [scanned])
+        rehashed = _scanned_file(rom, "game.chd", sha1="other-sha1")
+        rehashed.last_modified = 1000.0
+
+        db_rom_handler.sync_rom_files(rom.id, [rehashed])
+
+        stored = db_rom_handler.get_rom_file_by_id(first.id)
+        assert stored is not None
+        assert stored.title_id is None
 
     def test_retagged_track_meta_is_updated_in_place(self, rom: Rom):
         def scanned(title: str, year: int) -> RomFile:
@@ -306,6 +610,17 @@ class TestSyncRomFiles:
 
         assert second.id == first.id
         assert second.file_name == "b.bin"
+
+    def test_renamed_reused_row_keeps_its_id(self, rom: Rom):
+        (first,) = _sync(rom, [_scanned_file(rom, "old.nsp")])
+        first.file_name = "new.nsp"
+
+        synced = db_rom_handler.sync_rom_files(rom.id, [first])
+
+        stored = db_rom_handler.get_rom_file_by_id(first.id)
+        assert stored is not None
+        assert synced.files[0].id == first.id
+        assert stored.file_name == "new.nsp"
 
     def test_moved_file_is_matched_by_content(self, rom: Rom):
         (first,) = _sync(rom, [_scanned_file(rom, "a.bin")])
@@ -469,3 +784,393 @@ class TestSyncRomFilesWithReusedRows:
 
         assert [f.id for f in second] == [f.id for f in first]
         assert second[0].md5_hash == "md5"
+
+
+def _add_rom_file(
+    rom: Rom,
+    file_name: str = "game.bin",
+    size: int = 1000,
+    category: RomFileCategory | None = None,
+    session: Session = INJECTED_SESSION,
+) -> RomFile:
+    return db_rom_handler.add_rom_file(
+        RomFile(
+            rom_id=rom.id,
+            file_name=file_name,
+            file_path=rom.fs_path,
+            file_size_bytes=size,
+            category=category,
+        ),
+        session=session,
+    )
+
+
+class TestRomFileSizeTotal:
+    """Check that per-file writes keep the ROM size total in sync."""
+
+    def _size(self, rom: Rom) -> int:
+        stored = db_rom_handler.get_rom(rom.id)
+        assert stored is not None
+        return stored.fs_size_bytes
+
+    def test_add_counts_every_category(self, rom: Rom):
+        _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+        _add_rom_file(rom, "manual.pdf", 200, RomFileCategory.MANUAL)
+        _add_rom_file(rom, "guide.txt", 30, RomFileCategory.WALKTHROUGH)
+
+        assert self._size(rom) == 1230
+
+    def test_delete_subtracts_the_file(self, rom: Rom):
+        _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+        manual = _add_rom_file(rom, "manual.pdf", 200, RomFileCategory.MANUAL)
+
+        db_rom_handler.delete_rom_file(manual.id)
+
+        assert self._size(rom) == 1000
+
+    def test_deleting_the_last_file_leaves_zero(self, rom: Rom):
+        game = _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+
+        db_rom_handler.delete_rom_file(game.id)
+
+        assert self._size(rom) == 0
+
+    def test_resized_file_updates_the_total(self, rom: Rom):
+        game = _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+
+        db_rom_handler.update_rom_file(game.id, {"file_size_bytes": 4000})
+
+        assert self._size(rom) == 4000
+
+    def test_other_roms_keep_their_total(self, rom: Rom, second_rom: Rom):
+        _add_rom_file(second_rom, "other.bin", 500, RomFileCategory.GAME)
+        game = _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+
+        db_rom_handler.delete_rom_file(game.id)
+
+        assert self._size(second_rom) == 500
+
+    def test_deleting_an_unknown_file_is_a_no_op(self, rom: Rom):
+        _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+
+        db_rom_handler.delete_rom_file(999_999)
+
+        assert self._size(rom) == 1000
+
+    def test_moving_a_file_updates_both_roms(self, rom: Rom, second_rom: Rom):
+        _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+        manual = _add_rom_file(rom, "manual.pdf", 200, RomFileCategory.MANUAL)
+
+        db_rom_handler.update_rom_file(manual.id, {"rom_id": second_rom.id})
+
+        assert self._size(rom) == 1000
+        assert self._size(second_rom) == 200
+
+    def test_merging_a_file_under_another_rom_updates_both(
+        self, rom: Rom, second_rom: Rom
+    ):
+        _add_rom_file(rom, "game.bin", 1000, RomFileCategory.GAME)
+        manual = _add_rom_file(rom, "manual.pdf", 200, RomFileCategory.MANUAL)
+
+        db_rom_handler.add_rom_file(
+            RomFile(
+                id=manual.id,
+                rom_id=second_rom.id,
+                file_name=manual.file_name,
+                file_path=second_rom.fs_path,
+                file_size_bytes=manual.file_size_bytes,
+                category=manual.category,
+            )
+        )
+
+        assert self._size(rom) == 1000
+        assert self._size(second_rom) == 200
+
+
+class TestRomFileSizeSidecarInvalidation:
+    """The size-sorted rom-id and char indexes are cached under the filter
+    values version, so a size recompute has to move it once it commits."""
+
+    def test_add_moves_the_version(self, rom: Rom):
+        before = _filter_values_cache_version()
+
+        _add_rom_file(rom)
+
+        assert _filter_values_cache_version() != before
+
+    def test_delete_moves_the_version(self, rom: Rom):
+        game = _add_rom_file(rom)
+        before = _filter_values_cache_version()
+
+        db_rom_handler.delete_rom_file(game.id)
+
+        assert _filter_values_cache_version() != before
+
+    def test_resize_moves_the_version(self, rom: Rom):
+        game = _add_rom_file(rom)
+        before = _filter_values_cache_version()
+
+        db_rom_handler.update_rom_file(game.id, {"file_size_bytes": 5})
+
+        assert _filter_values_cache_version() != before
+
+    def test_rename_leaves_the_version(self, rom: Rom):
+        game = _add_rom_file(rom)
+        before = _filter_values_cache_version()
+
+        db_rom_handler.update_rom_file(game.id, {"file_name": "renamed.bin"})
+
+        assert _filter_values_cache_version() == before
+
+    def test_unknown_delete_leaves_the_version(self, rom: Rom):
+        before = _filter_values_cache_version()
+
+        db_rom_handler.delete_rom_file(999_999)
+
+        assert _filter_values_cache_version() == before
+
+
+class TestRomFileSizeLocking:
+    """Concurrent writers to one rom serialise on its row, taken before the
+    file write so the foreign key check cannot lock it first."""
+
+    @pytest.fixture
+    def statements(self) -> Iterator[list[str]]:
+        seen: list[str] = []
+
+        def record(_conn: Any, _cursor: Any, statement: str, *_args: Any) -> None:
+            seen.append(" ".join(statement.split()))
+
+        event.listen(sync_engine, "before_cursor_execute", record)
+        yield seen
+        event.remove(sync_engine, "before_cursor_execute", record)
+
+    @staticmethod
+    def _first(statements: list[str], prefix: str) -> int:
+        return next(i for i, s in enumerate(statements) if s.startswith(prefix))
+
+    def _assert_locked_before(self, statements: list[str], write: str) -> None:
+        lock = next(
+            i
+            for i, s in enumerate(statements)
+            if s.startswith("SELECT roms.id") and re.search(r"FOR (NO KEY )?UPDATE$", s)
+        )
+        assert lock < self._first(statements, write)
+        assert self._first(statements, write) < self._first(
+            statements, "UPDATE roms SET fs_size_bytes"
+        )
+
+    def test_add_locks_the_rom_first(self, rom: Rom, statements: list[str]):
+        _add_rom_file(rom)
+
+        self._assert_locked_before(statements, "INSERT INTO rom_files")
+
+    def test_delete_locks_the_rom_first(self, rom: Rom, statements: list[str]):
+        game = _add_rom_file(rom)
+        statements.clear()
+
+        db_rom_handler.delete_rom_file(game.id)
+
+        self._assert_locked_before(statements, "DELETE FROM rom_files")
+
+    def test_resize_locks_the_rom_first(self, rom: Rom, statements: list[str]):
+        game = _add_rom_file(rom)
+        statements.clear()
+
+        db_rom_handler.update_rom_file(game.id, {"file_size_bytes": 5})
+
+        self._assert_locked_before(statements, "UPDATE rom_files")
+
+    def test_move_locks_its_roms_before_the_file(
+        self, rom: Rom, second_rom: Rom, statements: list[str]
+    ):
+        # Folder conversion writes the rom row before its file rows, so file
+        # writes lock in the same order.
+        game = _add_rom_file(rom)
+        statements.clear()
+
+        db_rom_handler.update_rom_file(game.id, {"rom_id": second_rom.id})
+
+        file_lock = next(
+            i
+            for i, s in enumerate(statements)
+            if s.startswith("SELECT rom_files.rom_id") and s.endswith("FOR UPDATE")
+        )
+        rom_locks = [
+            i
+            for i, s in enumerate(statements)
+            if s.startswith("SELECT roms.id") and re.search(r"FOR (NO KEY )?UPDATE$", s)
+        ]
+        assert len(rom_locks) == 2
+        assert max(rom_locks) < file_lock
+
+    def test_an_owner_changed_meanwhile_fails_the_write(self):
+        session = MagicMock()
+        # The file moved from rom 1 to rom 2 before this transaction locked rom 1.
+        session.scalar.side_effect = [1, 2]
+
+        with pytest.raises(RomFileOwnerChangedError):
+            db_rom_handler._lock_rom_file_and_roms(10, [3], session)
+
+    def test_a_move_into_a_locked_rom_needs_no_more_locks(self):
+        session = MagicMock()
+        session.scalar.side_effect = [1, 3]
+
+        locked = db_rom_handler._lock_rom_file_and_roms(10, [3], session)
+
+        assert locked == {1, 3}
+        assert session.execute.call_count == 2
+
+    def test_a_vanished_file_locks_nothing_more(self):
+        session = MagicMock()
+        session.scalar.side_effect = [None]
+
+        assert db_rom_handler._lock_rom_file_and_roms(10, [3], session) is None
+        session.execute.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("dialect", "clause"),
+        [(MARIADB_DIALECT, "FOR UPDATE"), (POSTGRESQL_DIALECT, "FOR NO KEY UPDATE")],
+    )
+    def test_lock_spelling(self, dialect: Dialect, clause: str):
+        # NO KEY UPDATE leaves other tables' foreign key checks on the row free.
+        session = MagicMock()
+
+        db_rom_handler._lock_rom_rows([7], session)
+
+        (statement,) = session.execute.call_args.args
+        assert compile_sql(statement, dialect).endswith(clause)
+
+    def test_move_locks_both_roms_in_id_order(self, rom: Rom, second_rom: Rom):
+        # Two opposite moves take the locks in the same order, so they cannot
+        # deadlock.
+        session = MagicMock()
+
+        db_rom_handler._lock_rom_rows([second_rom.id, rom.id, second_rom.id], session)
+
+        locked = [
+            call.args[0].compile().params["id_1"]
+            for call in session.execute.call_args_list
+        ]
+        assert locked == sorted({rom.id, second_rom.id})
+
+
+class TestRaBatchReads:
+    """Direct coverage for the RetroAchievements sync's batched getters."""
+
+    def test_get_roms_by_ra_ids_returns_every_match(self, platform: Platform):
+        usa_rom = make_rom(platform, "Game USA", ra_id=12345)
+        eur_rom = make_rom(platform, "Game Europe", ra_id=12345)
+        make_rom(platform, "Other Game", ra_id=67890)
+
+        rows = db_rom_handler.get_roms_by_ra_ids([12345])
+
+        assert {row.id for row in rows} == {usa_rom.id, eur_rom.id}
+
+    def test_get_roms_by_ra_ids_empty_input_short_circuits(self):
+        assert db_rom_handler.get_roms_by_ra_ids([]) == []
+
+
+def _rom_user_status(rom_id: int, user_id: int) -> RomUserStatus | None:
+    rom_user = db_rom_handler.get_rom_user(rom_id, user_id)
+    assert rom_user is not None
+    return rom_user.status
+
+
+class TestRomUserStatusWrites:
+    @pytest.mark.parametrize(
+        ("current", "new", "expected", "changed"),
+        [
+            (None, RomUserStatus.COMPLETED_100, RomUserStatus.COMPLETED_100, 1),
+            (
+                RomUserStatus.INCOMPLETE,
+                RomUserStatus.COMPLETED_100,
+                RomUserStatus.COMPLETED_100,
+                1,
+            ),
+            (RomUserStatus.FINISHED, RomUserStatus.FINISHED, RomUserStatus.FINISHED, 0),
+            (RomUserStatus.RETIRED, RomUserStatus.FINISHED, RomUserStatus.RETIRED, 0),
+            (
+                RomUserStatus.NEVER_PLAYING,
+                RomUserStatus.FINISHED,
+                RomUserStatus.NEVER_PLAYING,
+                0,
+            ),
+        ],
+    )
+    def test_set_rom_user_statuses_transitions(
+        self,
+        rom: Rom,
+        admin_user: User,
+        current: RomUserStatus | None,
+        new: RomUserStatus,
+        expected: RomUserStatus,
+        changed: int,
+    ):
+        # The `rom` fixture already links this ROM to the admin user.
+        rom_user = db_rom_handler.get_rom_user(rom.id, admin_user.id)
+        assert rom_user is not None
+        db_rom_handler.update_rom_user(rom_user.id, {"status": current})
+
+        assert db_rom_handler.set_rom_user_statuses(admin_user.id, {rom.id: new}) == (
+            changed
+        )
+
+        assert _rom_user_status(rom.id, admin_user.id) == expected
+
+    def test_set_rom_user_statuses_creates_missing_rows(
+        self, platform: Platform, viewer_user: User
+    ):
+        new_rom = make_rom(platform, "Fresh Game", ra_id=12345)
+
+        assert (
+            db_rom_handler.set_rom_user_statuses(
+                viewer_user.id, {new_rom.id: RomUserStatus.FINISHED}
+            )
+            == 1
+        )
+
+        assert _rom_user_status(new_rom.id, viewer_user.id) == RomUserStatus.FINISHED
+
+    def test_set_rom_user_statuses_scopes_to_user(
+        self, rom: Rom, admin_user: User, editor_user: User
+    ):
+        db_rom_handler.set_rom_user_statuses(
+            editor_user.id, {rom.id: RomUserStatus.FINISHED}
+        )
+
+        assert _rom_user_status(rom.id, admin_user.id) is None
+
+    def test_set_rom_user_statuses_writes_in_batches(
+        self, platform: Platform, viewer_user: User, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(
+            "handler.database.roms_handler._ROM_USER_WRITE_BATCH_SIZE", 1
+        )
+        first = make_rom(platform, "First Game", ra_id=12345)
+        second = make_rom(platform, "Second Game", ra_id=67890)
+
+        assert (
+            db_rom_handler.set_rom_user_statuses(
+                viewer_user.id,
+                {first.id: RomUserStatus.FINISHED, second.id: RomUserStatus.INCOMPLETE},
+            )
+            == 2
+        )
+
+        for synced, status in (
+            (first, RomUserStatus.FINISHED),
+            (second, RomUserStatus.INCOMPLETE),
+        ):
+            assert _rom_user_status(synced.id, viewer_user.id) == status
+
+    def test_set_rom_user_statuses_empty_input(self, viewer_user: User):
+        assert db_rom_handler.set_rom_user_statuses(viewer_user.id, {}) == 0
+
+    def test_add_rom_user_returns_the_existing_row(self, rom: Rom, admin_user: User):
+        existing = db_rom_handler.get_rom_user(rom.id, admin_user.id)
+        assert existing is not None
+
+        rom_user = db_rom_handler.add_rom_user(rom.id, admin_user.id)
+
+        assert rom_user.id == existing.id

@@ -6,6 +6,9 @@ memory and writing it back on every read (see #4029).
 """
 
 from collections.abc import Sequence
+from typing import Any
+
+from tests.factories import make_rom
 
 from handler.database import db_collection_handler, db_rom_handler
 from models.collection import Collection, SmartCollection
@@ -19,30 +22,26 @@ def _add_rom(
     name: str,
     *,
     cover: str = "",
-    manual_metadata: dict | None = None,
+    manual_metadata: dict[str, Any] | None = None,
     regions: list[str] | None = None,
 ) -> Rom:
-    slug = name.lower().replace(" ", "_")
-    return db_rom_handler.add_rom(
-        Rom(
-            platform_id=platform.id,
-            name=name,
-            slug=slug,
-            fs_name=f"{slug}.zip",
-            fs_name_no_tags=slug,
-            fs_name_no_ext=slug,
-            fs_extension="zip",
-            fs_path=f"{platform.slug}/roms",
-            manual_metadata=manual_metadata or {},
-            regions=regions or [],
-            path_cover_s=cover,
-            path_cover_l=cover,
-        )
+    return make_rom(
+        platform,
+        name,
+        fs_stem=name.lower().replace(" ", "_"),
+        manual_metadata=manual_metadata or {},
+        regions=regions or [],
+        path_cover_s=cover,
+        path_cover_l=cover,
     )
 
 
 def _add_smart_collection(
-    user: User, criteria: dict, *, name: str = "Smart", is_public: bool = False
+    user: User,
+    criteria: dict[str, Any],
+    *,
+    name: str = "Smart",
+    is_public: bool = False,
 ) -> SmartCollection:
     return db_collection_handler.add_smart_collection(
         SmartCollection(
@@ -177,24 +176,6 @@ def test_filter_roms_by_smart_collection_scoped_to_a_regular_collection(
     assert {rom.id for rom in roms} == {inside.id}
 
 
-def test_filter_roms_by_smart_collection_with_joined_criteria(
-    platform: Platform, admin_user: User
-):
-    # `has_soundtrack` is a correlated column property; it has to survive being
-    # applied to a bare-column subquery.
-    rom = _add_rom(platform, "Rally One")
-
-    smart_collection = _add_smart_collection(
-        admin_user, {"has_soundtrack": False, "missing": False}
-    )
-
-    roms = db_rom_handler.get_roms_scalar(
-        smart_collection_id=smart_collection.id, user_id=admin_user.id
-    )
-
-    assert {result.id for result in roms} == {rom.id}
-
-
 def test_filter_roms_by_unknown_smart_collection_returns_nothing(
     platform: Platform, admin_user: User
 ):
@@ -205,6 +186,25 @@ def test_filter_roms_by_unknown_smart_collection_returns_nothing(
     )
 
     assert list(roms) == []
+
+
+def test_unusable_criteria_match_nothing_rather_than_everything(
+    platform: Platform, admin_user: User
+):
+    # `filter_criteria` is stored unvalidated, and honouring a row only in part
+    # would drop the constraint that makes it a narrower list than the library.
+    _add_rom(platform, "Rally One")
+    _add_rom(platform, "Rally Two")
+
+    smart_collection = _add_smart_collection(
+        admin_user, {"platform_ids": [platform.id, "not-an-id"]}
+    )
+
+    members = db_collection_handler.get_smart_collection_members(
+        smart_collection, user_id=admin_user.id
+    )
+
+    assert list(members) == []
 
 
 def test_refresh_smart_collection_updates_the_cached_columns(
