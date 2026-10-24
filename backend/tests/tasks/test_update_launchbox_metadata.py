@@ -62,16 +62,16 @@ class TestUpdateLaunchboxMetadataTask:
         """Test run method when Launchbox API is enabled"""
         mock_super_run.return_value = sample_zip_content
 
-        await task.run(force=True)
+        await task.run()
 
-        mock_super_run.assert_called_once_with(True)
+        mock_super_run.assert_called_once_with()
 
     async def test_run_when_launchbox_api_disabled(self, task, mocker):
         """Test run method when Launchbox API is disabled"""
         mocker.patch.object(LaunchboxHandler, "is_cloud_enabled", return_value=False)
         mock_log = mocker.patch("tasks.scheduled.update_launchbox_metadata.log")
 
-        await task.run(force=True)
+        await task.run()
 
         mock_log.warning.assert_called_once_with(
             "Launchbox API is not enabled, skipping metadata update"
@@ -83,7 +83,7 @@ class TestUpdateLaunchboxMetadataTask:
         """Test run method when super().run() returns None"""
         mock_super_run.return_value = None
 
-        await task.run(force=True)
+        await task.run()
 
         mock_super_run.assert_called_once()
 
@@ -99,7 +99,7 @@ class TestUpdateLaunchboxMetadataTask:
         """Test run method with corrupt ZIP file"""
         mock_super_run.return_value = corrupt_zip_content
 
-        await task.run(force=True)
+        await task.run()
 
         mock_log.error.assert_called_once_with(
             "Bad zip file in launchbox metadata update"
@@ -113,7 +113,7 @@ class TestUpdateLaunchboxMetadataTask:
         """Test successful completion of the task"""
         mock_super_run.return_value = sample_zip_content
 
-        await task.run(force=True)
+        await task.run()
 
         mock_log.info.assert_called_with(
             "Scheduled launchbox metadata update completed!"
@@ -138,7 +138,7 @@ class TestUpdateLaunchboxMetadataTask:
         )
         mock_async_cache_pipeline.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        await task.run(force=True)
+        await task.run()
 
         # Verify calls
         assert mock_async_cache_pipeline.called
@@ -234,7 +234,7 @@ class TestUpdateLaunchboxMetadataTask:
         )
         mock_async_cache_pipeline.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        await task.run(force=True)
+        await task.run()
 
         # Verify calls
         assert mock_async_cache_pipeline.called
@@ -273,7 +273,7 @@ class TestUpdateLaunchboxMetadataTask:
         )
         mock_async_cache_pipeline.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        await task.run(force=True)
+        await task.run()
 
         # Verify calls
         assert mock_async_cache_pipeline.called
@@ -324,7 +324,7 @@ class TestUpdateLaunchboxMetadataTaskIntegration:
         )
         mock_async_cache_pipeline.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        await task.run(force=True)
+        await task.run()
 
         # Check hset call details
         hset_calls = mock_pipe.hset.call_args_list
@@ -413,7 +413,7 @@ class TestBatchedCacheWriter:
             mock_pipeline.return_value.__aenter__ = AsyncMock(return_value=mock_pipe)
             mock_pipeline.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            await task.run(force=True)
+            await task.run()
 
         # One execute per queued write rather than one for the whole file.
         assert mock_pipe.execute.call_count == mock_pipe.hset.call_count
@@ -437,7 +437,7 @@ class TestInitialImportFlag:
             patch.object(async_cache, "set", AsyncMock()) as mock_set,
             patch.object(async_cache, "delete", AsyncMock()) as mock_delete,
         ):
-            await task.run(force=True)
+            await task.run()
 
         mock_set.assert_awaited_once_with(LAUNCHBOX_METADATA_INITIAL_IMPORT_KEY, "1")
         mock_delete.assert_awaited_once_with(LAUNCHBOX_METADATA_INITIAL_IMPORT_KEY)
@@ -457,7 +457,7 @@ class TestInitialImportFlag:
             patch.object(async_cache, "set", AsyncMock()) as mock_set,
             patch.object(async_cache, "delete", AsyncMock()),
         ):
-            await task.run(force=True)
+            await task.run()
 
         mock_set.assert_not_awaited()
 
@@ -472,7 +472,7 @@ class TestInitialImportFlag:
             patch.object(async_cache, "set", AsyncMock()),
             patch.object(async_cache, "delete", AsyncMock()) as mock_delete,
         ):
-            await task.run(force=True)
+            await task.run()
 
         mock_delete.assert_not_awaited()
 
