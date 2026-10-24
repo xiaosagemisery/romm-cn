@@ -1,8 +1,8 @@
-import { useLocalStorage } from "@vueuse/core";
 import type { RemovableRef } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { effectScope, watch, ref } from "vue";
 import type { UserSchema } from "@/__generated__";
+import { useUserLocalStorage } from "@/composables/useUserLocalStorage";
 import userApi from "@/services/api/user";
 import storeAuth from "@/stores/auth";
 
@@ -12,10 +12,6 @@ export const UI_SETTINGS_KEYS = {
 
   // Theme
   theme: { key: "settings.theme", default: "auto" },
-
-  // NOTE: uiVersion is intentionally NOT tracked here. It's owned by the
-  // singleton in composables/useUiVersion.ts so a write propagates reactively
-  // to the RomM.vue gate without a reload.
 
   // Home section
   showStats: { key: "settings.showStats", default: true },
@@ -59,25 +55,23 @@ export const UI_SETTINGS_KEYS = {
     key: "settings.libraryStatsMode",
     default: "compact",
   },
-  // Widget render order — comma-separated list of widget IDs.
+  // Widget render order: comma-separated list of widget IDs.
   // Persisted as a string in localStorage (the useUISettings helper
   // only handles primitives; consumers parse/serialize at the edges).
   // Unknown IDs are filtered out on read so removing a widget from
   // the registry doesn't leave dangling entries in user storage.
   widgetOrder: {
     key: "settings.widgetOrder",
-    default: "randomPick,libraryStats,anniversaries",
+    default: "randomPick,anniversaries,libraryStats",
   },
-
-  // Platforms drawer
-  platformsGroupBy: { key: "settings.platformsGroupBy", default: null },
 
   // Gallery section
   groupRoms: { key: "settings.groupRoms", default: true },
-  showSiblings: { key: "settings.showSiblings", default: true },
   showRegions: { key: "settings.showRegions", default: true },
   showLanguages: { key: "settings.showLanguages", default: true },
   showStatus: { key: "settings.showStatus", default: true },
+  // v2 game page: the scraped logo in place of the title text.
+  showLogoTitle: { key: "settings.showLogoTitle", default: false },
   showActionBar: { key: "settings.showActionBar", default: false },
   showGameTitle: { key: "settings.showGameTitle", default: false },
   enable3DEffect: { key: "settings.enable3DEffect", default: false },
@@ -91,6 +85,19 @@ export const UI_SETTINGS_KEYS = {
   boxartStyleDetails: {
     key: "settings.boxartStyleDetails",
     default: "cover_path",
+  },
+  boxartStylePlayer: {
+    key: "settings.boxartStylePlayer",
+    default: "cover_path",
+  },
+
+  // Jukebox
+  resumeMusic: { key: "settings.resumeMusic", default: false },
+
+  // Gameplay
+  confirmProtectedLaunch: {
+    key: "settings.confirmProtectedLaunch",
+    default: true,
   },
 } as const;
 
@@ -129,7 +136,7 @@ function createUISettings() {
   const localStorageRefs = Object.fromEntries(
     Object.entries(UI_SETTINGS_KEYS).map(([name, config]) => [
       name,
-      useLocalStorage(config.key, config.default),
+      useUserLocalStorage(config.key, config.default),
     ]),
   ) as UISettingsRefs;
 
@@ -190,7 +197,7 @@ function createUISettings() {
   Object.values(localStorageRefs).forEach((ref) => {
     watch(ref, () => {
       if (!isSyncing.value) {
-        saveUISettings();
+        void saveUISettings();
       }
     });
   });

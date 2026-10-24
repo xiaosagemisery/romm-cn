@@ -7,6 +7,13 @@ import type { RomFileSchema, RomUserStatus } from "@/__generated__";
 import storeNavigation from "@/stores/navigation";
 import type { DetailedRom, SimpleRom } from "@/stores/roms";
 
+export {
+  getDownloadFileName,
+  getDownloadLink,
+  getDownloadPath,
+  getSoleRomFile,
+} from "@/utils/downloadPath";
+
 /**
  * Views configuration object.
  */
@@ -79,19 +86,6 @@ export function getRoleIcon(role: string) {
 export const defaultAvatarPath = "/assets/default/user.svg";
 
 /**
- * Normalize a string by converting it to lowercase and removing diacritics.
- *
- * @param s The string to normalize.
- * @returns The normalized string.
- */
-export function normalizeString(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-/**
  * Convert a cron expression to a human-readable string.
  *
  * @param expression The cron expression to convert.
@@ -103,59 +97,6 @@ export function convertCronExperssion(expression: string) {
     convertedExpression.charAt(0).toLocaleLowerCase() +
     convertedExpression.substr(1);
   return convertedExpression;
-}
-
-/**
- * Generate a download link for ROM content.
- *
- * @param rom The ROM object.
- * @param files Optional array of file names to include in the download.
- * @returns The download link.
- */
-export function getDownloadPath({
-  rom,
-  fileIDs = [],
-}: {
-  rom: SimpleRom;
-  fileIDs?: number[];
-}) {
-  const queryParams = new URLSearchParams();
-  if (fileIDs.length > 0) {
-    queryParams.append("file_ids", fileIDs.join(","));
-  }
-  const queryString = queryParams.toString();
-
-  // If a single file is selected, use its name for the download path
-  const selectedFile =
-    fileIDs.length === 1
-      ? rom.files?.find((f) => f.id === fileIDs[0])
-      : undefined;
-  const nestedFile =
-    fileIDs.length === 0 &&
-    rom.has_nested_single_file &&
-    rom.files?.length === 1
-      ? rom.files[0]
-      : undefined;
-  const contentFile = selectedFile ?? nestedFile;
-  const contentName = contentFile
-    ? encodeURIComponent(contentFile.file_name)
-    : rom.fs_name;
-
-  return `/api/roms/${rom.id}/content/${contentName}${
-    queryString ? `?${queryString}` : ""
-  }`;
-}
-
-export function getDownloadLink({
-  rom,
-  fileIDs = [],
-}: {
-  rom: SimpleRom;
-  fileIDs?: number[];
-}) {
-  return `${window.location.origin}${encodeURI(
-    getDownloadPath({ rom, fileIDs }),
-  )}`;
 }
 
 /**
@@ -457,7 +398,10 @@ export function languageToEmoji(language: string) {
 }
 
 export type PlayingStatus =
-  RomUserStatus | "backlogged" | "now_playing" | "hidden";
+  | RomUserStatus
+  | "backlogged"
+  | "now_playing"
+  | "hidden";
 
 /**
  * Map of ROM statuses to their corresponding emoji, text, and i18n key.
@@ -538,7 +482,7 @@ export function getNintendoDSFiles(
   rom: DetailedRom | SimpleRom,
 ): RomFileSchema[] {
   // `files` only ships on DetailedRom. Gallery surfaces pass SimpleRom,
-  // where the inner-file check is impossible — return an empty list so
+  // where the inner-file check is impossible: return an empty list so
   // the caller falls back to the extension check.
   const files = (rom as DetailedRom).files;
   if (!files) return [];
@@ -557,8 +501,8 @@ export function getNintendoDSFiles(
  * Check if a ROM is a valid NDS/3DS/DSi game.
  *
  * Accepts both SimpleRom (gallery cards) and DetailedRom (detail view).
- * With SimpleRom the inner-file check is skipped — only the root
- * extension counts — which is what every gallery surface can ever see.
+ * With SimpleRom the inner-file check is skipped, only the root
+ * extension counts, which is what every gallery surface can ever see.
  */
 export function isNintendoDSRom(rom: DetailedRom | SimpleRom): boolean {
   if (
@@ -578,12 +522,16 @@ export function calculateMainLayoutWidth() {
   const { smAndDown } = useDisplay();
   const navigationStore = storeNavigation();
   const { mainBarCollapsed } = storeToRefs(navigationStore);
+  // The side safe-area insets sit outside the layout as RomM.vue's spacers.
+  const insetX =
+    "env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)";
   const calculatedWidth = computed(() => {
-    return smAndDown.value
-      ? "calc(100% - 16px) !important"
+    const chrome = smAndDown.value
+      ? "16px"
       : mainBarCollapsed.value
-        ? "calc(100% - 76px) !important"
-        : "calc(100% - 106px) !important";
+        ? "76px"
+        : "106px";
+    return `calc(100% - ${chrome} - ${insetX}) !important`;
   });
 
   return { calculatedWidth };
@@ -670,7 +618,7 @@ export function shuffled<T>(
   const result = [...items];
   for (let index = result.length - 1; index > 0; index -= 1) {
     const target = Math.floor(random() * (index + 1));
-    [result[index], result[target]] = [result[target], result[index]];
+    [result[index], result[target]] = [result[target]!, result[index]!];
   }
   return result;
 }

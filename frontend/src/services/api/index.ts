@@ -1,8 +1,7 @@
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
 import { default as Cookies } from "js-cookie";
 import { debounce } from "lodash";
-import router from "@/plugins/router";
-import { ROUTES, isAuthExemptRoute } from "@/plugins/router";
+import { isAuthExemptRoute, ROUTES } from "@/plugins/routeNames";
 
 const api = axios.create({
   // This will keep the url query params on refresh
@@ -34,6 +33,8 @@ const api = axios.create({
 const inflightRequests = new Set();
 
 const networkQuiesced = debounce(() => {
+  // The trailing call can outlive the DOM (test teardown), so don't assume it.
+  if (typeof document === "undefined") return;
   document.dispatchEvent(new CustomEvent("network-quiesced"));
 }, 250);
 
@@ -66,9 +67,9 @@ api.interceptors.response.use(
 
     return response;
   },
-  async (error) => {
-    // Mirror the success path's bookkeeping: a settled request — even a failed
-    // or canceled one — leaves the inflight set so `network-quiesced` can still
+  async (error: AxiosError) => {
+    // Mirror the success path's bookkeeping: a settled request, even a failed
+    // or canceled one, leaves the inflight set so `network-quiesced` can still
     // fire once the network goes quiet.
     inflightRequests.delete(error.config?.url);
     if (inflightRequests.size === 0) {
@@ -87,10 +88,10 @@ api.interceptors.response.use(
     //   * 5xx from a non-heartbeat endpoint → "suspect"; ask the connection
     //     layer to confirm via the authoritative /heartbeat probe (so one
     //     buggy endpoint doesn't flash the banner, and the heartbeat request
-    //     itself never re-triggers this — which would loop).
+    //     itself never re-triggers this, which would loop).
     //   * 4xx → backend is alive; emit backend-online so a stale offline banner
     //     clears immediately instead of waiting for the next heartbeat poll.
-    const status = error.response?.status as number | undefined;
+    const status = error.response?.status;
     const url: string = error.config?.url ?? "";
 
     // Ignore intentionally canceled requests (AbortController / signal). They do
@@ -115,11 +116,7 @@ api.interceptors.response.use(
     // failure): the session is still valid, so stay on the page and let the
     // caller surface the error. Only refresh the CSRF token when the backend
     // rejected it, so the next attempt uses a fresh one.
-    if (
-      error.response?.status === 403 &&
-      typeof error.response?.data === "string" &&
-      error.response.data.includes("CSRF")
-    ) {
+    if (isCsrfFailure(error)) {
       await refetchCSRFToken().catch(() => {});
     }
 
@@ -137,6 +134,10 @@ api.interceptors.response.use(
       const params = new URLSearchParams(search);
       const fullPath = pathname + search;
 
+      // Loaded lazily: a static import evaluates the router while this module
+      // is still initialising, so `router` reads as undefined.
+      const { default: router } = await import("@/plugins/router");
+
       // Don't redirect to login if already on an auth-exempt route.
       // Also resolve the route from the browser URL to handle the case where
       // the router hasn't been started yet (e.g., during app initialization),
@@ -151,7 +152,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      router.push({
+      void router.push({
         name: ROUTES.LOGIN,
         query: {
           next: params.get("next") ?? (pathname !== "/login" ? fullPath : "/"),
@@ -172,6 +173,16 @@ export function keepaliveHeaders(): Record<string, string> {
     "Content-Type": "application/json",
     "x-csrftoken": Cookies.get("romm_csrftoken") ?? "",
   };
+}
+
+/** Whether the backend turned a request down over its CSRF token, not its user. */
+export function isCsrfFailure(error: unknown): boolean {
+  const response = axios.isAxiosError(error) ? error.response : undefined;
+  return (
+    response?.status === 403 &&
+    typeof response.data === "string" &&
+    response.data.includes("CSRF")
+  );
 }
 
 export async function refetchCSRFToken() {

@@ -4,6 +4,12 @@ import api from "@/services/api";
 
 export type Config = ConfigResponse;
 
+// The backend lowercases folder names before writing them to config.yml, so
+// every read and write of a mapping normalizes the on-disk name the same way.
+function normalizeFsSlug(fsSlug: string): string {
+  return fsSlug.toLowerCase();
+}
+
 const defaultConfig = {
   CONFIG_FILE_MOUNTED: false,
   CONFIG_FILE_WRITABLE: false,
@@ -31,7 +37,13 @@ const defaultConfig = {
   GAMELIST_MEDIA_THUMBNAIL: "box2d",
   GAMELIST_MEDIA_IMAGE: "screenshot",
   PEGASUS_AUTO_EXPORT_ON_SCAN: false,
-  CONVERTO: {},
+  CONVERTO: {
+    download_conversion_enabled: false,
+    scan_metadata: true,
+    cache_ttl_hours: 24,
+    cache_max_size_gb: 20,
+    platform_formats: {},
+  },
   CONVERTO_LIBRARY_TARGETS: {},
 } as ConfigResponse;
 
@@ -54,17 +66,23 @@ export default defineStore("config", {
         return this.config;
       }
     },
+    getPlatformBinding(fsSlug: string): string | undefined {
+      return this.config.PLATFORMS_BINDING[normalizeFsSlug(fsSlug)];
+    },
     addPlatformBinding(fsSlug: string, slug: string) {
-      this.config.PLATFORMS_BINDING[fsSlug] = slug;
+      this.config.PLATFORMS_BINDING[normalizeFsSlug(fsSlug)] = slug;
     },
     removePlatformBinding(fsSlug: string) {
-      delete this.config.PLATFORMS_BINDING[fsSlug];
+      delete this.config.PLATFORMS_BINDING[normalizeFsSlug(fsSlug)];
+    },
+    getPlatformVersion(fsSlug: string): string | undefined {
+      return this.config.PLATFORMS_VERSIONS[normalizeFsSlug(fsSlug)];
     },
     addPlatformVersion(fsSlug: string, slug: string) {
-      this.config.PLATFORMS_VERSIONS[fsSlug] = slug;
+      this.config.PLATFORMS_VERSIONS[normalizeFsSlug(fsSlug)] = slug;
     },
     removePlatformVersion(fsSlug: string) {
-      delete this.config.PLATFORMS_VERSIONS[fsSlug];
+      delete this.config.PLATFORMS_VERSIONS[normalizeFsSlug(fsSlug)];
     },
     addExclusion(exclusionType: ExclusionType, exclusionValue: string) {
       this.config[exclusionType].push(exclusionValue);

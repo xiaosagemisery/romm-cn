@@ -3,6 +3,19 @@
 # trunk-ignore-all(checkov)
 # trunk-ignore-all(hadolint/DL4006)
 
+# Keep the pins in sync with the gme-build stage of docker/Dockerfile.
+# trunk-ignore(hadolint/DL3029)
+FROM --platform=linux/amd64 emscripten/emsdk:4.0.12@sha256:744fb6a68941970951bacf9d6632041a0398260492232691ef22bbf54b0585c6 AS emsdk-amd64
+# trunk-ignore(hadolint/DL3029)
+FROM --platform=linux/arm64 emscripten/emsdk:4.0.12-arm64@sha256:369a4cb655aa1066e6e450dde774243c502d999b1d93fb4890a9d1428daa9280 AS emsdk-arm64
+# trunk-ignore(hadolint/DL3006)
+FROM emsdk-${BUILDARCH} AS gme-build
+ARG GME_VERSION=0.6.5
+ARG GME_COMMIT=9e23d10f9fd2a6a2f33b10912dd8dc7153258995
+ADD --checksum=${GME_COMMIT} "https://github.com/libgme/game-music-emu.git#${GME_VERSION}" /libgme
+COPY docker/gme /romm-gme
+RUN /romm-gme/build.sh /libgme /gme
+
 FROM ubuntu:22.04
 
 # Prevent interactive prompts during installation
@@ -118,6 +131,10 @@ RUN git clone --filter=blob:none https://github.com/rommapp/argosy-sigil.git /tm
     && mkdir -p "${SITE_PACKAGES}/sigil" \
     && cp ./sigil/*.py ./sigil/_sigil.*.so "${SITE_PACKAGES}/sigil/" \
     && rm -rf /tmp/argosy-sigil
+# Kept outside /app/frontend because the ./frontend bind mount hides it;
+# entrypoint.sh links it into the assets tree at startup.
+ENV GME_ASSETS_DIR="/opt/romm/gme"
+COPY --from=gme-build /gme "${GME_ASSETS_DIR}"
 WORKDIR /app
 
 # Copy entrypoint script

@@ -7,6 +7,7 @@
 #   - rahasher-build: Build RAHasher
 #   - sigil-build: Build sigil Python bindings (title ID extraction)
 #   - rom-converto-fetch: Fetch the rom-converto CLI (ROM conversion and metadata)
+#   - gme-build: Build libgme to WebAssembly (chiptune soundtracks)
 #   - nginx-build: Build nginx modules
 #   - production-stage: Setup frontend and backend
 #   - slim-image: Slim image with only the necessary files
@@ -23,6 +24,11 @@ ARG PYTHON_VERSION=3.14
 ARG PYTHON_ALPINE_SHA256=9e9fde4d32eedce0b661d9ab91e826b62dddf28e928c230ec55f1866cac66b01
 # The image's pip comes from CPython's bundled ensurepip, which lags pip's security releases.
 ARG PIP_VERSION=26.2.2
+ARG EMSDK_VERSION=4.0.12
+ARG EMSDK_AMD64_SHA256=744fb6a68941970951bacf9d6632041a0398260492232691ef22bbf54b0585c6
+ARG EMSDK_ARM64_SHA256=369a4cb655aa1066e6e450dde774243c502d999b1d93fb4890a9d1428daa9280
+ARG GME_VERSION=0.6.5
+ARG GME_COMMIT=9e23d10f9fd2a6a2f33b10912dd8dc7153258995
 ARG NODE_VERSION=24.22
 ARG NODE_ALPINE_SHA256=6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d
 ARG NGINX_VERSION=1.30.5
@@ -149,6 +155,28 @@ RUN git clone --filter=blob:none https://github.com/rommapp/argosy-sigil.git && 
     cp ./sigil/*.py ./sigil/_sigil.*.so /sigil-pkg/
 
 
+# LIBGME (LGPL-2.1+) FOR CHIPTUNE SOUNDTRACKS
+# The wasm is the same on every platform, so it builds with the builder's own
+# emsdk image. Keep the pins in sync with the dev image's copies in ../Dockerfile.
+# trunk-ignore(hadolint/DL3029)
+FROM --platform=linux/amd64 emscripten/emsdk:${EMSDK_VERSION}@sha256:${EMSDK_AMD64_SHA256} AS emsdk-amd64
+# trunk-ignore(hadolint/DL3029)
+FROM --platform=linux/arm64 emscripten/emsdk:${EMSDK_VERSION}-arm64@sha256:${EMSDK_ARM64_SHA256} AS emsdk-arm64
+
+# trunk-ignore(hadolint/DL3006,checkov/CKV_DOCKER_7)
+FROM emsdk-${BUILDARCH} AS gme-build
+
+ARG GME_VERSION
+ARG GME_COMMIT
+
+# checkov:skip=CKV_DOCKER_4:the ADD below is a Git URL pinned to a commit by --checksum
+ADD --checksum=${GME_COMMIT} \
+    "https://github.com/libgme/game-music-emu.git#${GME_VERSION}" \
+    /libgme
+COPY ./docker/gme /romm-gme
+RUN /romm-gme/build.sh /libgme /gme
+
+
 # ROM-CONVERTO CLI
 # Keep the version and both sums in sync with the dev image's copy in ../Dockerfile.
 FROM alpine:${ALPINE_VERSION}@sha256:${ALPINE_SHA256} AS rom-converto-fetch
@@ -232,6 +260,7 @@ COPY --from=frontend-build /front/dist ${WEBSERVER_FOLDER}
 COPY --from=backend-node-build /backend-node/rom_patcher/node_modules/rom-patcher/rom-patcher-js /backend/utils/rom_patcher/rom-patcher-js
 
 COPY ./frontend/assets ${WEBSERVER_FOLDER}/assets
+COPY --from=gme-build /gme ${WEBSERVER_FOLDER}/assets/gme
 RUN mkdir -p ${WEBSERVER_FOLDER}/assets/romm && \
     ln -sf /romm/resources ${WEBSERVER_FOLDER}/assets/romm/resources
 COPY ./backend /backend

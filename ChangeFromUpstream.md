@@ -93,9 +93,9 @@ Change commit: `36322f67ed5434df356f8332ccb25b4e72bf17de`.
 | `backend/main.py` | Removed streaming and netplay endpoint/socket imports, router registration and socket mounts; also removed `/netplay` from the CSRF middleware exclusions. |
 | `backend/utils/database.py` | Rewrote exception handlers in `safe_str_to_bool`, `safe_float`, and `safe_int` as valid exception tuples. |
 
-## Upstream backend sync (`7eae2b8ff`)
+## Upstream sync (`7eae2b8ff`)
 
-The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `uv.lock` were brought up to the upstream `master` at `7eae2b8ff` (2026-10-23). The frontend, the docs and the CI files stay at the fork's own state, so the frontend is still the one from before upstream promoted v2 to `frontend/src/`.
+The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `uv.lock` were brought up to the upstream `master` at `7eae2b8ff` (2026-10-23). The frontend follows upstream too, including #5309: the v1 UI and the console mode are gone and the former v2 UI lives in `frontend/src/`. The CI workflows stay at the fork's own state, apart from the removed v1 freeze check.
 
 ### Removed again after the sync
 
@@ -103,9 +103,19 @@ The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `u
 | --- | --- |
 | Streaming, netplay, save sync | `endpoints/streaming.py`, `endpoints/netplay.py`, `endpoints/sync/`, `handler/streaming/`, `handler/sync/` (RetroArch Cloud Sync included), `handler/netplay_handler.py`, the sync watcher and the push-pull task stay deleted. The `STREAMING_*`, `SYNC_*` and `DISABLE_*` emulator settings, the streaming RQ queue and worker, and the `streaming`/`devices` notification topics are gone. |
 | Device push install | `endpoints/device/install.py`, `handler/device_install/`, the `DEVICE_INSTALL_*` settings and the install notification kinds are removed. Devices keep registration and client tokens, without sync mode, sync config or capabilities. |
-| Browser players | The EasyRPG endpoint, handler, RTP tooling, `Rom.is_easyrpg_game`, the `playable` filter and the emulator asset stages of both Dockerfiles are removed. The libgme WebAssembly stage is dropped too, because the fork's frontend does not use it. |
+| Browser players | The EasyRPG endpoint, handler, RTP tooling, `Rom.is_easyrpg_game`, the `playable` filter and the emulator asset stages of both Dockerfiles are removed. The libgme WebAssembly stage stays, because the browser soundtrack player plays SPC, VGM and GYM files through it. |
 | Age limits | Upstream's age-limit feature (#5081) is reverted: `utils/age_ratings.py`, `Rom.min_age` and its `roms_facets` mirror, `age_limit` and `hide_unrated_roms` on users and permission groups, the age clause of `RomVisibilityFilter`, the matching API fields and tests. Hidden platforms and ROMs still work. The age-ratings metadata itself is untouched. |
 | Saves, states, screenshots, firmware | `has_saves` and `has_states` filters, the `saves`/`states`/`screenshots` relationships on `Rom`, the stats counters, the firmware pass of the scan, the `FIRMWARE` audit target and permission entities (`streaming`, `emulation`, `firmware`) are removed. |
+
+### Frontend after the sync
+
+| Area | Specific change |
+| --- | --- |
+| Structure | `frontend/` is upstream's tree at `7eae2b8ff`: the v1 views, components, layouts and console mode are removed and `frontend/src/v2/` moved to `frontend/src/`. The `frontend-v2-*` skills became `frontend-*`. |
+| Removed again | The EmulatorJS, Ruffle, js-dos, PICO-8 and EasyRPG players and their routes, the save data and screenshot tabs, firmware and memory-card screens, streaming sessions and admin panel, device install and save sync, the desktop shell native launch, the play-mode badges and the `playable`, `has_saves` and `has_states` filters, and the age limit settings. |
+| Kept small | `stores/playing.ts` stays as upstream has it. It is always false without a player, and the files that read it stay identical to upstream. |
+| Generated types | `src/__generated__/` is regenerated from the fork's backend, so the removed endpoints and fields have no types. |
+| Tooling | The player isolation headers plugin and the EasyRPG dev proxy are removed from `vite.config.js`. |
 
 ### Migrations
 

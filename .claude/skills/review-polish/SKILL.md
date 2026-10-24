@@ -124,6 +124,18 @@ catch these, but only after the contributor has handed the PR over.
 
 ---
 
+## Encode what you fixed twice
+
+If polish turned up a mechanical pattern (you fixed the same kind of thing
+twice), propose a check as a named follow-up instead of relying on the next
+reviewer. For the frontend, that is a stock rule in `eslint.config.js`, or
+`frontend/eslint-plugin-romm/rules/<name>.js` plus `<name>.test.ts`
+(`RuleTester`, valid and invalid cases), registered in the plugin's `index.js`
+and turned on in `eslint.config.js`. Test with `npx vitest run
+eslint-plugin-romm` and `npm run typecheck:scripts`. A plain text pattern across
+the repo can be a Trunk regex linter instead (a `definitions` entry in
+`.trunk/trunk.yaml`).
+
 ---
 
 ## E. Verification before handoff
@@ -144,14 +156,14 @@ mypy wanting explicit annotations on `__init__` attributes
 
 Run from `frontend/`:
 
-1. `npm run typecheck`: zero errors (`vue-tsc --noEmit`).
-2. `trunk check`: ESLint and Prettier clean on the changed files.
-3. `npm run test`: zero failures (Vitest + happy-dom; runs unit tests and every `/lib` story's `play()` via `composeStories`).
+1. `npm run typecheck`: zero errors (`vue-tsc --build`, the app and the Node tooling).
+2. `trunk check`: ESLint clean on the changed files.
+3. `npm run test`: zero failures (unit tests in happy-dom, and every story's `play()` and axe check in headless Chromium; needs `npx playwright install chromium` once).
 4. `npm run build`: zero failures (CI sanity check).
 
 **If you touched the backend API:** start the backend, run `npm run generate`, then re-`typecheck`.
 
-**If you touched tokens** (`src/v2/tokens/index.ts`): `npm run build:tokens` (also auto-runs on `predev`/`prebuild`) and confirm `tokens.css` regenerated.
+**If you touched tokens** (`src/tokens/index.ts`): `npm run build:tokens` (also auto-runs on `predev`/`prebuild`) and confirm `tokens.css` regenerated.
 
 **If you touched locales** (`src/locales/**`): `python3 frontend/src/locales/check_i18n_locales.py` must pass with zero missing/extra keys. See the `frontend-i18n` skill.
 
@@ -160,7 +172,7 @@ Run from `frontend/`:
 With `uiVersion = "v2"`:
 
 - **Golden path + edge cases:** empty, error, loading, no-permission, extreme data; plus nearby regressions.
-- **Both themes:** `v2-dark` and `v2-light`.
+- **Both themes:** `r-dark` and `r-light`.
 - **All four input modalities:** mouse, touch, keyboard, gamepad; focus ring only on `key`/`pad`.
 - **Responsive sweep:** 320px → 4K across the `useBreakpoint` tiers; overlays full-bleed on `xs`.
 - **Accessibility:** contrast, keyboard reachability with no traps, aria-labels on icon-only controls.
@@ -175,7 +187,7 @@ With `uiVersion = "v2"`:
 - New primitive → mandatory story with controls + at least one variant per theme; interactive ones get a `play()`.
 - Modified primitive → existing story still renders and interactions still pass.
 - Don't duplicate coverage between Vitest (pure logic) and Storybook `play()` (components).
-- Responsive composites: sweep the Storybook viewport presets (see `frontend-v2-input`).
+- Responsive composites: sweep the Storybook viewport presets (see `frontend-input`).
 
 ### Backend (`backend/`)
 
@@ -188,7 +200,7 @@ Run from `backend/`:
 
 ### CI gates this mirrors
 
-`frontend.yml` (vitest, build, vue-tsc + lockfile lint), `i18n.yml` (locale check), `pytest.yml` (pytest on MariaDB + PostgreSQL), `migrations.yml` (alembic on both DBs), `trunk-check.yml` (Trunk across the repo). Green locally → green in CI.
+`frontend.yml` (vitest, build, vue-tsc + lockfile lint), `i18n.yml` (locale check), `pytest.yml` (pytest on MariaDB + PostgreSQL), `migrations.yml` (alembic on both DBs), `typecheck.yml`, `trunk-check.yml` (Trunk across the repo). Green locally → green in CI.
 
 ### Don't
 
