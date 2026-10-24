@@ -2,6 +2,12 @@
 
 Read and follow [CLAUDE.md](CLAUDE.md) for all repository instructions.
 
+## Branches and pull requests
+
+- The fork's `master` branch (the "main" branch) only mirrors the upstream RomM `master`. It is used for upstream syncs and carries none of the fork's changes.
+- Do not open pull requests unless the user explicitly asks for one. Push work to a feature or sync branch (for example `sync/upstream-backend`) and report it.
+- When syncing from upstream, do not re-add features the fork deleted (streaming, netplay, emulator players, saves/states/screenshots, firmware, play sessions, memory cards, device save sync). Replay those removals on top of the upstream code and keep the fork-only additions listed in `ChangeFromUpstream.md`.
+
 ## Change documentation
 
 - For every major change relative to the fork baseline, update `README.md` and `ChangeFromUpstream.md` in the same change.
