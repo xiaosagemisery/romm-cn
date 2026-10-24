@@ -290,6 +290,44 @@ class FSHandler:
 
         return full_path
 
+    def cached_path_validator(self) -> Callable[[str], Path]:
+        """Return a `validate_path` that checks each parent directory once per callable."""
+        validated_dirs: dict[Path, Path] = {}
+
+        def validate(path: str) -> Path:
+            rel_path = Path(path)
+            if ".." in rel_path.parts or rel_path.is_absolute() or not rel_path.name:
+                return self.validate_path(path)
+
+            parent = rel_path.parent
+            full_dir = validated_dirs.get(parent)
+            if full_dir is None:
+                full_dir = validated_dirs[parent] = self.validate_path(str(parent))
+            # validate_path accepts a symlinked leaf, and a plain leaf resolves
+            # inside its already checked directory, so the leaf needs no syscall.
+            return full_dir / rel_path.name
+
+        return validate
+
+    async def _compute_file_hash(self, file_path: str) -> str:
+        full_path = self.validate_path(file_path)
+
+        def digest() -> str:
+            with open(full_path, "rb") as f:
+                return hashlib.file_digest(
+                    f, lambda: hashlib.md5(usedforsecurity=False)
+                ).hexdigest()
+
+        return await asyncio.to_thread(digest)
+
+    async def compute_file_md5(self, file_path: str) -> str:
+        """MD5 of the bytes on disk, unlike zip-aware `compute_content_hash`.
+
+        Raises:
+            OSError: The file is missing or unreadable.
+        """
+        return await self._compute_file_hash(file_path)
+
     @asynccontextmanager
     async def _atomic_write(self, target_path: Path):
         """Context manager for atomic file writing.
