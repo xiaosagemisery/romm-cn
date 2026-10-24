@@ -69,6 +69,13 @@ Change commit: `36322f67ed5434df356f8332ccb25b4e72bf17de`.
 | `env.template`, `DEVELOPER_SETUP.md`, `examples/config.example.yml`, `.gitignore` | Removed the emulator, streaming, and firmware settings and documentation. |
 | `backend/tests/test_nginx_cache_headers.py` | Updated for the trimmed nginx template. |
 
+## README cleanup
+
+| File | Specific change |
+| --- | --- |
+| `README.md` | Removed the community projects, project support, and friendly projects sections together with their link references. |
+| `.github/resources/opencollective-badge.svg` | Removed the Open Collective badge image, which no longer has any reference. |
+
 ## Game metadata translation
 
 | File | Specific change |

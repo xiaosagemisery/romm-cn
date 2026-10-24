@@ -65,6 +65,7 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 - **游戏元数据：** 为扫描及自动更新时获取的游戏名称和简介新增简体中文翻译，支持缓存，翻译失败时保留原文。
 - **模拟器与存档数据：** 移除前后端中所有与模拟器相关的代码，包括播放器、存档、即时存档、截图（ROM 截图保留）、固件、游玩记录、记忆卡和设备存档同步，并新增迁移 `0129` 删除相关数据表；`config.yml` 中的 `emulatorjs`、`streaming` 配置段和 `filesystem.structure.firmware` 会被忽略。
+- **README：** 移除「社区项目」「支持本项目」「友好项目」三个章节及其链接。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。
 
 各文件的具体改动请参阅 [ChangeFromUpstream.md](ChangeFromUpstream.md)。
@@ -80,50 +81,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 - [Argosy][argosy-launcher]，作者 [@tmgast](https://github.com/tmgast)：用于安装和启动游戏的原生 Android 客户端。
 - [Grout][grout]，作者 [@BrandonKowalski](https://github.com/BrandonKowalski)：直接在基于 Linux 的复古掌机上，从你的 RomM 实例下载和管理游戏。支持：Allium、Batocera、Knulli、MinUI、muOS、NextUI、Onion、ROCKNIX、Spruce、TrimUI。
 - [Playnite 插件][playnite-app]，作者 [@gantoine](https://github.com/gantoine)：适用于 Playnite 的游戏库插件。
-
-## 社区项目
-
-以下项目由上游社区成员维护，本分支未单独验证其兼容性。请注意，RomM 团队不会定期审查这些项目的源代码。
-
-### 移动端
-
-- [romm-ios-app][romm-ios-app]：由 [@ilyas-hallak](https://github.com/ilyas-hallak) 开发的原生 iOS 应用。
-
-### 桌面端
-
-- [RomMate][rommate]：由 [@brenoprata10](https://github.com/brenoprata10) 开发，用于浏览游戏收藏的桌面应用。
-- [romm-client][romm-client]：由 [@chaun14](https://github.com/chaun14) 开发的桌面客户端。
-- [Freegosy][freegosy]：由 [@abduznik](https://github.com/abduznik) 开发的一体化游戏管理工具。
-
-### 掌机
-
-- [DeckyRommSync][decky-romm-sync]：由 [@danielcopper](https://github.com/danielcopper) 开发，适用于 SteamOS 的下载与同步工具。
-- [SwitchRomM][switch-romm]：由 [@Shalasere](https://github.com/Shalasere) 开发，适用于 Switch 的 NRO 格式自制程序。
-
-### 其他
-
-- [romm-comm][romm-comm-discord-bot]：由 [@idio-sync](https://github.com/idio-sync) 开发的 Discord 机器人。
-- [GGRequestz][ggrequestz]：由 [@XTREEMMAK](https://github.com/XTREEMMAK) 开发，用于发现游戏和提交游戏请求的工具。
-- [Syncthing sync][syncthing-sync]：由 [@amn-96](https://github.com/amn-96) 开发，用于将 Syncthing 库推送到 RomM 的小工具。
-
-## 支持本项目
-
-欢迎通过 Open Collective 支持本项目的开发。所有资金都将用于支付 RomM 的托管、开发和维护费用。
-
-<div align="center">
-  <div dir="auto">
-    <a href="https://opencollective.com/romm" target="_blank" rel="noopener noreferrer"><img src=".github/resources/opencollective-badge.svg" alt="Open Collective" width="250" height="58"/></a>
-  </div>
-</div>
-
-## 友好项目
-
-以下是一些你可能感兴趣的项目：
-
-- [Retrom](https://github.com/JMBeresford/retrom)： 集中式游戏库与游戏收藏管理服务
-- [Drop](https://droposs.org/)： 为无数字版权管理（DRM）限制的游戏提供类似 Steam 的体验
-- [LanCommander](https://lancommander.app/)： 面向 PC 游戏的数字游戏平台
-- [Steam ROM Manager](https://steamgriddb.github.io/steam-rom-manager/)： 用于在 Steam 中管理 ROM 的应用
 
 ## 支持方
 
@@ -150,15 +107,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 [mobygames-api]: https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#mobygames
 [steamgriddb-api]: https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#steamgriddb
 [retroachievements-api]: https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#retroachievements
-[romm-comm-discord-bot]: https://github.com/idio-sync/romm-comm
-[decky-romm-sync]: https://github.com/danielcopper/decky-romm-sync
-[switch-romm]: https://github.com/Shalasere/SwitchRomM
 [playnite-app]: https://github.com/rommapp/playnite-plugin
-[ggrequestz]: https://github.com/XTREEMMAK/ggrequestz
-[syncthing-sync]: https://github.com/amn-96/romm_syncthing_sync
-[romm-client]: https://github.com/chaun14/romm-client
-[rommate]: https://github.com/brenoprata10/rommate
-[freegosy]: https://github.com/abduznik/freegosy
 [grout]: https://github.com/rommapp/grout
-[romm-ios-app]: https://github.com/ilyas-hallak/romm-ios-app
 [argosy-launcher]: https://github.com/rommapp/argosy-launcher
