@@ -32,7 +32,7 @@ Comprehensive documentation of the RomM backend: a FastAPI-based server powering
 | ------------------ | -------------------------------- |
 | **Framework**      | FastAPI 0.121.1                  |
 | **Language**       | Python 3.14+                     |
-| **ORM**            | SQLAlchemy 2.0                   |
+| **ORM**            | SQLAlchemy 2.1                   |
 | **Migrations**     | Alembic                          |
 | **Databases**      | MariaDB, MySQL, PostgreSQL       |
 | **Cache/Queue**    | Redis (via RQ)                   |
@@ -178,11 +178,12 @@ backend/
 │   ├── platform.py            # Platform CRUD
 │   ├── collections.py         # Collection management
 │   ├── configs.py             # App configuration
-│   ├── device.py              # Device registration
+│   ├── device/                # Devices
+│   │   ├── __init__.py        # Device registration
+│   │   ├── auth.py            # Device pairing flow (RFC 8628)
 │   ├── export.py              # ES-DE gamelist.xml + Pegasus exports
 │   ├── feeds.py               # Tinfoil, WebRcade, PKGi feeds
 │   ├── heartbeat.py           # Health check + setup wizard
-│   ├── raw.py                 # Raw asset file serving
 │   ├── search.py              # Cross-provider metadata search
 │   ├── stats.py               # Library statistics
 │   ├── tasks.py               # Task monitoring & triggering
@@ -209,7 +210,7 @@ backend/
 │   ├── fs_exceptions.py       # Filesystem errors
 │   ├── config_exceptions.py   # Config write errors
 │   ├── task_exceptions.py     # Scheduler errors
-│   └── socket_exceptions.py   # Scan stopped
+│   └── socket_exceptions.py   # Scan stopped or refused
 │
 ├── handler/                   # Business logic layer
 │   ├── scan_handler.py        # Library scan orchestration
@@ -274,8 +275,8 @@ backend/
 │   └── client_token.py        # ClientToken
 │
 ├── tasks/                     # Background job system
-│   ├── tasks.py               # Base Task, PeriodicTask, run_task_by_name
-│   ├── registry.py            # Name -> task catalog, the API and cron address
+│   ├── tasks.py               # TaskSpec, base Task, PeriodicTask, run_task_by_name
+│   ├── registry.py            # Name -> TaskSpec catalog, the API and cron address
 │   ├── cron_config.py         # Schedule the `rq cron` process loads
 │   ├── scheduled/             # Cron-scheduled tasks
 │   │   ├── scan_library.py                    # Nightly library rescan
@@ -285,13 +286,14 @@ backend/
 │   │   └── convert_images_to_webp.py          # Artwork WebP conversion
 │   └── manual/                # On-demand tasks
 │       ├── cleanup_missing_roms.py       # Drop DB entries for missing files
+│       ├── convert_library.py            # Store matched ROMs in each platform's library format
 │       └── cleanup_orphaned_resources.py # Remove unreferenced artwork
 │
 ├── utils/                     # Shared helpers
 │   ├── __init__.py            # get_version()
 │   ├── cache.py               # Redis fixture loading
 │   ├── hashing.py             # CRC32, file hashing
-│   ├── context.py             # Async context vars (aiohttp, httpx)
+│   ├── context.py             # Async context vars (aiohttp, httpx2)
 │   ├── database.py            # JSON/JSONB helpers, DB detection
 │   ├── filesystem.py          # Path sanitization
 │   ├── validation.py          # Input validation
@@ -302,7 +304,7 @@ backend/
 │   ├── router.py              # Custom APIRouter
 │   ├── gamelist_exporter.py   # ES-DE gamelist.xml generation
 │   ├── platform_aliases.py    # Batocera/RetroBat/ES-DE folder name → slug
-│   ├── archive_7zip.py        # 7-Zip archive handling
+│   ├── archives.py            # Archive handling (7-Zip, zip)
 │   ├── platforms.py           # Platform management
 │   └── emoji.py               # Emoji utilities
 │
@@ -311,6 +313,7 @@ backend/
 │
 ├── tests/                     # Test suite
 │   ├── conftest.py            # Pytest fixtures
+│   ├── factories.py           # make_* factories that persist test rows
 │   └── ...                    # Mirrors backend structure
 │
 └── romm_test/                 # Test fixtures & data
@@ -337,7 +340,7 @@ backend/
 3. uvicorn.run("main:app")       # Start ASGI server
    └── FastAPI lifespan
        ├── Create aiohttp.ClientSession
-       ├── Create httpx.AsyncClient
+       ├── Create httpx2.AsyncClient
        └── Store in app.state + context vars
 ```
 
@@ -354,7 +357,7 @@ Response ← CORS ← CSRF ← Authentication ← Session (Redis) ← Context Va
 | 2     | `CSRFMiddleware`           | Token-based CSRF protection (cookie + header)     |
 | 3     | `AuthenticationMiddleware` | `HybridAuthBackend`: Basic, Bearer, Session, OIDC |
 | 4     | `RedisSessionMiddleware`   | Cookie-based sessions stored in Redis             |
-| 5     | `set_context_middleware`   | Inject aiohttp/httpx clients into context vars    |
+| 5     | `set_context_middleware`   | Inject aiohttp/httpx2 clients into context vars   |
 
 ### Request Flow
 
@@ -383,11 +386,26 @@ HTTP Request
 
 ### Supported Databases
 
-| Database      | Driver                | Status    |
-| ------------- | --------------------- | --------- |
-| MariaDB 10.5+ | `mariadb+pymysql`     | Default   |
-| MySQL 8.0+    | `mysql+pymysql`       | Supported |
-| PostgreSQL    | `postgresql+psycopg2` | Supported |
+| Database       | Driver                     | Status    |
+| -------------- | -------------------------- | --------- |
+| MariaDB 10.11+ | `mariadb+mariadbconnector` | Default   |
+| MySQL 8.0.17+  | `mysql+mysqlconnector`     | Supported |
+| PostgreSQL     | `postgresql+psycopg`       | Supported |
+
+MariaDB 10.5 and 10.6 reached upstream end of life in June 2025 and July 2026, so
+10.11 is the oldest LTS still receiving fixes.
+
+CI runs the test suite against MariaDB 13.0 and PostgreSQL 18, and the migration
+suite additionally against MariaDB 10.11, which predates the 11.6 `uca1400`
+collation default. MySQL has no CI coverage.
+
+Query SQL that differs between engines lives in `utils/sql_dialect.py`
+(`DialectCase` and the helpers built on it), which picks each engine's spelling
+when the statement compiles. Handlers don't branch on `ROMM_DB_DRIVER`.
+
+`utils/fulltext.py` reads InnoDB's full-text token sizes and stopwords from the
+server and splits search words the way its parser does, so a search can require
+the words a FULLTEXT index holds and check the rest with `LIKE`.
 
 ### Engine & Session Setup
 
@@ -459,20 +477,22 @@ Constants: `FILE_NAME_MAX_LENGTH=450`, `FILE_PATH_MAX_LENGTH=1000`, `FILE_EXTENS
 
 **Table:** `users`
 
-| Column            | Type                              | Notes                      |
-| ----------------- | --------------------------------- | -------------------------- |
-| `id`              | Integer                           | PK, autoincrement          |
-| `username`        | String(255)                       | Unique, indexed            |
-| `hashed_password` | String(255)                       | Nullable (OIDC users)      |
-| `email`           | String(255)                       | Unique, indexed, nullable  |
-| `enabled`         | Boolean                           | Default `True`             |
-| `role`            | Enum(`VIEWER`, `EDITOR`, `ADMIN`) | Default `VIEWER`           |
-| `avatar_path`     | String(255)                       | Default `""`               |
-| `last_login`      | Timestamp                         | Nullable                   |
-| `last_active`     | Timestamp                         | Nullable                   |
-| `ra_username`     | String(255)                       | RetroAchievements username |
-| `ra_progression`  | JSON                              | RetroAchievements data     |
-| `ui_settings`     | JSON                              | User preferences           |
+| Column            | Type                              | Notes                                           |
+| ----------------- | --------------------------------- | ----------------------------------------------- |
+| `id`              | Integer                           | PK, autoincrement                               |
+| `username`        | String(255)                       | Unique, indexed                                 |
+| `hashed_password` | String(255)                       | Nullable (OIDC users)                           |
+| `email`           | String(255)                       | Unique, indexed, nullable                       |
+| `oidc_issuer`     | ExactString(255)                  | OIDC `iss`, nullable                            |
+| `oidc_sub`        | ExactString(255)                  | OIDC `sub`, nullable; unique with `oidc_issuer` |
+| `enabled`         | Boolean                           | Default `True`                                  |
+| `role`            | Enum(`VIEWER`, `EDITOR`, `ADMIN`) | Default `VIEWER`                                |
+| `avatar_path`     | String(255)                       | Default `""`                                    |
+| `last_login`      | Timestamp                         | Nullable                                        |
+| `last_active`     | Timestamp                         | Nullable                                        |
+| `ra_username`     | String(255)                       | RetroAchievements username                      |
+| `ra_progression`  | JSON                              | RetroAchievements data                          |
+| `ui_settings`     | JSON                              | User preferences                                |
 
 **Relationships:** rom_users (1:M), notes (1:M), collections (1:M), smart_collections (1:M), devices (1:M, cascade), client_tokens (1:M, cascade)
 
@@ -528,15 +548,17 @@ Constants: `FILE_NAME_MAX_LENGTH=450`, `FILE_PATH_MAX_LENGTH=1000`, `FILE_EXTENS
 
 Tracks individual files within a ROM (archives can contain multiple files).
 
-| Column                                         | Type        | Notes                                                                                                                              |
-| ---------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                           | Integer     | PK                                                                                                                                 |
-| `rom_id`                                       | Integer     | FK → roms                                                                                                                          |
-| `file_name`, `file_path`                       | String      | File identity                                                                                                                      |
-| `file_size_bytes`                              | BigInteger  | Size                                                                                                                               |
-| `crc_hash`, `md5_hash`, `sha1_hash`, `ra_hash` | String(100) | Hashes                                                                                                                             |
-| `category`                                     | Enum        | `GAME`, `DLC`, `HACK`, `MANUAL`, `PATCH`, `UPDATE`, `MOD`, `DEMO`, `TRANSLATION`, `PROTOTYPE`, `CHEAT`, `SOUNDTRACK`, `SCREENSHOT` |
-| `missing_from_fs`                              | Boolean     | Sync state                                                                                                                         |
+| Column                                         | Type                    | Notes                                                                                                                              |
+| ---------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                           | Integer                 | PK                                                                                                                                 |
+| `rom_id`                                       | Integer                 | FK → roms                                                                                                                          |
+| `file_name`, `file_path`                       | String                  | File identity                                                                                                                      |
+| `file_size_bytes`                              | BigInteger              | Size                                                                                                                               |
+| `crc_hash`, `md5_hash`, `sha1_hash`, `ra_hash` | String(100)             | Hashes                                                                                                                             |
+| `category`                                     | Enum                    | `GAME`, `DLC`, `HACK`, `MANUAL`, `PATCH`, `UPDATE`, `MOD`, `DEMO`, `TRANSLATION`, `PROTOTYPE`, `CHEAT`, `SOUNDTRACK`, `SCREENSHOT` |
+| `title_id`, `title_version`                    | String(100), BigInteger | Platform-native id and numeric version read from the binary (rom-converto or sigil)                                                |
+| `converto_read_at`                             | Timestamp               | Last time rom-converto read the file; NULL queues it on the next scan                                                              |
+| `missing_from_fs`                              | Boolean                 | Sync state                                                                                                                         |
 
 **Relationships:** rom (M:1), track_meta (1:1, `SOUNDTRACK` files only)
 
@@ -685,24 +707,53 @@ Token format: `rmm_` + 64 hex chars (32-byte random)
 
 ---
 
+#### Audit Events
+
+**Table:** `audit_events` (what users and background jobs did, kept `AUDIT_LOG_RETENTION_DAYS`)
+
+| Column                                                  | Type       | Notes                                         |
+| ------------------------------------------------------- | ---------- | --------------------------------------------- |
+| `id`                                                    | Integer    | PK                                            |
+| `occurred_at`                                           | Timestamp  | For a synced play, when it started            |
+| `actor_kind`                                            | String(16) | `user`, `anonymous` or `system`               |
+| `actor_id`                                              | FK → users | `SET NULL` on delete                          |
+| `action`                                                | String(64) | `AuditAction`, e.g. `rom.download`            |
+| `actor_name`, `target_type`, `target_id`, `target_name` | String     | Snapshots, so an event outlives what it names |
+| `ip_address`, `device_id`                               | String     | No FK                                         |
+| `data`                                                  | JSON       | What the client builds the sentence from      |
+
+---
+
 ### Alembic Migrations
 
 80+ migration scripts in `alembic/versions/`. Key milestones:
 
-| Migration      | Description                               |
-| -------------- | ----------------------------------------- |
-| `0009`         | Models refactor                           |
-| `0014`, `0019` | Asset filesystem refactoring              |
-| `0020`         | Added created_at/updated_at to all tables |
-| `0021`         | ROM user associations                     |
-| `0022`         | Collection system                         |
-| `0023`         | Column nullability constraints            |
-| `0024`         | Sibling ROM database views                |
-| `0025`         | ROM hash tracking                         |
-| `0064`         | Performance indexes on updated_at         |
-| `0068`         | Device tables                             |
-| `0072`         | Client tokens table                       |
-| `0129`         | Drop emulator save data (irreversible)    |
+| Migration      | Description                                 |
+| -------------- | ------------------------------------------- |
+| `0009`         | Models refactor                             |
+| `0014`, `0019` | Asset filesystem refactoring                |
+| `0020`         | Added created_at/updated_at to all tables   |
+| `0021`         | ROM user associations                       |
+| `0022`         | Collection system                           |
+| `0023`         | Column nullability constraints              |
+| `0024`         | Sibling ROM database views                  |
+| `0025`         | ROM hash tracking                           |
+| `0064`         | Performance indexes on updated_at           |
+| `0068`         | Device tables                               |
+| `0072`         | Client tokens table                         |
+| `0129`         | Drop emulator save data (irreversible)      |
+| `0130`, `0131` | Notifications and notification channels     |
+| `0132`         | Audit events                                |
+| `0133`, `0134` | Indexed gallery sorts                       |
+| `0137`         | System permission groups keyed, not flagged |
+| `0139`         | Pinned media per ROM user                   |
+| `0143`         | Sibling platform names                      |
+| `0144`         | OIDC subject on users                       |
+| `0145`         | Drop derivable columns                      |
+| `0146`         | ROM search aliases                          |
+| `0147`         | ROM file title ids                          |
+| `0149`, `0150` | ROM file-name indexes                       |
+| `0152`         | Cross-user smart collection scopes          |
 
 Migrations support batch mode for SQLite and DB-specific SQL for MariaDB/MySQL/PostgreSQL.
 
@@ -712,7 +763,7 @@ Migrations support batch mode for SQLite and DB-specific SQL for MariaDB/MySQL/P
 
 **Base URL:** `/api`
 **Documentation:** Swagger UI at `/api/docs`, ReDoc at `/api/redoc`
-**Pagination:** `fastapi-pagination` with `LimitOffsetParams` (`limit`, `offset`, `total`)
+**Pagination:** `PageParams` (`limit`, `offset`) via the `PAGE_QUERY` dependency, returning a `LimitOffsetPage` (`items`, `total`, `limit`, `offset`); both live in `endpoints/responses/base.py`. Routes with a smaller page cap subclass `PageParams` (`MusicPageParams`, `AuditPageParams`)
 
 ### 6.1 Authentication (`/api`)
 
@@ -723,8 +774,10 @@ Migrations support batch mode for SQLite and DB-specific SQL for MariaDB/MySQL/P
 | POST   | `/token`           | No   | OAuth2 token (password, refresh_token grants)  |
 | GET    | `/login/openid`    | No   | OIDC login redirect                            |
 | GET    | `/oauth/openid`    | No   | OIDC callback                                  |
-| POST   | `/forgot-password` | No   | Request password reset                         |
+| POST   | `/forgot-password` | No   | Email a reset link, or log it without email    |
 | POST   | `/reset-password`  | No   | Reset password with token                      |
+
+A reset link is emailed when SMTP is set up, the user has an address and `ROMM_BASE_URL` is shareable, at most once a minute per user; otherwise it goes to the log for an admin to pass on. It is built from `ROMM_BASE_URL`, never the request's `Host`. The heartbeat's `NOTIFICATIONS.EMAILS_RESET_LINKS` says whether links are emailed.
 
 ### 6.2 Users (`/api/users`)
 
@@ -781,7 +834,10 @@ Migrations support batch mode for SQLite and DB-specific SQL for MariaDB/MySQL/P
 | DELETE | `/{id}`                      | ROMS_WRITE | Delete ROM                                       |
 | POST   | `/delete`                    | ROMS_WRITE | Bulk delete                                      |
 | POST   | `/download/{id}/{file_name}` | ROMS_READ  | Download ROM                                     |
+| GET    | `/{id}/content/{file_name}`  | ROMS_READ  | Download ROM, in a listed `?format=` when asked  |
 | POST   | `/unidentified`              | ROMS_READ  | Get unidentified ROMs                            |
+
+With rom-converto enabled (`ROM_CONVERTO_ENABLED`, `converto.download_conversion_enabled`), `?format=zso,iso` lists the formats a client can read. A single-file download whose stored format is listed is served as-is. Otherwise the first listed format with a copy cached under `/tmp/romm/cache/converts` (`$ROMM_TMP_PATH/cache/converts` when set) is served, then the first one rom-converto can produce: answered by the same request if it converts within a few seconds, else `202` with `Retry-After` while it finishes. `406` means no listed format can be served, and `HEAD` reports the same without starting a conversion. Only signed-in, non-kiosk users start conversions. A rom's detail response lists the formats its single file can be converted to in `download_formats`, empty when the caller can't start a conversion.
 
 #### ROM Upload (Chunked)
 
@@ -819,30 +875,33 @@ Facet endpoints (`/artists`, `/albums`, `/genres`, `/years`) return `{value, cou
 | Method | Path     | Scope     | Description                          |
 | ------ | -------- | --------- | ------------------------------------ |
 | GET    | `/roms`  | ROMS_READ | Search metadata across all providers |
-| GET    | `/cover` | ROMS_READ | Search SteamGridDB for cover art     |
+| GET    | `/cover` | ROMS_READ | Search SteamGridDB and Steam covers  |
 
 ### 6.8 Devices (`/api/devices`)
 
-| Method | Path    | Scope         | Description                         |
-| ------ | ------- | ------------- | ----------------------------------- |
-| POST   | `/`     | DEVICES_WRITE | Register device (fingerprint dedup) |
-| GET    | `/`     | DEVICES_READ  | List devices                        |
-| GET    | `/{id}` | DEVICES_READ  | Get device                          |
-| PUT    | `/{id}` | DEVICES_WRITE | Update device                       |
-| DELETE | `/{id}` | DEVICES_WRITE | Delete device                       |
+| Method | Path      | Scope         | Description                                                |
+| ------ | --------- | ------------- | ---------------------------------------------------------- |
+| POST   | `/`       | DEVICES_WRITE | Register device (fingerprint dedup)                        |
+| GET    | `/`       | DEVICES_READ  | List devices                                               |
+| GET    | `/online` | DEVICES_READ  | Ids of devices with a live device socket or a recent claim |
+| GET    | `/{id}`   | DEVICES_READ  | Get device                                                 |
+| PUT    | `/{id}`   | DEVICES_WRITE | Update device                                              |
+| DELETE | `/{id}`   | DEVICES_WRITE | Delete device                                              |
 
 ### 6.9 Collections (`/api/collections`)
 
-| Method | Path                  | Scope             | Description           |
-| ------ | --------------------- | ----------------- | --------------------- |
-| POST   | `/`                   | COLLECTIONS_WRITE | Create collection     |
-| GET    | `/`                   | COLLECTIONS_READ  | List collections      |
-| GET    | `/identifiers`        | COLLECTIONS_READ  | Get collection IDs    |
-| GET    | `/{id}`               | COLLECTIONS_READ  | Get collection        |
-| PUT    | `/{id}`               | COLLECTIONS_WRITE | Update collection     |
-| DELETE | `/{id}`               | COLLECTIONS_WRITE | Delete collection     |
-| POST   | `/{id}/roms`          | COLLECTIONS_WRITE | Add ROM to collection |
-| DELETE | `/{id}/roms/{rom_id}` | COLLECTIONS_WRITE | Remove ROM            |
+| Method | Path                     | Scope             | Description                       |
+| ------ | ------------------------ | ----------------- | --------------------------------- |
+| POST   | `/`                      | COLLECTIONS_WRITE | Create collection                 |
+| GET    | `/`                      | COLLECTIONS_READ  | List collections                  |
+| GET    | `/identifiers`           | COLLECTIONS_READ  | Get collection IDs                |
+| GET    | `/{id}`                  | COLLECTIONS_READ  | Get collection                    |
+| PUT    | `/{id}`                  | COLLECTIONS_WRITE | Update collection                 |
+| PUT    | `/{id}/visibility`       | COLLECTIONS_WRITE | Share or unshare collection       |
+| PUT    | `/smart/{id}/visibility` | COLLECTIONS_WRITE | Share or unshare smart collection |
+| DELETE | `/{id}`                  | COLLECTIONS_WRITE | Delete collection                 |
+| POST   | `/{id}/roms`             | COLLECTIONS_WRITE | Add ROM to collection             |
+| DELETE | `/{id}/roms/{rom_id}`    | COLLECTIONS_WRITE | Remove ROM                        |
 
 ### 6.10 Feeds (`/api/feeds`)
 
@@ -881,8 +940,86 @@ Facet endpoints (`/artists`, `/albums`, `/genres`, `/years`) return `{value, cou
 | GET    | `/status`     | TASKS_RUN | Status of all tasks      |
 | GET    | `/{id}`       | TASKS_RUN | Status of specific task  |
 | POST   | `/run/{name}` | TASKS_RUN | Trigger task execution   |
+| POST   | `/scan`       | TASKS_RUN | Queue a scan             |
 
-### 6.13 Other Endpoints
+`POST /scan` takes the options of the `scan` socket event and answers 202 with the queued job.
+`GET /{id}` follows it, with the counts so far in `meta.scan_stats`.
+A missing body means a quick scan of the whole library, a missing `apis` every enabled metadata source, and an unknown key answers 422.
+A scan of named `roms_ids` goes ahead of a queued library scan, any other scan answers 409 while a library scan is queued or running.
+It answers 503 when no worker listens on the scan queue.
+
+### 6.13 Notifications (`/api/notifications`)
+
+| Method | Path    | Scope    | Description                                                 |
+| ------ | ------- | -------- | ----------------------------------------------------------- |
+| GET    | `/`     | ME_READ  | Caller's notifications, newest first                        |
+| POST   | `/`     | ME_WRITE | Send one to yourself; admins also to users, `admins`, `all` |
+| POST   | `/read` | ME_WRITE | Mark ids read (`ids: null` marks all)                       |
+| DELETE | `/{id}` | ME_WRITE | Dismiss one for good                                        |
+| DELETE | `/`     | ME_WRITE | Dismiss all                                                 |
+
+A client's notification carries its own `title`, `body`, `icon` (`mdi-*`) and `link`, which must be a path inside RomM. RomM's own `kind`s are reserved; any other (`custom`, `argosy.sync_done`) is shown as sent.
+
+```bash
+curl -X POST "$ROMM/api/notifications" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Scan finished", "body": "12 ROMs added", "level": "success", "link": "/rom/12"}'
+```
+
+#### Notification channels (`/api/notification-channels`)
+
+Each user forwards their own notifications to other services. A channel is one of three types:
+
+- `apprise`: any of the 100+ services [Apprise](https://github.com/caronc/apprise#supported-notifications) reaches (Discord, Telegram, ntfy, Slack, Gotify…), set up through that service's own fields. **Admins only**, since Apprise opens its own connections, past the SSRF guard. The owner's role is checked again at every delivery, so a demoted admin's channel fails until it turns off.
+- `webhook`: RomM's own JSON payload (below), POSTed to an http(s) URL.
+- `email`: a plain-text email over the server's SMTP, to an address confirmed with a 6-digit code first.
+
+A channel filters by minimum level and by topic (`scans`, `tasks`, `account`, `custom`); every stored notification that passes goes out in its own RQ job, retried at 30 s, 2 min and 10 min. A channel that fails 10 deliveries in a row turns itself off and tells its owner.
+
+| Method | Path                      | Scope    | Description                                                                                    |
+| ------ | ------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| GET    | `/`                       | ME_READ  | Caller's channels, secrets masked                                                              |
+| GET    | `/apprise-services`       | ME_READ  | Every Apprise service and its fields (admins only, else 403)                                   |
+| POST   | `/apprise-services/parse` | ME_READ  | Read a pasted URL (Discord's own, or an Apprise one) into its service and fields (admins only) |
+| POST   | `/`                       | ME_WRITE | Add a channel; an email address gets a code                                                    |
+| PATCH  | `/{id}`                   | ME_WRITE | Change it; an omitted URL or secret stays, an empty secret is dropped                          |
+| DELETE | `/{id}`                   | ME_WRITE | Delete it                                                                                      |
+| POST   | `/{id}/test`              | ME_WRITE | Send a sample notification now                                                                 |
+| POST   | `/{id}/confirm`           | ME_WRITE | Confirm an email address with its code                                                         |
+| POST   | `/{id}/resend-code`       | ME_WRITE | Email a new code (once a minute)                                                               |
+
+The Apprise catalog comes from Apprise's own plugin details: URL tokens become fields, options become advanced fields, and a field is required only when every URL template of its service needs it. A token is a secret when Apprise marks it so or its name is a credential's (`token`, `key`, `webhook`…). A channel stores its service and fields, sealed, and each delivery builds the URL from the template those fields fill. Not offered: schemas that act on the host (`syslog`, `dbus`, `windows`…), FCM (it opens its key file itself), the options Apprise reads from a local file (`template`, `keyfile`, `subfile`, `pgp*`) and the ones RomM sets. Apprise follows no redirects and doesn't retry, its timeouts are capped at 10 s to connect and 15 s to read, a list takes at most 20 items, and `@everyone`, `@here` and `<@…>` ping nobody. A failure's error carries Apprise's warning and the start of the service's reply. Each service links its setup guide on Apprise's wiki. A pasted URL is read back into fields by matching the URL Apprise writes for it against the service's templates. The API returns the fields that aren't secret and names the secrets; on edit, a secret left out stays and an empty one goes, but a kept secret never follows the channel to another destination, as Apprise's `url_identifier` tells them apart. A test gets 60 s, like a queued delivery.
+
+Only an admin's webhooks may reach private addresses; everyone else's go through the SSRF guard. A kept webhook secret doesn't follow the channel to another origin. A webhook delivery gets 15 s in all, and only the start of a refusal's body is read. Text for RomM's own kinds is English until outbound messages are translated. Links are absolute only when `ROMM_BASE_URL` is shareable.
+
+```json
+{
+  "event": "notification",
+  "id": 42,
+  "kind": "scan_completed",
+  "level": "success",
+  "title": "Scan completed",
+  "body": "3 new games",
+  "url": "https://romm.example.com/scan",
+  "data": { "new_roms": 3 },
+  "actor": null,
+  "created_at": "2026-09-23T12:00:00+00:00"
+}
+```
+
+With a secret, a webhook adds `X-RomM-Signature: sha256=<hex HMAC-SHA256 of the body>`. Email needs `SMTP_HOST` and `SMTP_FROM` (see `env.template`); the heartbeat's `NOTIFICATIONS.EMAIL_ENABLED` says whether it's set up. Channel configs are sealed with a key derived from `ROMM_AUTH_SECRET_KEY`, so rotating it means entering their URLs and secrets again.
+
+### 6.14 Audit Events (`/api/audit-events`)
+
+| Method | Path | Scope   | Description                                                     |
+| ------ | ---- | ------- | --------------------------------------------------------------- |
+| GET    | `/`  | ME_READ | Events newest first: everyone's for an admin, else the caller's |
+
+Filters: `actor_id`, `action`, `category`, `target_type`/`target_id`, `since`/`until`, `search` (names and IP). Pages carry `max_id`; pass it back so later pages skip events recorded meanwhile. An admin reads everyone's only with `users.read` in the token.
+
+Events are written by `handler/audit_handler.record()` after an action succeeds, and a failure to write never fails the action. A ROM content fetch is a `rom.download`, or a `rom.player_load` when the in-browser player marks it `purpose=play`; a fetch whose Range starts past byte 0, or that the same caller made in the last 10 minutes, isn't recorded. A failed login keeps the attempted name only when an account has it. The client address comes from `X-Forwarded-For` only when the connection is from a proxy in `FORWARDED_ALLOW_IPS`.
+
+### 6.15 Other Endpoints
 
 | Router    | Path                                   | Description                            |
 | --------- | -------------------------------------- | -------------------------------------- |
@@ -894,7 +1031,7 @@ Facet endpoints (`/artists`, `/albums`, `/genres`, `/years`) return `{value, cou
 | Export    | `POST /api/export/gamelist-xml`        | Export ES-DE gamelist.xml              |
 | Export    | `POST /api/export/pegasus`             | Export Pegasus frontend metadata       |
 
-The codebase exposes roughly **177 HTTP routes** and **7 WebSocket handlers** across 21 routers.
+The codebase exposes roughly **196 HTTP operations** and **7 WebSocket handlers** across 24 routers.
 
 ---
 
@@ -957,6 +1094,10 @@ users.read / users.write     : User management (admin)
 tasks.run                    : Task execution
 ```
 
+### Permission Groups
+
+Endpoints also check the caller's permission group (`handler/auth/permissions.py`), which holds entity and action grants plus per-user overrides. Most entities line up with a scope above.
+
 ### CSRF Protection
 
 - Cookie: `romm_csrftoken` (signed with `itsdangerous`)
@@ -967,9 +1108,10 @@ tasks.run                    : Task execution
 
 ### Session Management
 
-- Redis keys: `session:{session_id}`, `user_sessions:{username}`
+- Redis keys: `session:{session_id}`, `user_sessions:{username}`, `session_sockets:{channel}:{session_id}`
 - Cookie: `romm_session` (httponly, samesite=lax/strict)
 - `clear_user_sessions(user_id)` on password change clears all sessions
+- Removing a session (logout, revoke) disconnects the sockets it opened on `/ws`, which would otherwise keep their `user:{id}` and `admin` rooms
 
 ---
 
@@ -1095,6 +1237,19 @@ ScanStats:
     updated_roms, new_files
 ```
 
+### 8.6 Notifications (`handler/notification_handler.py`)
+
+Persistent per-user notifications, kept until dismissed and pushed live to the user's `user:{id}` socket room. From backend code, web process or worker alike:
+
+```python
+await notify(user.id, NotificationKind.SCAN_COMPLETED, NotificationLevel.SUCCESS, stats)
+await notify_admins("custom", NotificationLevel.WARNING, title="Disk almost full")
+```
+
+A `NotificationKind` is translated by the client from `data`; a new one needs a describer in `frontend/src/utils/notifications.ts` and locale keys. Until then, or for a one-off, pass any other kind with `title`/`body`/`link`/`icon`. Both helpers log and swallow failures, so a job never fails over reporting itself.
+
+A task reports its success from `run_task_by_name`. Its failure is reported by `report_task_failure`, an exception handler `RomMWorker` installs, so a timeout, a killed work horse or a dead worker notifies too, for cron runs as well as manual ones. The handler can run in the worker parent, so it enqueues `notify_task_failure` on the default queue rather than loading the notification stack there.
+
 ---
 
 ## 9. External Integrations (Adapters)
@@ -1153,7 +1308,7 @@ Each adapter wraps an external API with authentication, retry logic, and type sa
 | ------------- | -------------------- | ------------------------------------------------- |
 | LaunchBox     | `launchbox_handler/` | Local XML database + remote API, platform mapping |
 | HowLongToBeat | `hltb_handler`       | Game playtime estimates                           |
-| Steam         | `steam_handler`      | Storefront metadata for win/linux/mac only        |
+| Steam         | `steam_handler`      | Storefront metadata (win/linux/mac) and cover art |
 | Hasheous      | `hasheous_handler`   | Hash-based ROM identification                     |
 | TheGamesDB    | `tgdb_handler`       | Alternative game metadata                         |
 | Flashpoint    | `flashpoint_handler` | Browser game archive database                     |
@@ -1192,7 +1347,15 @@ Client  ←──Socket.IO──→  FastAPI (python-socketio)  ←──Redis P
 | `scan:log`          | Log message        | Scan log entries            |
 | `scan:stop`         |                    | Scan completed or cancelled |
 
----
+### Notifications (`/ws`)
+
+Sent to the user's own `user:{id}` room:
+
+| Event                     | Payload                | When                         |
+| ------------------------- | ---------------------- | ---------------------------- |
+| `notifications:new`       | `NotificationSchema`   | One was stored for the user  |
+| `notifications:read`      | `{ids: int[] \| null}` | Another tab marked some read |
+| `notifications:dismissed` | `{ids: int[] \| null}` | Another tab dismissed some   |
 
 ## 11. Background Tasks & Scheduling
 
@@ -1212,7 +1375,11 @@ Client  ←──Socket.IO──→  FastAPI (python-socketio)  ←──Redis P
 ### Scheduled Tasks
 
 Declared in `tasks/registry.py` and registered with RQ's cron scheduler by
-`tasks/cron_config.py`, which the `rq cron` process loads at start. A task is
+`tasks/cron_config.py`, which the `rq cron` process loads at start. The registry
+holds each task's `TaskSpec` (title, schedule, queue, timeout) and the dotted
+path to the `Task` that runs it, which `get_task` imports only when a job runs.
+The scheduler, the tasks API and the worker's failure reporting read specs
+alone, so they never load task code. A task is
 registered only when it is enabled and has a cron string, so turning one off is
 a restart rather than an unschedule. Delayed jobs, which is how the filesystem
 watcher defers a rescan, are released by the worker itself (`--with-scheduler`).
@@ -1223,22 +1390,31 @@ failure callback and a scan needs one to report a worker that died mid-scan.
 
 Toggled via environment variables:
 
-| Task                              | Env Toggle                                         | Default Cron       | Description            |
-| --------------------------------- | -------------------------------------------------- | ------------------ | ---------------------- |
-| `scan_library`                    | `ENABLE_SCHEDULED_RESCAN`                          | `0 3 * * *` (3 AM) | Full library rescan    |
-| `update_switch_titledb`           | `ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB`           | `0 4 * * *`        | Update Switch game DB  |
-| `update_launchbox_metadata`       | `ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA`       | `0 4 * * *`        | Refresh LaunchBox data |
-| `convert_images_to_webp`          | `ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP`          | `0 4 * * *`        | Image optimization     |
-| `sync_retroachievements_progress` | `ENABLE_SCHEDULED_RETROACHIEVEMENTS_PROGRESS_SYNC` | `0 4 * * *`        | Sync RA user progress  |
-| `cleanup_orphaned_resources`      | `ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES`      | `0 5 * * *`        | Remove unused artwork  |
+| Task                              | Env Toggle                                         | Default Cron       | Description                    |
+| --------------------------------- | -------------------------------------------------- | ------------------ | ------------------------------ |
+| `scan_library`                    | `ENABLE_SCHEDULED_RESCAN`                          | `0 3 * * *` (3 AM) | Full library rescan            |
+| `update_switch_titledb`           | `ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB`           | `0 4 * * *`        | Update Switch game DB          |
+| `update_launchbox_metadata`       | `ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA`       | `0 4 * * *`        | Refresh LaunchBox data         |
+| `convert_images_to_webp`          | `ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP`          | `0 4 * * *`        | Image optimization             |
+| `sync_retroachievements_progress` | `ENABLE_SCHEDULED_RETROACHIEVEMENTS_PROGRESS_SYNC` | `0 4 * * *`        | Sync RA user progress          |
+| `cleanup_orphaned_resources`      | `ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES`      | `0 5 * * *`        | Remove unused artwork          |
+| `cleanup_upload_tmp`              | `ENABLE_SCHEDULED_CLEANUP_UPLOAD_TMP` (default on) | `0 * * * *`        | Drop stale uploads             |
+| `cleanup_zip_cache`               | `ENABLE_SCHEDULED_CLEANUP_ZIP_CACHE` (default on)  | `0 4 * * *`        | Drop stale cached ZIPs         |
+| `cleanup_conversion_cache`        | Always on                                          | `0 4 * * *`        | Drop stale converted downloads |
+| `cleanup_audit_log`               | `AUDIT_LOG_RETENTION_DAYS` above 0 (default 90)    | `30 4 * * *`       | Prune old audit events         |
 
 ### Manual Tasks
 
-Triggered via `POST /api/tasks/run/{task_name}`:
+Triggered via `POST /api/tasks/run/{task_name}`, which enqueues on `low_prio_queue` and answers 503 when no live worker is listening on it:
 
-| Task                   | Description                                   |
-| ---------------------- | --------------------------------------------- |
-| `cleanup_missing_roms` | Remove DB entries for files no longer on disk |
+| Task                   | Description                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `cleanup_missing_roms` | Remove DB entries for files no longer on disk                                         |
+| `convert_library`      | Convert matched ROMs to `converto.platform_formats` in place, replacing the originals |
+
+A spec marked `destructive` asks for a typed confirmation before the UI runs it, and one marked `single_instance` answers 409 while a job of it is queued or running. `convert_library` is both, and runs only with `ROM_CONVERTO_ENABLED` set.
+
+`convert_library` only converts losslessly (no xiso) and only identified ROMs, since a converted file no longer hash-matches a DAT. It stages each output under a `.romm_tmp_` directory beside the ROM, deletes the originals (and a cue's tracks) once the output is in place, rewrites `.m3u` entries in folder ROMs, and refreshes the ROM's files, so the ROM keeps its id, saves and collections.
 
 `cleanup_orphaned_resources` is also runnable this way; it is listed under
 Scheduled Tasks because it additionally supports an opt-in cron schedule. It
@@ -1329,20 +1505,24 @@ Falls back to `FakeRedis` in test mode.
 
 ### Cache Key Patterns
 
-| Pattern                    | TTL             | Content                         |
-| -------------------------- | --------------- | ------------------------------- |
-| `session:{id}`             | 14 days         | Session JSON                    |
-| `user_sessions:{username}` | 14 days         | Set of session IDs              |
-| `reset-jti:{jti}`          | 10 min          | Password reset token (one-time) |
-| `invite-jti:{jti}`         | 10 min          | Invite token (one-time)         |
-| `refresh-jti:{jti}`        | 7 days          | Refresh token validation        |
-| `romm:mame_index`          | Permanent       | MAME game index                 |
-| `romm:scummvm_index`       | Permanent       | ScummVM game index              |
-| `romm:ps1_serials`         | Permanent       | PS1 serial codes                |
-| `romm:ps2_serials`         | Permanent       | PS2 serial codes                |
-| `romm:psp_serials`         | Permanent       | PSP serial codes                |
-| `romm:switch_titledb`      | Refreshed daily | Switch TitleDB                  |
-| Upload sessions            | 24 hours        | Chunked upload state            |
+| Pattern                           | TTL             | Content                             |
+| --------------------------------- | --------------- | ----------------------------------- |
+| `session:{id}`                    | 14 days         | Session JSON                        |
+| `user_sessions:{username}`        | 14 days         | Set of session IDs                  |
+| `session_sockets:{channel}:{id}`  | 14 days         | Socket IDs a session opened         |
+| `notification-channel:{id}:code`  | 30 min          | Hash of an email confirmation code  |
+| `notification-channel-cooldown:*` | 1 min           | A user's and an address's last code |
+| `reset-email:{user_id}`           | 1 min           | A user's last emailed reset link    |
+| `reset-jti:{jti}`                 | 10 min          | Password reset token (one-time)     |
+| `invite-jti:{jti}`                | 10 min          | Invite token (one-time)             |
+| `refresh-jti:{jti}`               | 7 days          | Refresh token validation            |
+| `romm:mame_index`                 | Permanent       | MAME game index                     |
+| `romm:scummvm_index`              | Permanent       | ScummVM game index                  |
+| `romm:ps1_serials`                | Permanent       | PS1 serial codes                    |
+| `romm:ps2_serials`                | Permanent       | PS2 serial codes                    |
+| `romm:psp_serials`                | Permanent       | PSP serial codes                    |
+| `romm:switch_titledb`             | Refreshed daily | Switch TitleDB                      |
+| Upload sessions                   | 24 hours        | Chunked upload state                |
 
 ---
 
@@ -1352,13 +1532,14 @@ Falls back to `FakeRedis` in test mode.
 
 #### Core
 
-| Variable         | Default          | Description          |
-| ---------------- | ---------------- | -------------------- |
-| `ROMM_BASE_PATH` | `/romm`          | Base data directory  |
-| `ROMM_BASE_URL`  | `http://0.0.0.0` | Application base URL |
-| `ROMM_PORT`      | `8080`           | Server port          |
-| `DEV_MODE`       | `false`          | Development mode     |
-| `LOGLEVEL`       | `INFO`           | Log level            |
+| Variable              | Default          | Description                                                |
+| --------------------- | ---------------- | ---------------------------------------------------------- |
+| `ROMM_BASE_PATH`      | `/romm`          | Base data directory                                        |
+| `ROMM_BASE_URL`       | `http://0.0.0.0` | Application base URL                                       |
+| `ROMM_PORT`           | `8080`           | Server port                                                |
+| `DEV_MODE`            | `false`          | Development mode                                           |
+| `LOGLEVEL`            | `INFO`           | Log level                                                  |
+| `FORWARDED_ALLOW_IPS` | private ranges   | Proxies trusted to report the client address (`*` for any) |
 
 #### Database
 
@@ -1411,7 +1592,7 @@ Falls back to `FakeRedis` in test mode.
 | `OIDC_REDIRECT_URI`             |                      | Redirect URI                    |
 | `OIDC_USERNAME_ATTRIBUTE`       | `preferred_username` | Username claim                  |
 | `OIDC_CLAIM_ROLES`              |                      | Roles claim name                |
-| `OIDC_ROLE_VIEWER/EDITOR/ADMIN` |                      | Role mappings                   |
+| `OIDC_ROLE_VIEWER/EDITOR/ADMIN` |                      | Comma-separated role values     |
 | `OIDC_TLS_CACERTFILE`           |                      | Custom CA bundle for OIDC calls |
 | `OIDC_RP_INITIATED_LOGOUT`      | `false`              | Send logout to OIDC provider    |
 | `OIDC_END_SESSION_ENDPOINT`     |                      | End-session URL override        |
@@ -1511,11 +1692,9 @@ Exception
 ├── CollectionNotFoundInDatabaseException  # 404
 ├── CollectionPermissionError              # 403
 ├── CollectionAlreadyExistsException       # 500
-├── RomNotFoundInRetroAchievementsException # 404
 ├── SGDBInvalidAPIKeyException             # 401
 │
 ├── FolderStructureNotMatchException  # Invalid library layout
-├── PlatformNotFoundException         # Platform not found in FS
 ├── PlatformAlreadyExistsException    # Duplicate platform
 ├── RomsNotFoundException             # No ROMs for platform
 ├── RomAlreadyExistsException         # Duplicate ROM

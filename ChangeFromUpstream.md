@@ -111,6 +111,10 @@ The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `u
 
 `0129_remove_emulator_data` keeps its revision id and still revises `0128_hltb_main_story_column`. Upstream's `0130` to `0147` and `0149`, `0150` follow it, re-chained (`0149` revises `0147`), and `0152_cross_user_smart_scopes` closes the chain. Skipped because they only touch removed tables or add removed permissions: `0129_save_state_favorites_labels`, `0135`, `0136`, `0138`, `0140`, `0141`, `0142`, `0151` and `0153`. `0148_rom_age_limits` is skipped because the fork drops age limits.
 
+### Docs and skills
+
+`docs/BACKEND_ARCHITECTURE.md` was merged with upstream's version at `7eae2b8ff` and the sections for removed features (saves, states, screenshots, firmware, play sessions, netplay, device sync and install, EasyRPG, age limits) were dropped again. The `backend-development`, `review-polish` and `security-audit` skills follow upstream, with the references to tooling the fork does not have (the mypy workflow, the ruff `TID251` factory ban, the ESLint plugin) removed.
+
 ### Kept from the fork
 
 The Google Translate step in `scan_handler.py` and `endpoints/roms/__init__.py`, and the trimmed `FSAssetsHandler` (avatars only), carry over unchanged.

@@ -1,6 +1,6 @@
 ---
 name: review-polish
-description: The before-review and before-handoff pass for RomM, covering both stacks. First shapes the code the checks can't see — comment and docstring discipline (the single most-corrected thing in this repo), duplicated constants/types/getters, imprecise names, loose typing in tests. Then runs the verification gate that keeps CI green — frontend (typecheck/lint/test/build/i18n/tokens), backend (pytest/alembic/trunk), the OpenAPI regen step, and (for UI) manual browser/theme/input/Storybook checks. Use after the code works, right before committing, opening a PR, or telling the user a change is done.
+description: "The before-review and before-handoff pass for RomM, covering both stacks. First shapes the code the checks can't see: comment and docstring discipline (the single most-corrected thing in this repo), duplicated constants/types/getters, imprecise names, loose typing in tests. Then runs the verification gate that keeps CI green: frontend (typecheck/lint/test/build/i18n/tokens), backend (pytest/alembic/trunk), the OpenAPI regen step, and (for UI) manual browser/theme/input/Storybook checks. Ends with what the PR description owes a reviewer: screenshots of a UI change, a mermaid diagram of an architectural one. Use after the code works, right before committing, opening a PR, or telling the user a change is done."
 ---
 
 # RomM: Review Polish & Verification
@@ -9,7 +9,7 @@ Two passes, in order, once the change works:
 
 1. **Polish (A–D):** shape the code the checks can't see. Derived from the
    corrections a maintainer actually pushed on top of 37 approved contributor
-   PRs — every rule below is something that got hand-fixed after review, so
+   PRs: every rule below is something that got hand-fixed after review, so
    applying it up front saves a round trip.
 2. **Verify (E):** run the checks that match what you touched, mirroring the CI
    gates so review isn't the first place a failure shows up. Polish comes
@@ -124,10 +124,12 @@ catch these, but only after the contributor has handed the PR over.
 
 ---
 
+---
+
 ## E. Verification before handoff
 
 Run the checks that match what you touched. **Static checks don't prove a
-feature works** — when UI changed, also test it in the browser. **Never
+feature works**; when UI changed, also test it in the browser. **Never
 `--no-verify`.**
 
 **Commit whatever `trunk fmt` rewrites.** A "run fmt" commit landing on top of a
@@ -142,10 +144,10 @@ mypy wanting explicit annotations on `__init__` attributes
 
 Run from `frontend/`:
 
-1. `npm run typecheck` — zero errors (`vue-tsc --noEmit`).
-2. `npm run lint` _(if present)_ / ESLint clean. Trunk also runs ESLint + Prettier in CI.
-3. `npm run test` — zero failures (Vitest + happy-dom; runs unit tests **and** every `/lib` story's `play()` via `composeStories`).
-4. `npm run build` — zero failures (CI sanity check).
+1. `npm run typecheck`: zero errors (`vue-tsc --noEmit`).
+2. `trunk check`: ESLint and Prettier clean on the changed files.
+3. `npm run test`: zero failures (Vitest + happy-dom; runs unit tests and every `/lib` story's `play()` via `composeStories`).
+4. `npm run build`: zero failures (CI sanity check).
 
 **If you touched the backend API:** start the backend, run `npm run generate`, then re-`typecheck`.
 
@@ -153,41 +155,115 @@ Run from `frontend/`:
 
 **If you touched locales** (`src/locales/**`): `python3 frontend/src/locales/check_i18n_locales.py` must pass with zero missing/extra keys. See the `frontend-i18n` skill.
 
-#### UI manual pass (when changes are visible) — v2
+#### UI manual pass (when changes are visible): v2
 
 With `uiVersion = "v2"`:
 
 - **Golden path + edge cases:** empty, error, loading, no-permission, extreme data; plus nearby regressions.
 - **Both themes:** `v2-dark` and `v2-light`.
-- **All four input modalities:** mouse, touch, keyboard, gamepad — focus ring only on `key`/`pad`.
+- **All four input modalities:** mouse, touch, keyboard, gamepad; focus ring only on `key`/`pad`.
 - **Responsive sweep:** 320px → 4K across the `useBreakpoint` tiers; overlays full-bleed on `xs`.
 - **Accessibility:** contrast, keyboard reachability with no traps, aria-labels on icon-only controls.
 - **Performance:** lists/grids of 1000+ items stay smooth; every `v-for` has a stable `:key`.
+- **Screenshots:** capture the change while you're in there, at least one and enough to
+  convey what's different. Shoot the component or view in its real surroundings, not a
+  full-page dump, and save to a temp dir outside the repo.
+  See [F. The PR description](#f-the-pr-description).
 
 #### Storybook (for `/lib`)
 
 - New primitive → mandatory story with controls + at least one variant per theme; interactive ones get a `play()`.
 - Modified primitive → existing story still renders and interactions still pass.
 - Don't duplicate coverage between Vitest (pure logic) and Storybook `play()` (components).
+- Responsive composites: sweep the Storybook viewport presets (see `frontend-v2-input`).
 
 ### Backend (`backend/`)
 
 Run from `backend/`:
 
-1. `uv run pytest <path/file>` — zero failures on the tests affected by the diff. Never run the whole suite locally (20+ minutes); see [AGENTS.md](../../../AGENTS.md) for how to pick targets. CI runs it in full.
-2. `trunk fmt && trunk check` — ruff/black/isort/mypy/bandit clean (CI enforces Trunk).
+1. `uv run pytest <path/file>`: zero failures on the tests affected by the diff. Add `-n auto` when the targets span a directory or more. Never run the whole suite locally (20+ minutes serially); see [AGENTS.md](../../../AGENTS.md) for how to pick targets. CI runs it in full.
+2. `trunk fmt && trunk check`: ruff/black/isort/mypy/bandit clean (CI enforces Trunk).
 3. **If you added a migration:** `uv run alembic upgrade head` then `uv run alembic downgrade -1` to prove both directions; it must work on MariaDB **and** PostgreSQL (CI runs both).
 4. **If a response schema or route signature changed:** regenerate frontend types (`npm run generate`) and typecheck the frontend.
 
 ### CI gates this mirrors
 
-`typecheck.yml` (vue-tsc + lockfile lint), `frontend.yml` (vitest + build), `i18n.yml` (locale check), `pytest.yml` (pytest on MariaDB + PostgreSQL), `migrations.yml` (alembic on both DBs), `trunk-check.yml` (Trunk across the repo). Green locally → green in CI.
+`frontend.yml` (vitest, build, vue-tsc + lockfile lint), `i18n.yml` (locale check), `pytest.yml` (pytest on MariaDB + PostgreSQL), `migrations.yml` (alembic on both DBs), `trunk-check.yml` (Trunk across the repo). Green locally → green in CI.
 
 ### Don't
 
 - Open a PR without manually testing the UI when UI was touched.
+- Open a PR on a UI change with an empty `Screenshots` section.
+- Describe a boundary change in prose alone when a diagram would land it in one read.
 - `--no-verify` on commits.
 - Leave a locale key English-only, a token un-generated, or a migration one-directional.
+
+---
+
+## F. The PR description
+
+Base it on `.github/PULL_REQUEST_TEMPLATE.md`, and carry the two things a reviewer cannot
+reconstruct from the diff.
+
+### Screenshots, for a UI change
+
+The template's `Screenshots (if applicable)` heading is not optional for a UI change; a reviewer
+who can't see the change reviews the diff instead of the result. Shoot enough to give that
+reviewer the gist, and stop there: one shot carries most changes.
+
+- **Before/after** when the change alters something that already existed and the after alone
+  wouldn't read as different, labelled as such.
+- **A second theme** only when the change is theme-dependent; a state or breakpoint only when it's
+  the point of the change.
+- Name the files for what they show (`missing-games-actions.png`); the filename is the alt text
+  when you don't supply one.
+
+Upload them yourself with `gh`, which takes `--attach '<file>#<alt text>'` (up to 50 per command)
+on `pr create`, `pr edit` and `pr comment`. Write the body referencing each file by its local path
+and `gh` rewrites the reference to the uploaded asset, so the shots land under the `Screenshots`
+heading instead of being appended at the end:
+
+```bash
+# /tmp/pr-body.md, under the Screenshots heading:
+#   ![The new actions row on a missing game](/tmp/shots/missing-games-actions.png)
+gh pr create --title '...' --body-file /tmp/pr-body.md \
+  --attach /tmp/shots/missing-games-actions.png
+```
+
+On an existing PR, `gh pr edit --attach` keeps the current body and appends the upload unless the
+body already references the file. A partial upload still creates or updates the PR and exits
+non-zero, so check the body rather than trusting the exit code. Never commit the images or push
+them to a branch to get a URL. Only fall back to handing the user file paths when the upload
+fails.
+
+### Mermaid diagram, for an architectural change
+
+GitHub renders a fenced `mermaid` block in a PR body, so a change that moves a boundary gets one:
+a new service, handler, or task in a request or job path; a model or relationship change; a new
+external provider or integration; a different call path across layers; an auth, session, or socket
+flow. Code that changes inside an existing boundary does not.
+
+- **Draw what changed**, with the new pieces distinguishable from what was already there. A
+  diagram that redraws the whole backend teaches nothing.
+- **Pick the type for the question:** `flowchart` for a call or data path, `sequenceDiagram` for an
+  exchange whose order over time is the point (auth handshake, scan lifecycle), `erDiagram` for
+  models and their relationships.
+- **Label the edges** with what crosses them, the call, the payload, the event name, not "uses".
+- **No custom colors or styling.** The default theme is the one that reads in both of GitHub's.
+- **Make sure it parses.** An unparseable block renders as raw text in the description. When the
+  syntax isn't one you're sure of, render it first:
+  `npx -y @mermaid-js/mermaid-cli -i d.mmd -o d.svg -p pc.json`, where `pc.json` is
+  `{"executablePath": "<a local Chrome>", "args": ["--no-sandbox"]}` (puppeteer downloads no
+  browser of its own here).
+
+```mermaid
+flowchart LR
+    client[Web client] -->|POST /api/roms/scan| api[roms endpoint]
+    api -->|enqueue| queue[(RQ queue)]
+    queue --> worker[scan task]
+    worker -->|emit scan:done| socket[Socket.IO]
+    socket --> client
+```
 
 ---
 
@@ -202,4 +278,7 @@ Run from `backend/`:
       pytest, migrations both directions, OpenAPI regen)
 - [ ] UI changes tested in the browser: both themes, all four input modalities,
       responsive sweep
+- [ ] UI changes screenshotted (enough to convey the change), and the shots
+      uploaded to the PR with `gh ... --attach`
+- [ ] Architectural changes carry a `mermaid` diagram in the PR description
 - [ ] `trunk fmt && trunk check` clean, with whatever fmt rewrote committed
