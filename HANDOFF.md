@@ -1,36 +1,45 @@
 # Handoff
 
 ## Completed
-- Fetched `origin/master`; it had no commits beyond the local base.
-- Pushed local commit `36322f67e` to `origin/codex/local-updates-20261024`.
-- Kept the untracked `.git-credentials` file out of Git.
+- Restored the fork's `master` to the pre-update baseline `6c3b32582594eb6f94bc858a05db78f33e84b882`; upstream `rommapp/romm/master` remains separate and newer.
+- Renamed the feature branch from `codex/local-updates-20261024` to `codex/remove-streaming-netplay-add-translator`.
+- Added `README.md` category summaries, created `ChangeFromUpstream.md` with file-level details against baseline `6c3b325...`, and added the future documentation rule to `AGENTS.md`.
+- Replaced the bad local-only README commit `e0f517106` before creating documentation commit `be12d57df4605160abe972bad1a4759a26b1faff`.
+- Pushed the new branch over SSH, verified GitHub points it to `be12d57d...`, then deleted the old remote branch with an exact `--force-with-lease` check. The local branch tracks `origin/codex/remove-streaming-netplay-add-translator`.
+- Added troubleshooting notes for the PowerShell, GitHub connector, and GitHub CLI issues encountered during the branch work; this handoff and those notes are being synced in the current push.
 
 ## Remaining
-- Open a pull request from `codex/local-updates-20261024` to `master` if these changes should be proposed upstream.
-- Review the large streaming and netplay deletions before merging.
+- Review the code changes in `36322f6...` before proposing a pull request, especially the removal of streaming/netplay functionality and the Google Translate integration.
+- Run targeted checks for any code changes accepted after review. No tests were run during this documentation and branch-renaming task.
+- Preserve the unrelated local edit in `CLAUDE.md`; keep untracked `.git-credentials` out of Git.
 
 ## Key files and commands
-- Local change: commit `36322f67e` (`Update: sync streaming modules, fix database syntax, add translator; align local with remote master`).
-- Relevant files include `backend/utils/translator.py`, `backend/utils/database.py`, `backend/config/__init__.py`, and removed streaming/netplay modules and tests.
-- Sync and push commands: `git fetch origin master`; `git switch -c codex/local-updates-20261024`; `git push -u origin codex/local-updates-20261024`.
+- Summary: `README.md`.
+- Detailed change list: `ChangeFromUpstream.md`.
+- Future documentation rule: `AGENTS.md`.
+- Commit: `be12d57df4605160abe972bad1a4759a26b1faff` (`docs: document changes from fork baseline`).
+- Branch rename: `git branch -m codex/remove-streaming-netplay-add-translator`.
+- Push: `git push git@github.com:xiaosagemisery/romm-cn.git HEAD:refs/heads/codex/remove-streaming-netplay-add-translator`.
+- Delete old remote branch: `git push --force-with-lease=refs/heads/codex/local-updates-20261024:31ac905afad0b472ee4dac03efcb98b57c9b3e4b git@github.com:xiaosagemisery/romm-cn.git :refs/heads/codex/local-updates-20261024`.
+- SSH authentication check succeeded with `ssh -o BatchMode=yes -T git@github.com`; `gh auth status` reports its stored token invalid.
 
 ## Blockers and risks
-- The commit removes the streaming and netplay backend modules and the streaming endpoint test file. Confirm these removals are intended before merging.
-- `.git-credentials` remains untracked locally and was not pushed.
+- The local `CLAUDE.md` edit is unrelated to this push and remains local. Do not discard it.
+- The feature branch's code changes have not been reviewed or tested in this turn.
+- No pull request was created.
 
 ## First step next time
-- Review the branch diff against `master`, especially the streaming and netplay removals, then run the targeted checks for the accepted changes.
+- Review `git diff 6c3b32582594eb6f94bc858a05db78f33e84b882..codex/remove-streaming-netplay-add-translator`, then run only the targeted tests relevant to code changes that are retained.
 
 ## Pitfalls encountered
-- `HANDOFF.md` and `tech_issue.md` were absent at session start.
-- Sandboxed `git fetch` could not write `.git/FETCH_HEAD`; rerunning the Git operation with the required elevated access succeeded.
-- Do not stage `.git-credentials`.
+- The GitHub CLI's stored token is invalid, but SSH authentication works. Use SSH for Git pushes and branch deletion; this avoids the HTTPS Schannel credential path.
+- A commit permalink does not prove a commit belongs to a particular branch; verify branch heads and ancestry.
+- GitHub's branch API reports the fork's `master` at `6c3b325...`, the renamed feature branch at `be12d57...`, and the old feature branch as deleted.
 
 ## Verification and artifacts
-- `git fetch origin master` succeeded; `origin/master` was unchanged and the local `master` had one additional commit.
-- Push succeeded to `origin/codex/local-updates-20261024`.
-- No tests were run because this task only pushed an existing commit and recorded the handoff.
-- No generated artifacts.
-
-- Follow-up pushes can use `git push` because this branch already tracks its remote branch.
-
+- `git diff --cached --check` completed with no whitespace errors before commit.
+- GitHub API confirmed `codex/remove-streaming-netplay-add-translator` at `be12d57df4605160abe972bad1a4759a26b1faff`.
+- GitHub API returned 404 for the deleted `codex/local-updates-20261024` branch.
+- GitHub API confirmed `master` remains at `6c3b32582594eb6f94bc858a05db78f33e84b882`.
+- Local branch and remote-tracking branch match at `be12d57df`.
+- No tests were run; the commit changes documentation only.
