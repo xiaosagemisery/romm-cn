@@ -8,16 +8,6 @@
   </h3>
 </div>
 
-<div align="center">
-  <div dir="auto">
-    <a href="https://trendshift.io/repositories/14133?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-14133" target="_blank" rel="noopener noreferrer"><img src=".github/resources/trendshift-badge.svg" alt="Trendshift" width="250" height="58"/></a>
-    <a href="https://news.ycombinator.com/item?id=44247964" target="_blank" rel="noopener noreferrer"><img src=".github/resources/hackernews-badge.svg" width="250px" alt="Hacker News 徽章"></a>
-    <br />
-    <a href="https://selfh.st/survey/2025-results/" target="_blank" rel="noopener noreferrer"><img src=".github/resources/selfhst-badge.svg" width="250px" alt="selfh.st 徽章"></a>
-    <a href="https://discord.gg/invite/romm" target="_blank" rel="noopener noreferrer"><img src=".github/resources/discord-badge.svg" alt="Discord" width="250" height="58"/></a>
-  </div>
-</div>
-
 # 概述
 
 romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、整理和浏览游戏收藏，支持多个游戏平台、多种命名规则和自定义标签。本分支以游戏库管理和游戏元数据简体中文翻译为重点。
@@ -65,14 +55,10 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 - **游戏元数据：** 为扫描及自动更新时获取的游戏名称和简介新增简体中文翻译，支持缓存，翻译失败时保留原文。
 - **模拟器与存档数据：** 移除前后端中所有与模拟器相关的代码，包括播放器、存档、即时存档、截图（ROM 截图保留）、固件、游玩记录、记忆卡和设备存档同步，并新增迁移 `0129` 删除相关数据表；`config.yml` 中的 `emulatorjs`、`streaming` 配置段和 `filesystem.structure.firmware` 会被忽略。
-- **README：** 移除「社区项目」「支持本项目」「友好项目」「支持方」四个章节及其链接。
+- **README：** 移除顶部徽章，以及「参与贡献」「社区项目」「支持本项目」「友好项目」「支持方」章节及其链接。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。
 
 各文件的具体改动请参阅 [ChangeFromUpstream.md](ChangeFromUpstream.md)。
-
-## 参与贡献
-
-如需为 RomM 做出贡献，请参阅[贡献指南](./CONTRIBUTING.md)。
 
 ## 官方应用
 
