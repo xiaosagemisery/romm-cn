@@ -104,11 +104,12 @@ The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `u
 | Streaming, netplay, save sync | `endpoints/streaming.py`, `endpoints/netplay.py`, `endpoints/sync/`, `handler/streaming/`, `handler/sync/` (RetroArch Cloud Sync included), `handler/netplay_handler.py`, the sync watcher and the push-pull task stay deleted. The `STREAMING_*`, `SYNC_*` and `DISABLE_*` emulator settings, the streaming RQ queue and worker, and the `streaming`/`devices` notification topics are gone. |
 | Device push install | `endpoints/device/install.py`, `handler/device_install/`, the `DEVICE_INSTALL_*` settings and the install notification kinds are removed. Devices keep registration and client tokens, without sync mode, sync config or capabilities. |
 | Browser players | The EasyRPG endpoint, handler, RTP tooling, `Rom.is_easyrpg_game`, the `playable` filter and the emulator asset stages of both Dockerfiles are removed. The libgme WebAssembly stage is dropped too, because the fork's frontend does not use it. |
+| Age limits | Upstream's age-limit feature (#5081) is reverted: `utils/age_ratings.py`, `Rom.min_age` and its `roms_facets` mirror, `age_limit` and `hide_unrated_roms` on users and permission groups, the age clause of `RomVisibilityFilter`, the matching API fields and tests. Hidden platforms and ROMs still work. The age-ratings metadata itself is untouched. |
 | Saves, states, screenshots, firmware | `has_saves` and `has_states` filters, the `saves`/`states`/`screenshots` relationships on `Rom`, the stats counters, the firmware pass of the scan, the `FIRMWARE` audit target and permission entities (`streaming`, `emulation`, `firmware`) are removed. |
 
 ### Migrations
 
-`0129_remove_emulator_data` keeps its revision id and still revises `0128_hltb_main_story_column`. Upstream's `0130` to `0150` follow it, re-chained, and `0152_cross_user_smart_scopes` closes the chain. Skipped because they only touch removed tables or add removed permissions: `0129_save_state_favorites_labels`, `0135`, `0136`, `0138`, `0140`, `0141`, `0142`, `0151` and `0153`.
+`0129_remove_emulator_data` keeps its revision id and still revises `0128_hltb_main_story_column`. Upstream's `0130` to `0147` and `0149`, `0150` follow it, re-chained (`0149` revises `0147`), and `0152_cross_user_smart_scopes` closes the chain. Skipped because they only touch removed tables or add removed permissions: `0129_save_state_favorites_labels`, `0135`, `0136`, `0138`, `0140`, `0141`, `0142`, `0151` and `0153`. `0148_rom_age_limits` is skipped because the fork drops age limits.
 
 ### Kept from the fork
 

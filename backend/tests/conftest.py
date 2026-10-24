@@ -439,6 +439,16 @@ def _clear_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
+def no_live_translation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the Google Translate step off the network, so metadata stays as fetched."""
+
+    async def passthrough(text: str | None, *_args: Any, **_kwargs: Any) -> str | None:
+        return text
+
+    monkeypatch.setattr("utils.translator.translate_text", passthrough)
+
+
+@pytest.fixture(autouse=True)
 def clear_database():
     _clear_tables()
     # Drop any cached gallery filter values to keep tests isolated.

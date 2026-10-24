@@ -261,7 +261,7 @@ class TestAudience:
             f"user:{viewer_user.id}",
         }
 
-    @pytest.mark.parametrize("hidden", ["rom", "platform", "age"])
+    @pytest.mark.parametrize("hidden", ["rom", "platform"])
     async def test_a_user_the_rom_is_hidden_from_is_left_out(
         self,
         entry: ActivityEntry,
@@ -270,21 +270,15 @@ class TestAudience:
         rom: Rom,
         hidden: str,
     ):
-        if hidden == "age":
-            db_rom_handler.update_rom(rom.id, {"min_age": 18})
-            db_user_handler.update_user(viewer_user.id, {"age_limit": 12})
-        else:
-            entity, entity_id = (
-                (PermEntity.ROMS, rom.id)
-                if hidden == "rom"
-                else (PermEntity.PLATFORMS, rom.platform_id)
+        entity, entity_id = (
+            (PermEntity.ROMS, rom.id)
+            if hidden == "rom"
+            else (PermEntity.PLATFORMS, rom.platform_id)
+        )
+        with sync_session.begin() as session:
+            session.add(
+                HiddenEntity(entity=entity, entity_id=entity_id, user_id=viewer_user.id)
             )
-            with sync_session.begin() as session:
-                session.add(
-                    HiddenEntity(
-                        entity=entity, entity_id=entity_id, user_id=viewer_user.id
-                    )
-                )
 
         with _captured_emits() as emit:
             await activity_handler.publish_active(entry)

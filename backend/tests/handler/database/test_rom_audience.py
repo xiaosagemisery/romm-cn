@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 
 import pytest
-from tests.factories import make_esrb_rated_rom, make_rom
+from tests.factories import make_rom
 
 from handler.auth.permissions import resolve_permissions
 from handler.database import db_permission_handler, db_rom_handler, db_user_handler
@@ -23,30 +23,9 @@ def _cleanup_non_system_groups() -> Iterator[None]:
         ).delete(synchronize_session="evaluate")
 
 
-@pytest.fixture
-def default_age_limit() -> Iterator[None]:
-    """Give the seeded default group an age limit of 16 for the test."""
-    default_id = db_permission_handler.get_default_group_id()
-    assert default_id is not None
-
-    def set_limit(age_limit: int | None) -> None:
-        with sync_session.begin() as session:
-            session.query(PermissionGroup).filter_by(id=default_id).update(
-                {"age_limit": age_limit}
-            )
-
-    set_limit(16)
-    yield
-    set_limit(None)
-
-
-def _group(
-    name: str, *, age_limit: int | None = None, hide_unrated: bool = False
-) -> int:
+def _group(name: str) -> int:
     with sync_session.begin() as session:
-        group = PermissionGroup(
-            name=name, age_limit=age_limit, hide_unrated_roms=hide_unrated
-        )
+        group = PermissionGroup(name=name)
         session.add(group)
         session.flush()
         return group.id
@@ -89,42 +68,31 @@ def _resolved(rom: RomVisibility) -> list[int]:
 
 @pytest.fixture
 def roms(platform: Platform, other_platform: Platform) -> list[Rom]:
-    roms = [
-        make_esrb_rated_rom(platform, "rated", "T"),
-        make_rom(platform, "unrated"),
-        make_esrb_rated_rom(platform, "mature", "M"),
-        make_esrb_rated_rom(other_platform, "elsewhere", "E"),
+    return [
+        make_rom(platform, "first"),
+        make_rom(platform, "second"),
+        make_rom(platform, "third"),
+        make_rom(other_platform, "elsewhere"),
     ]
-    # Between the age limits below: 12 hides T, 16 hides M, 18 hides neither.
-    assert [_visibility(rom).min_age for rom in roms] == [13, None, 17, 6]
-    return roms
 
 
 def test_matches_the_resolver_for_every_user_and_rom(
-    admin_user: User, platform: Platform, roms: list[Rom], default_age_limit: None
+    admin_user: User, platform: Platform, roms: list[Rom]
 ):
-    rated, unrated, _mature, elsewhere = roms
-    hides_rom = _group("No rated")
-    teen = _group("Teen", age_limit=12)
-    hides_platform = _group("No platform", age_limit=12)
-    strict = _group("Strict", hide_unrated=True)
-    _hide(PermEntity.ROMS, rated.id, group_id=hides_rom)
+    first, second, _third, elsewhere = roms
+    hides_rom = _group("No first")
+    hides_platform = _group("No platform")
+    _hide(PermEntity.ROMS, first.id, group_id=hides_rom)
     _hide(PermEntity.PLATFORMS, platform.id, group_id=hides_platform)
 
     _user("defaulted")
-    _user("older_than_default", age_limit=18)
-    _user("younger_than_default", age_limit=12)
-    _user("in_teen", permission_group_id=teen)
     _user("in_hides_rom", permission_group_id=hides_rom)
     _user("in_hides_platform", permission_group_id=hides_platform)
-    _user("in_strict", permission_group_id=strict)
-    _user("strict_but_not_unrated", permission_group_id=strict, hide_unrated_roms=False)
-    _user("unrated_hidden_alone", hide_unrated_roms=True)
     _user("disabled", enabled=False)
     own_hides = _user("own_hides")
-    _hide(PermEntity.ROMS, unrated.id, user_id=own_hides.id)
+    _hide(PermEntity.ROMS, second.id, user_id=own_hides.id)
     _hide(PermEntity.PLATFORMS, elsewhere.platform_id, user_id=own_hides.id)
-    _hide(PermEntity.ROMS, rated.id, user_id=admin_user.id)
+    _hide(PermEntity.ROMS, first.id, user_id=admin_user.id)
 
     for rom in roms:
         visibility = _visibility(rom)

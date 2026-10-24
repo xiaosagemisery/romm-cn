@@ -1,7 +1,7 @@
 """Index `roms.fs_name_no_ext` for RetroArch Cloud Sync's ROM lookup
 
 Revision ID: 0149_roms_fs_name_no_ext_index
-Revises: 0148_rom_age_limits
+Revises: 0147_rom_file_title_ids
 Create Date: 2026-10-06 00:00:00.000000
 
 """
@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0149_roms_fs_name_no_ext_index"
-down_revision = "0148_rom_age_limits"
+down_revision = "0147_rom_file_title_ids"
 branch_labels = None
 depends_on = None
 
