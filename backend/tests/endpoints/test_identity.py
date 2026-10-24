@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from config import OAUTH_ACCESS_TOKEN_EXPIRE_SECONDS
 from handler.auth import base_handler as auth_handler_module
-from handler.auth import oauth_handler
+from handler.auth import auth_handler, oauth_handler
 from handler.auth.constants import SESSION_COOKIE_NAME
 from handler.auth.middleware.redis_session_middleware import RedisSessionMiddleware
 from handler.database.users_handler import DBUsersHandler
@@ -846,3 +846,17 @@ def test_update_user_ui_settings_nested_object(
 
     user = response.json()
     assert user["ui_settings"] == nested_settings
+
+
+@pytest.mark.parametrize("new_password", ["", "short", "pässword"])
+def test_reset_password_rejects_an_invalid_password_before_spending_the_link(
+    client, new_password: str
+):
+    with mock.patch.object(auth_handler, "verify_password_reset_token") as verify:
+        response = client.post(
+            "/api/reset-password",
+            json={"token": "a-token", "new_password": new_password},
+        )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    verify.assert_not_called()
