@@ -16,14 +16,13 @@ Comprehensive documentation of the RomM frontend: a Vue 3 single-page applicatio
 8. [Component Architecture](#8-component-architecture)
 9. [Views & Pages](#9-views--pages)
 10. [Console Mode](#10-console-mode)
-11. [Emulation Integration](#11-emulation-integration)
-12. [Theming & Styling](#12-theming--styling)
-13. [Internationalization (i18n)](#13-internationalization-i18n)
-14. [Real-Time Communication](#14-real-time-communication)
-15. [Caching Strategy](#15-caching-strategy)
-16. [Utilities & Composables](#16-utilities--composables)
-17. [Build & Tooling](#17-build--tooling)
-18. [Type System](#18-type-system)
+11. [Theming & Styling](#11-theming--styling)
+12. [Internationalization (i18n)](#12-internationalization-i18n)
+13. [Real-Time Communication](#13-real-time-communication)
+14. [Caching Strategy](#14-caching-strategy)
+15. [Utilities & Composables](#15-utilities--composables)
+16. [Build & Tooling](#16-build--tooling)
+17. [Type System](#17-type-system)
 
 ---
 
@@ -105,9 +104,9 @@ Comprehensive documentation of the RomM frontend: a Vue 3 single-page applicatio
 │                    INFRASTRUCTURE LAYER                   │
 │  plugins/        Vuetify, Pinia, i18n, Router             │
 │  styles/         Themes, global CSS                       │
-│  locales/        17 language packs                        │
+│  locales/        18 language packs                        │
 │  types/          TypeScript definitions                   │
-│  utils/          Helpers (formatting, emulation, covers)  │
+│  utils/          Helpers (formatting, covers)             │
 │  __generated__/  OpenAPI-generated types                  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -148,7 +147,6 @@ frontend/
     ├── views/                     # Page-level components (routes)
     │   ├── Auth/                  # Setup, Login, ResetPassword, Register
     │   ├── Gallery/               # Platform, Search, Collection variants
-    │   ├── Player/                # EmulatorJS, RuffleRS
     │   ├── Settings/              # Profile, UI, Library, Metadata, Admin, Stats
     │   ├── Home.vue               # Dashboard
     │   ├── GameDetails.vue        # ROM detail page (8 tabs)
@@ -185,8 +183,7 @@ frontend/
     │   ├── views/                 # Console pages
     │   │   ├── Home.vue           # Platform grid, collections
     │   │   ├── GamesList.vue      # ROM grid for platform/collection
-    │   │   ├── Game.vue           # Game details with spatial nav
-    │   │   └── Play.vue           # Emulator in console mode
+    │   │   └── Game.vue           # Game details with spatial nav
     │   ├── components/            # Console-specific components (12)
     │   │   ├── GameCard.vue, SystemCard.vue, CollectionCard.vue
     │   │   ├── BackButton.vue, NavigationHint.vue
@@ -226,13 +223,12 @@ frontend/
     │   ├── tasks.ts               # Background task status
     │   ├── upload.ts              # Upload progress tracking
     │   ├── download.ts            # Download queue
-    │   ├── playing.ts             # Emulator state
     │   ├── language.ts            # Locale selection
     │   ├── notifications.ts       # Toast queue
     │   └── users.ts               # User list (admin)
     │
     ├── services/                  # Data fetching & communication
-    │   ├── api/                   # 16 Axios API modules (+ index.ts client)
+    │   ├── api/                   # 15 Axios API modules (+ index.ts client)
     │   │   ├── index.ts           # Axios instance (CSRF, interceptors)
     │   │   ├── rom.ts             # ROM CRUD, upload, download
     │   │   ├── platform.ts        # Platform CRUD
@@ -241,14 +237,9 @@ frontend/
     │   │   ├── identity.ts        # Login, logout, password reset
     │   │   ├── config.ts          # Backend configuration
     │   │   ├── task.ts            # Task monitoring
-    │   │   ├── firmware.ts        # Firmware uploads
-    │   │   ├── save.ts            # Game saves
-    │   │   ├── state.ts           # Save states
-    │   │   ├── screenshot.ts      # Screenshots
     │   │   ├── setup.ts           # Setup wizard
     │   │   ├── sgdb.ts            # SteamGridDB covers
     │   │   ├── export.ts          # Gamelist.xml + Pegasus exports
-    │   │   ├── play-session.ts    # Play session tracking
     │   │   └── client-token.ts    # API token management
     │   ├── cache/                 # Experimental response cache
     │   │   ├── index.ts           # Browser Cache API wrapper
@@ -273,16 +264,15 @@ frontend/
     │   ├── en_GB/, fr_FR/, de_DE/, es_ES/, it_IT/, ja_JP/
     │   ├── ko_KR/, pt_BR/, pl_PL/, ro_RO/, ru_RU/
     │   ├── zh_CN/, zh_TW/, cs_CZ/, hu_HU/, bg_BG/
-    │   └── (each has: collection, common, console, detail,
-    │         emulator, gallery, home, library, login,
-    │         navigation, patcher, platform, scan, settings, task)
+    │   └── (each has: activity, collection, common, console,
+    │         emptyStates, gallery, home, login, logs, patcher,
+    │         platform, recommendations, rom, scan, settings, setup)
     │
     ├── types/                     # TypeScript definitions
     │   ├── emitter.d.ts           # 80+ event types
     │   ├── main.d.ts              # Global augmentations
     │   ├── rom.d.ts               # ROM selection types
     │   ├── user.d.ts              # User form types
-    │   ├── ruffle.d.ts            # Flash emulator types
     │   ├── rompatcher.d.ts        # ROM patcher types
     │   └── index.ts               # Utility types
     │
@@ -385,8 +375,6 @@ Component Action
 │   ├── /collection/virtual/:id   → Virtual collection
 │   ├── /collection/smart/:id     → Smart collection
 │   ├── /rom/:rom                 → Game details (8 tabs)
-│   ├── /rom/:rom/ejs             → EmulatorJS player
-│   ├── /rom/:rom/ruffle          → Ruffle Flash player
 │   ├── /april-fools              → April Fools easter egg (toggleable)
 │   ├── /scan                     → Library scanner [platforms.write]
 │   ├── /patcher                  → ROM patcher
@@ -406,7 +394,6 @@ Component Action
     ├── /console/collection/smart/:id
     ├── /console/collection/virtual/:id
     ├── /console/rom/:rom         → Console game details
-    └── /console/rom/:rom/play    → Console emulator
 ```
 
 ### Route Guards
@@ -508,7 +495,6 @@ Server capability flags used throughout the UI:
 
 ```typescript
 METADATA_SOURCES: { IGDB, SS, MOBY, RA, STEAMGRIDDB, LAUNCHBOX, ... }
-EMULATION: { DISABLE_EMULATOR_JS, DISABLE_RUFFLE_RS, DISABLE_JSDOS, DISABLE_PICO8 }
 FRONTEND: { DISABLE_USERPASS_LOGIN, DISABLE_LOGS_VIEWER, YOUTUBE_BASE_URL }
 OIDC: { ENABLED, AUTOLOGIN, PROVIDER, RP_INITIATED_LOGOUT }
 TASKS: { scheduled task configurations }
@@ -559,14 +545,9 @@ const api = axios.create({
 | `identity.ts`     | Login, logout, forgot/reset password             |
 | `config.ts`       | Platform bindings, versions, exclusions          |
 | `task.ts`         | List, status, run                                |
-| `firmware.ts`     | Upload, list, delete                             |
-| `save.ts`         | Upload, update, delete                           |
-| `state.ts`        | Upload, update, delete                           |
-| `screenshot.ts`   | Upload, update                                   |
 | `setup.ts`        | Library structure, platform creation             |
 | `sgdb.ts`         | Cover art search                                 |
 | `export.ts`       | Gamelist.xml export, Pegasus export              |
-| `play-session.ts` | Play session ingestion & listing                 |
 | `client-token.ts` | Token CRUD, pair, exchange                       |
 
 ### Chunked Upload System (`rom.ts`)
@@ -633,8 +614,8 @@ User changes setting → localStorage updated
 Tier 1: Common (shared, reusable)
 ├── Collection/     Cards, list items, 6 dialogs
 ├── Dialog/         Loading, SearchCover
-├── EmptyStates/    8 variants (game, platform, collection, firmware, saves...)
-├── Game/           Cards, 14 dialogs, PlayBtn, FavBtn, VirtualTable (48+)
+├── EmptyStates/    variants (game, platform, collection, search...)
+├── Game/           Cards, dialogs, FavBtn, VirtualTable
 ├── Navigation/     AppBar, 3 drawers, 10 nav buttons
 ├── Platform/       Cards, PlatformIcon, 3 dialogs
 └── Notifications/  Snackbar, upload progress
@@ -779,12 +760,7 @@ Console Layout
 │   └── Virtual scrolling
 │
 ├── Game Detail View
-│   ├── Description, metadata, screenshots
-│   ├── Save state management
-│   └── Play button → Emulator
-│
-└── Play View
-    └── EmulatorJS with save/state/BIOS selection
+    └── Description, metadata, screenshots
 ```
 
 ### Input System
@@ -836,43 +812,7 @@ All synthesized with sine/noise blend, exponential envelopes, low-pass filter, a
 
 ---
 
-## 11. Emulation Integration
-
-### EmulatorJS
-
-**Location:** `views/Player/EmulatorJS/`
-
-| Feature         | Details                                        |
-| --------------- | ---------------------------------------------- |
-| Core selection  | Platform-specific core mapping (40+ platforms) |
-| BIOS/firmware   | Selectable from uploaded firmware              |
-| Save management | Upload, download, delete saves & states        |
-| Multi-disc      | Disc selection for multi-file games            |
-| Cache           | IndexedDB cache for game data                  |
-| Fullscreen      | With keyboard lock                             |
-| Netplay         | Socket.IO-based multiplayer                    |
-| Controls        | Per-core configurable via config.yml           |
-
-### Ruffle (Flash)
-
-**Location:** `views/Player/RuffleRS/`
-
-- SWF/Flash game emulation via Ruffle 0.2.0-nightly
-- Fullscreen support
-- Background color customization
-
-### Platform Detection
-
-`utils/index.ts` provides:
-
-- `getSupportedEJSCores(platform)`: maps platforms to EmulatorJS cores
-- `isEJSEmulationSupported(rom)`: checks WebGL + server config
-- `isRuffleEmulationSupported(rom)`: checks Flash platform
-- `isCDBasedSystem(platform)`: 31 CD-based platforms for animation logic
-
----
-
-## 12. Theming & Styling
+## 11. Theming & Styling
 
 ### Theme System
 
@@ -909,7 +849,7 @@ Vuetify handles theme switching. Additional shared brand colors: `romm-red`, `ro
 
 ---
 
-## 13. Internationalization (i18n)
+## 12. Internationalization (i18n)
 
 ### Setup
 
@@ -943,11 +883,11 @@ Vuetify handles theme switching. Additional shared brand colors: `romm-red`, `ro
 ### Namespace Organization
 
 Each locale directory contains translation files per feature:
-`collection`, `common`, `console`, `detail`, `emulator`, `gallery`, `home`, `library`, `login`, `navigation`, `patcher`, `platform`, `scan`, `settings`, `task`
+`activity`, `collection`, `common`, `console`, `emptyStates`, `gallery`, `home`, `login`, `logs`, `patcher`, `platform`, `recommendations`, `rom`, `scan`, `settings`, `setup`
 
 ---
 
-## 14. Real-Time Communication
+## 13. Real-Time Communication
 
 ### Socket.IO Client
 
@@ -973,7 +913,7 @@ io({
 
 ---
 
-## 15. Caching Strategy
+## 14. Caching Strategy
 
 ### Experimental Browser Cache
 
@@ -1002,7 +942,7 @@ Request Flow with Cache:
 
 ---
 
-## 16. Utilities & Composables
+## 15. Utilities & Composables
 
 ### Global Composables
 
@@ -1026,10 +966,8 @@ Request Flow with Cache:
 - `regionToEmoji()`: 50+ region codes → country flags
 - `languageToEmoji()`: 40+ language codes → country flags
 
-**Emulation Support:**
+**Platform Helpers:**
 
-- `getSupportedEJSCores()`: platform → EmulatorJS core mapping
-- `isEJSEmulationSupported()`: WebGL + config check
 - `isCDBasedSystem()`: 31 CD-based platforms
 - `isArcadeSystem()`: 3 arcade platforms
 
@@ -1060,7 +998,7 @@ Procedural SVG generation for:
 
 ---
 
-## 17. Build & Tooling
+## 16. Build & Tooling
 
 ### Vite Configuration
 
@@ -1069,7 +1007,7 @@ Procedural SVG generation for:
 | **Target**          | ESNext                                   |
 | **Dev port**        | 3000 (8443 with HTTPS)                   |
 | **Backend proxy**   | `/api/*` → `http://127.0.0.1:5000`       |
-| **WebSocket proxy** | `/ws`, `/netplay` → backend with upgrade |
+| **WebSocket proxy** | `/ws` → backend with upgrade      |
 | **Allowed hosts**   | `localhost`, `127.0.0.1`, `romm.dev`     |
 
 **Plugins:**
@@ -1111,7 +1049,7 @@ Generated types used throughout stores and API services for type-safe backend co
 
 ---
 
-## 18. Type System
+## 17. Type System
 
 ### Generated Types (`__generated__/models/`)
 
@@ -1127,8 +1065,6 @@ Auto-generated from backend OpenAPI schema:
 | `CollectionSchema`                                | Collection with ROM IDs                            |
 | `VirtualCollectionSchema`                         | Auto-generated collection                          |
 | `SmartCollectionSchema`                           | Filter-based collection                            |
-| `SaveSchema` / `StateSchema` / `ScreenshotSchema` | Asset types                                        |
-| `FirmwareSchema`                                  | BIOS file info                                     |
 | `HeartbeatResponse`                               | Server status and capabilities                     |
 | `ConfigResponse`                                  | Full server configuration                          |
 | `ScanStats`                                       | Scan progress counters                             |
@@ -1142,7 +1078,6 @@ Auto-generated from backend OpenAPI schema:
 | `emitter.d.ts`    | `SnackbarStatus`, `Events` (80+ event signatures)      |
 | `rom.d.ts`        | `RomSelectEvent`                                       |
 | `user.d.ts`       | `UserItem` (extends User with password + avatar)       |
-| `ruffle.d.ts`     | `RufflePlayerElement`, `RuffleSourceAPI`               |
 | `rompatcher.d.ts` | ROM patching library interfaces                        |
 | `main.d.ts`       | Global augmentations                                   |
 | `index.ts`        | `isKeyof<T>`, `ExtractPiniaStoreType<D>`, `ValueOf<T>` |
