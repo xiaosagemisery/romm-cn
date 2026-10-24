@@ -20,7 +20,6 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 - 提供 [400 多个游戏平台][docs-supported-platforms] 的元数据
 - 扫描或自动更新游戏元数据时，将获取的游戏名称和简介翻译为简体中文，支持缓存，翻译失败时保留原文
 - 与朋友共享游戏库，并限制其访问范围和操作权限
-- 提供适用于 [Playnite][playnite-app]、[Android][argosy-launcher] 和[自定义固件（CFW）][grout]的官方应用
 - 支持多碟游戏、可下载内容（DLC）、模组、改版游戏、补丁和说明书
 - 解析文件名中的[标签][docs-tag-support]，并按标签筛选
 - 通过任意现代网页浏览器查看、上传、更新和删除游戏
@@ -55,18 +54,10 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 - **游戏元数据：** 为扫描及自动更新时获取的游戏名称和简介新增简体中文翻译，支持缓存，翻译失败时保留原文。
 - **模拟器与存档数据：** 移除前后端中所有与模拟器相关的代码，包括播放器、存档、即时存档、截图（ROM 截图保留）、固件、游玩记录、记忆卡和设备存档同步，并新增迁移 `0129` 删除相关数据表；`config.yml` 中的 `emulatorjs`、`streaming` 配置段和 `filesystem.structure.firmware` 会被忽略。
-- **README：** 移除顶部徽章，以及「参与贡献」「社区项目」「支持本项目」「友好项目」「支持方」章节及其链接。
+- **README：** 移除顶部徽章，以及「参与贡献」「官方应用」「社区项目」「支持本项目」「友好项目」「支持方」章节及其链接。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。
 
 各文件的具体改动请参阅 [ChangeFromUpstream.md](ChangeFromUpstream.md)。
-
-## 官方应用
-
-以下应用与集成由上游 RomM 团队开发和维护。本分支未单独验证其兼容性。
-
-- [Argosy][argosy-launcher]，作者 [@tmgast](https://github.com/tmgast)：用于安装和启动游戏的原生 Android 客户端。
-- [Grout][grout]，作者 [@BrandonKowalski](https://github.com/BrandonKowalski)：直接在基于 Linux 的复古掌机上，从你的 RomM 实例下载和管理游戏。支持：Allium、Batocera、Knulli、MinUI、muOS、NextUI、Onion、ROCKNIX、Spruce、TrimUI。
-- [Playnite 插件][playnite-app]，作者 [@gantoine](https://github.com/gantoine)：适用于 Playnite 的游戏库插件。
 
 <!-- 文档链接 -->
 
@@ -82,6 +73,3 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 [mobygames-api]: https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#mobygames
 [steamgriddb-api]: https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#steamgriddb
 [retroachievements-api]: https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#retroachievements
-[playnite-app]: https://github.com/rommapp/playnite-plugin
-[grout]: https://github.com/rommapp/grout
-[argosy-launcher]: https://github.com/rommapp/argosy-launcher

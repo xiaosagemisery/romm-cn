@@ -73,7 +73,7 @@ Change commit: `36322f67ed5434df356f8332ccb25b4e72bf17de`.
 
 | File | Specific change |
 | --- | --- |
-| `README.md` | Removed the header badges and the contributing, community projects, project support, friendly projects, and sponsors sections together with their link references. |
+| `README.md` | Removed the header badges and the contributing, official apps, community projects, project support, friendly projects, and sponsors sections, the official-apps feature bullet, and their link references. |
 | `.github/resources/*-badge.svg` | Removed the Trendshift, Hacker News, selfh.st, Discord, Open Collective, Greptile, and Aikido badge images, which no longer have any reference. |
 
 ## Game metadata translation
