@@ -33,12 +33,6 @@ export const ROUTES = {
   VIRTUAL_COLLECTION: "virtual-collection",
   SMART_COLLECTION: "smart-collection",
   ROM: "rom",
-  EMULATORJS: "emulatorjs",
-  JSDOS: "jsdos",
-  PICO8: "pico8",
-  RUFFLE: "ruffle",
-  STREAM: "stream",
-  STREAM_DESKTOP: "stream-desktop",
   SCAN: "scan",
   UPLOAD: "upload",
   ACTIVITY: "activity",
@@ -53,14 +47,12 @@ export const ROUTES = {
   LOGS: "logs",
   PAIR: "pair",
   PAIR_DEVICE: "pair-device",
-  APRIL_FOOLS: "april-fools",
   CONSOLE_HOME: "console-home",
   CONSOLE_PLATFORM: "console-platform",
   CONSOLE_COLLECTION: "console-collection",
   CONSOLE_SMART_COLLECTION: "console-smart-collection",
   CONSOLE_VIRTUAL_COLLECTION: "console-virtual-collection",
   CONSOLE_ROM: "console-rom",
-  CONSOLE_PLAY: "console-play",
   // V2-only routes (no v1 equivalent — v1 uses its drawer for these).
   PLATFORMS_INDEX: "platforms-index",
   COLLECTIONS_INDEX: "collections-index",
@@ -258,64 +250,6 @@ const routes = [
           }
           next();
         }) as NavigationGuardWithThis<undefined>,
-      },
-      {
-        path: "rom/:rom/ejs",
-        name: ROUTES.EMULATORJS,
-        components: {
-          default: () => import("@/views/Player/EmulatorJS/Base.vue"),
-          v2: v2For(ROUTES.EMULATORJS),
-        },
-      },
-      {
-        path: "rom/:rom/jsdos",
-        name: ROUTES.JSDOS,
-        components: {
-          default: () => import("@/views/Home.vue"),
-          v2: v2For(ROUTES.JSDOS),
-        },
-      },
-      {
-        path: "rom/:rom/pico8",
-        name: ROUTES.PICO8,
-        components: {
-          default: () => import("@/views/Home.vue"),
-          v2: v2For(ROUTES.PICO8),
-        },
-      },
-      {
-        path: "rom/:rom/ruffle",
-        name: ROUTES.RUFFLE,
-        components: {
-          default: () => import("@/views/Player/RuffleRS/Base.vue"),
-          v2: v2For(ROUTES.RUFFLE),
-        },
-      },
-      {
-        path: "april-fools",
-        name: ROUTES.APRIL_FOOLS,
-        components: {
-          default: () => import("@/views/Player/AprilFools.vue"),
-          v2: v2For(ROUTES.APRIL_FOOLS),
-        },
-      },
-      {
-        path: "rom/:rom/stream",
-        name: ROUTES.STREAM,
-        components: {
-          default: () => import("@/views/Home.vue"),
-          v2: v2For(ROUTES.STREAM),
-        },
-      },
-      {
-        // No :rom, unlike the player route: a desktop session runs no game.
-        // The container is a query param because its key is a URL.
-        path: "stream/desktop",
-        name: ROUTES.STREAM_DESKTOP,
-        components: {
-          default: () => import("@/views/Home.vue"),
-          v2: v2For(ROUTES.STREAM_DESKTOP),
-        },
       },
       // Settings group — every settings route shares the same v2
       // sub-layout (sidebar + content panel). Library Tools (Scan /
@@ -573,11 +507,6 @@ const routes = [
         path: "rom/:rom",
         name: ROUTES.CONSOLE_ROM,
         component: () => import("@/console/views/Game.vue"),
-      },
-      {
-        path: "rom/:rom/play",
-        name: ROUTES.CONSOLE_PLAY,
-        component: () => import("@/console/views/Play.vue"),
       },
     ],
   },

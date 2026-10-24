@@ -46,15 +46,6 @@ mariadb
 frontend/assets/romm
 romm_mock
 
-# emulator runtimes, linked in from the dev image by entrypoint.sh
-frontend/assets/emulatorjs/*
-!frontend/assets/emulatorjs/*.svg
-frontend/assets/ruffle/*
-!frontend/assets/ruffle/*.svg
-!frontend/assets/ruffle/*.png
-frontend/assets/jsdos
-frontend/assets/pico8
-
 # virtualenv
 .venv
 

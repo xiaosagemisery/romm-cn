@@ -8,8 +8,7 @@
 // renders). No "live" badge: every card in this view is an active session by
 // definition, so the badge carried no per-card information — the page's
 // session counter is the single live indicator.
-import { RAvatar, RBtn, RIcon } from "@v2/lib";
-import { useI18n } from "vue-i18n";
+import { RAvatar, RIcon } from "@v2/lib";
 import type { RouteLocationRaw } from "vue-router";
 import CoverArtPip from "@/v2/components/shared/CoverArtPip.vue";
 import GameCover from "@/v2/components/shared/GameCover.vue";
@@ -26,17 +25,9 @@ interface Props {
   avatarSrc: string;
   elapsedLabel: string;
   deviceType: string;
-  /** Emulator core running the session, e.g. "RA Snes9x" — streaming
-   *  sessions only. */
-  emulatorLabel?: string | null;
-  /** Admin-only: this is a streaming session an admin can force-release. */
-  canRelease?: boolean;
-  releasing?: boolean;
 }
 
 defineProps<Props>();
-const emit = defineEmits<{ release: [] }>();
-const { t } = useI18n();
 </script>
 
 <template>
@@ -81,25 +72,9 @@ const { t } = useI18n();
               <RIcon icon="mdi-circle-small" size="14" />
               <span class="activity-card__device">{{ deviceType }}</span>
             </template>
-            <template v-if="emulatorLabel">
-              <RIcon icon="mdi-circle-small" size="14" />
-              <span class="activity-card__core">{{ emulatorLabel }}</span>
-            </template>
           </div>
         </div>
       </div>
-
-      <RBtn
-        v-if="canRelease"
-        class="activity-card__release"
-        variant="outlined"
-        size="small"
-        color="danger"
-        :loading="releasing"
-        @click.stop.prevent="emit('release')"
-      >
-        {{ t("activity.release-session") }}
-      </RBtn>
     </div>
   </router-link>
 </template>
@@ -193,10 +168,5 @@ html[data-bp~="xs"] .activity-card .activity-card__art {
 
 .activity-card__device {
   text-transform: capitalize;
-}
-
-.activity-card__release {
-  margin-top: 8px;
-  width: 100%;
 }
 </style>

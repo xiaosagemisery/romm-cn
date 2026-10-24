@@ -35,20 +35,6 @@ export function useThemeAssets() {
     );
   }
 
-  function getBezelImagePath(
-    platformSlug: string,
-    preferredFormat: SupportedFormat = "png",
-  ): ComputedRef<string> {
-    return computed(() =>
-      resolveAsset(
-        "bezels",
-        platformSlug,
-        preferredFormat,
-        themeStore.themeName,
-      ),
-    );
-  }
-
   function getBackgroundImagePath(
     backgroundName: string = "background",
     preferredFormat: SupportedFormat = "svg",
@@ -66,7 +52,6 @@ export function useThemeAssets() {
   return {
     getAssetPath,
     getSystemImagePath,
-    getBezelImagePath,
     getBackgroundImagePath,
     themeName: computed(() => themeStore.themeName),
   };

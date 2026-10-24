@@ -1,15 +1,14 @@
 // Platforms list-mode column geometry. Shared between PlatformListHeader
 // and PlatformListRow so the title row and every body row line up.
 //
-// Six columns: name (stretches) + family + category + generation +
-// playable + game count (right-aligned). The three metadata columns +
-// playable surface the same axes the toolbar can group by — so a user
-// reading the list in a flat order can still see what would have
-// separated them. The narrow-viewport template drops every metadata
+// Five columns: name (stretches) + family + category + generation + game
+// count (right-aligned). The three metadata columns surface the same axes
+// the toolbar can group by — so a user reading the list in a flat order can
+// still see what would have separated them. The narrow-viewport template drops every metadata
 // column to keep the row legible without horizontal scroll.
 
 export type PlatformSortKey =
-  "name" | "family" | "category" | "generation" | "playable" | "rom_count";
+  "name" | "family" | "category" | "generation" | "rom_count";
 
 export interface PlatformColumn {
   key: PlatformSortKey;
@@ -44,18 +43,11 @@ export const PLATFORM_COLUMNS: readonly PlatformColumn[] = [
     align: "start",
     meta: true,
   },
-  {
-    key: "playable",
-    label: "Playable",
-    sortable: true,
-    align: "center",
-    meta: true,
-  },
   { key: "rom_count", label: "Games", sortable: true, align: "end" },
 ];
 
 export const PLATFORM_LIST_GRID_TEMPLATE =
-  "minmax(0, 1fr) 160px 130px 110px 88px 96px";
+  "minmax(0, 1fr) 160px 130px 110px 96px";
 
 // Narrow-viewport template — drops every metadata column. Same name +
 // games layout the list shipped with originally, so the mobile view

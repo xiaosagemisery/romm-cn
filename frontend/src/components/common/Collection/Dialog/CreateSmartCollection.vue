@@ -31,7 +31,6 @@ const {
   filterMatched,
   filterFavorites,
   filterDuplicates,
-  filterPlayables,
   filterRA,
   filterMissing,
   filterVerified,
@@ -82,7 +81,6 @@ const filterSummary = computed(() => {
   if (filterMatched.value) filters.push("Matched only");
   if (filterFavorites.value) filters.push("Favorites");
   if (filterDuplicates.value) filters.push(t("platform.show-duplicates"));
-  if (filterPlayables.value) filters.push("Playable");
   if (filterRA.value) filters.push("Has RetroAchievements");
   if (filterMissing.value) filters.push("Missing from filesystem");
   if (filterVerified.value) filters.push("Verified");
@@ -141,7 +139,6 @@ async function createSmartCollection() {
     if (filterMatched.value) filterCriteria.matched = true;
     if (filterFavorites.value) filterCriteria.favorite = true;
     if (filterDuplicates.value) filterCriteria.duplicate = true;
-    if (filterPlayables.value) filterCriteria.playable = true;
     if (filterRA.value) filterCriteria.has_ra = true;
     if (filterMissing.value) filterCriteria.missing = true;
     if (filterVerified.value) filterCriteria.verified = true;

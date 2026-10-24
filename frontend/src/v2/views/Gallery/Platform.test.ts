@@ -83,10 +83,6 @@ vi.mock("@/v2/components/Gallery/PlatformHead.vue", () => ({
   }),
 }));
 
-vi.mock("@/v2/components/Gallery/FirmwareTab.vue", () => ({
-  default: defineComponent({ template: "<div />" }),
-}));
-
 vi.mock("@/v2/components/Gallery/ScanPlatformDialog.vue", () => ({
   default: defineComponent({ template: "<div />" }),
 }));

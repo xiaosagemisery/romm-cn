@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, useSlots } from "vue";
 import { useTheme } from "vuetify";
-import EmptyFirmware from "@/components/common/EmptyStates/EmptyFirmware.vue";
 import EmptyGame from "@/components/common/EmptyStates/EmptyGame.vue";
 import EmptyPlatform from "@/components/common/EmptyStates/EmptyPlatform.vue";
 import RIsotipo from "@/components/common/RIsotipo.vue";
@@ -116,7 +115,6 @@ onMounted(() => {
         >
           <EmptyGame v-if="emptyStateType == 'game'" />
           <EmptyPlatform v-else-if="emptyStateType == 'platform'" />
-          <EmptyFirmware v-else-if="emptyStateType == 'firmware'" />
           <slot v-else name="empty-state" />
         </v-row>
 

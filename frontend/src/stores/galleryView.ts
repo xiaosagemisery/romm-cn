@@ -12,7 +12,6 @@ const defaultGalleryState = {
   currentView: currentViewStorage.value,
   currentBoxartStyle: boxartStyleStorage.value,
   defaultAspectRatio: 2 / 3,
-  activeFirmwareDrawer: false,
   scrolledToTop: false,
   showFabOverlay: false,
 };
@@ -24,9 +23,6 @@ export default defineStore("galleryView", {
     setView(view: number) {
       this.currentView = view;
       currentViewStorage.value = view;
-    },
-    switchActiveFirmwareDrawer() {
-      this.activeFirmwareDrawer = !this.activeFirmwareDrawer;
     },
     getAspectRatio({ boxartStyle }: { boxartStyle?: BoxartStyleOption } = {}) {
       // 3D, physical and mixed cases have custom aspect ratios

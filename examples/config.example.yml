@@ -84,7 +84,6 @@
 #   # https://docs.romm.app/latest/getting-started/folder-structure/#custom-library-structure
 #   structure:
 #     default: 'roms/{platform}/{game}'
-#     firmware: 'bios/{platform}'
 #     # Overrides by fs_slug; a list unions its layouts.
 #     nes:
 #       - 'roms/{platform}/{game}'
@@ -152,7 +151,7 @@
 #     # Shown in the artwork gallery
 #     - title_screen  # Title screen
 #     - fanart  # User uploaded artwork
-#     # Bezel displayed around the emulatorjs window
+#     # Bezel artwork
 #     - bezel
 #     # Manual in PDF format
 #     - manual # Manual (enabled by default)
@@ -174,58 +173,3 @@
 #       image: screenshot  # Use as the <image> tag in the exported gamelist.xml
 #   pegasus:
 #     export: false # Whether to export metadata.pegasus.txt for Pegasus (merged into an existing file)
-
-# EmulatorJS per-core options
-# emulatorjs:
-#   debug: true # Available options will be logged to the browser console
-#   cache_limit: null # Cache limit per ROM (in bytes)
-#   disable_batch_bootup: false
-#   disable_auto_unload: false
-#   auto_save_sync: false # Upload the save to the server whenever it changes, without Save & Quit
-#   settings:
-#     parallel_n64: # Use the exact core name
-#       vsync: disabled
-#     snes9x:
-#       snes9x_region: ntsc
-#     default: # These settings apply to all cores
-#       fps: show
-#   netplay:
-#     enabled: true
-#     ice_servers:
-#       - urls: "stun:stun.relay.metered.ca:80"
-#       - urls: "turn:global.relay.metered.ca:80"
-#         username: "<username>"
-#         credential: "<password>"
-#   controls: # https://emulatorjs.org/docs4devs/control-mapping/
-#     snes9x:
-#       0: # Player 1
-#         0: # A MAPPING FOR EACH BUTTON MUST BE SET!
-#           value: x # Mapping for keyboard
-#           value2: BUTTON_2 # Mapping for connected controller
-#       1: # Player 2
-#       2: # Player 3
-#       3: # Player 4
-
-# Emulator streaming: play a ROM through a real emulator in a webstation
-# container, streamed to the browser.
-# Supported platforms, emulators and BIOS requirements:
-# https://docs.romm.app/latest/using/emulator-streaming/
-#
-# streaming:
-#   enabled: true
-#   containers:
-#     # One container can serve many platforms. Container keys are defaults
-#     # for every platform it serves; a platform block may override emulator,
-#     # label, and memory_card_sync.
-#     - protocol: webstation
-#       host: https://192.168.1.56:3010  # browser-facing UI, must be https
-#       subfolder: /streaming            # matches the container's SUBFOLDER
-#       library_path: /romm              # where it mounts your ROM library
-#       broker_secret: change-me         # matches the container's BROKER_SECRET
-#       label: Emulation station
-#       broker_host: http://192.168.1.56:3010  # server-to-broker URL, when RomM can't dial `host` itself
-#       platforms:
-#         snes: retroarch                 # the emulator name directly...
-#         ps2:                            # ...or a block overriding container keys
-#           emulator: pcsx2
-#           memory_card_sync: true

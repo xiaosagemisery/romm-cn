@@ -5,7 +5,6 @@
 // so both surfaces stay in sync.
 //
 // Actions:
-//   play        → router.push /rom/:id/ejs
 //   download    → direct download link click
 //   copy-link   → copy the API download URL to clipboard; falls back to
 //                 a dialog that shows the link when clipboard is denied
@@ -27,15 +26,12 @@
 // Variants:
 //   glass      → default translucent frosted-glass pill
 //   surface    → translucent grey, page-background friendly (Details)
-//   emphasized → white-on-dark (used by Play in card + details)
-//   brand      → solid brand fill, the coloured peer to emphasized
-//                (used by Stream so it reads as its own destination)
 //   bare       → no background or border, just the icon (list rows /
 //                inline strips where the row's own surface frames the
 //                control)
 //
-// `withLabel` turns the button into a pill with "Play" / "Download" /
-// etc. text next to the icon, matching the GameDetails Play CTA.
+// `withLabel` turns the button into a pill with "Download" / etc. text next
+// to the icon.
 import { RDivider, RIcon, RMenu, RMenuItem, RTooltip } from "@v2/lib";
 import type { Emitter } from "mitt";
 import { computed, inject, onBeforeUnmount, ref, toRef } from "vue";
@@ -66,9 +62,6 @@ defineOptions({ inheritAttrs: false });
 const { t } = useI18n();
 
 export type GameAction =
-  | "play"
-  | "stream"
-  | "join"
   | "download"
   | "copy-link"
   | "qr"
@@ -89,13 +82,10 @@ interface Props {
    * `surface`: translucent grey surface, matches RTag tokens
    *            (GameDetails header where the buttons sit on the
    *            page background, not over a cover).
-   * `emphasized`: primary white-on-dark CTA (Play).
-   * `brand`: solid brand fill. Sits beside `emphasized` as an equal
-   *          CTA that goes somewhere else (Stream).
    * `bare`: no chrome; just the icon. For list rows where the row's
    *         own surface already frames the control.
    */
-  variant?: "glass" | "surface" | "emphasized" | "brand" | "bare";
+  variant?: "glass" | "surface" | "bare";
   withLabel?: boolean;
   /**
    * Status-only: when several status states are active, the button
@@ -163,33 +153,6 @@ type Preset = {
 // aria labels, different click handlers. Written as an if-chain instead
 // of a switch so the linter can see every path returns.
 const preset = computed<Preset>(() => {
-  if (props.action === "play") {
-    return {
-      icon: "mdi-play",
-      label: t("rom.play"),
-      activeIcon: null,
-      onClick: () => actions.play("local"),
-      active: false,
-    };
-  }
-  if (props.action === "stream") {
-    return {
-      icon: "mdi-play-network",
-      label: actions.streamActionLabel.value,
-      activeIcon: null,
-      onClick: () => actions.play("stream"),
-      active: false,
-    };
-  }
-  if (props.action === "join") {
-    return {
-      icon: "mdi-account-multiple-plus",
-      label: actions.joinActionLabel.value,
-      activeIcon: null,
-      onClick: () => void actions.joinStream(),
-      active: false,
-    };
-  }
   if (props.action === "download") {
     return {
       icon: "mdi-download-outline",
@@ -692,38 +655,6 @@ function onClick(e: MouseEvent) {
   background: var(--r-color-surface-hover);
   border-color: transparent;
   color: var(--r-color-fg);
-}
-
-/* Emphasized — the primary-action look (white on dark). Used by Play. */
-.r-v2-game-btn--emphasized {
-  background: var(--r-color-overlay-emphasis-bg) !important;
-  border-color: var(--r-color-overlay-emphasis-bg) !important;
-  color: var(--r-color-overlay-emphasis-fg) !important;
-}
-.r-v2-game-btn--emphasized:hover {
-  background: var(--r-color-overlay-emphasis-bg-hover) !important;
-  transform: translateY(-1px);
-}
-.r-v2-game-btn--emphasized:active {
-  transform: scale(0.96);
-}
-
-/* Brand, a solid fill in the product colour. Play and Stream are peers
-   that lead somewhere different, so the second CTA takes colour rather
-   than a second white pill. */
-.r-v2-game-btn--brand {
-  background: var(--r-color-brand-primary) !important;
-  border-color: var(--r-color-brand-primary) !important;
-  color: white !important;
-}
-.r-v2-game-btn--brand:hover {
-  background: var(--r-color-brand-primary-hover) !important;
-  border-color: var(--r-color-brand-primary-hover) !important;
-  transform: translateY(-1px);
-}
-.r-v2-game-btn--brand:active {
-  background: var(--r-color-brand-primary-pressed) !important;
-  transform: scale(0.96);
 }
 
 /* Active-state colour swaps per action. */

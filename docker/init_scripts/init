@@ -13,7 +13,6 @@ ENABLE_SCHEDULED_CLEANUP_ORPHANED_RESOURCES="${ENABLE_SCHEDULED_CLEANUP_ORPHANED
 ENABLE_SCHEDULED_RESCAN="${ENABLE_SCHEDULED_RESCAN:="false"}"
 ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA="${ENABLE_SCHEDULED_UPDATE_LAUNCHBOX_METADATA:="false"}"
 ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB="${ENABLE_SCHEDULED_UPDATE_SWITCH_TITLEDB:="false"}"
-ENABLE_SYNC_FOLDER_WATCHER="${ENABLE_SYNC_FOLDER_WATCHER:="false"}"
 
 # if REDIS_HOST is set, we assume that an external redis is used
 REDIS_HOST="${REDIS_HOST:=""}"
@@ -307,20 +306,6 @@ start_bin_watcher() {
 	echo "${WATCHER_PID}" >/tmp/watcher.pid
 }
 
-start_bin_sync_watcher() {
-	info_log "Starting sync folder watcher"
-	sync_base_path="${ROMM_BASE_PATH:-/romm}/sync"
-	mkdir -p "${sync_base_path}"
-	local -a wrap=()
-	otel_prefix wrap sync_watcher
-	watchfiles \
-		--target-type command \
-		"${wrap[*]@Q} python3 sync_watcher.py" \
-		"${sync_base_path}" &
-	SYNC_WATCHER_PID=$!
-	echo "${SYNC_WATCHER_PID}" >/tmp/sync_watcher.pid
-}
-
 watchdog_process_pid() {
 	PROCESS=$1
 	if [[ -f "/tmp/${PROCESS}.pid" ]]; then
@@ -354,7 +339,6 @@ shutdown() {
 	stop_process_pid rq_worker
 	stop_process_pid rq_scan_worker
 	stop_process_pid rq_cron
-	stop_process_pid sync_watcher
 	stop_process_pid watcher
 	stop_process_pid nginx
 	stop_process_pid gunicorn
@@ -418,11 +402,6 @@ while ! ((exited)); do
 	# only start the watcher if enabled
 	if [[ ${ENABLE_RESCAN_ON_FILESYSTEM_CHANGE} == "true" ]]; then
 		watchdog_process_pid watcher
-	fi
-
-	# only start the sync folder watcher if enabled
-	if [[ ${ENABLE_SYNC_FOLDER_WATCHER} == "true" ]]; then
-		watchdog_process_pid sync_watcher
 	fi
 
 	watchdog_process_pid nginx

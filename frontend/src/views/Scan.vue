@@ -652,23 +652,6 @@ async function stopScan() {
             })
           }}</span>
         </v-chip>
-        <v-chip
-          color="secondary"
-          size="small"
-          text-color="white"
-          class="ml-1 my-1"
-        >
-          <v-icon left> mdi-memory </v-icon>
-          <span v-if="xs" class="ml-2">{{
-            t("scan.firmware-scanned-n", scanStats.scanned_firmware)
-          }}</span>
-          <span v-else class="ml-2">{{
-            t("scan.firmware-scanned-with-details", {
-              n_scanned_firmware: scanStats.scanned_firmware,
-              n_new_firmware: scanStats.new_firmware,
-            })
-          }}</span>
-        </v-chip>
       </v-chip>
     </div>
   </div>

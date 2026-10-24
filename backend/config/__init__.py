@@ -301,11 +301,6 @@ SCHEDULED_BUILD_RECOMMENDATIONS_CRON: Final[str] = _get_env(
 KIOSK_MODE: Final[bool] = safe_str_to_bool(_get_env("KIOSK_MODE"))
 DISABLE_LOGS_VIEWER: Final[bool] = safe_str_to_bool(_get_env("DISABLE_LOGS_VIEWER"))
 
-# ASSETS
-MAX_AUTOCLEANUP_LIMIT: Final[int] = max(
-    1, safe_int(_get_env("MAX_AUTOCLEANUP_LIMIT"), 100)
-)
-
 # LOGGING
 LOGLEVEL: Final[str] = _get_env("LOGLEVEL", "INFO").upper()
 FORCE_COLOR: Final[bool] = safe_str_to_bool(_get_env("FORCE_COLOR"))

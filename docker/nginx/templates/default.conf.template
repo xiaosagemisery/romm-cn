@@ -14,21 +14,6 @@ map $http_x_forwarded_proto $forwardscheme {
     https https;
 }
 
-# COEP and COOP headers for cross-origin isolation, which are set only for the
-# EmulatorJS and js-dos player paths, to enable SharedArrayBuffer support, which
-# is needed for multi-threaded cores. Not $uri: try_files rewrites it to
-# /index.html before add_header runs, so the query string is matched explicitly.
-map $request_uri $coep_header {
-    default        "";
-    ~^/rom/.*/(ejs|jsdos)(\?|$) "require-corp";
-    ~^/console/rom/[0-9]+/play "require-corp";
-}
-map $request_uri $coop_header {
-    default        "";
-    ~^/rom/.*/(ejs|jsdos)(\?|$) "same-origin";
-    ~^/console/rom/[0-9]+/play "same-origin";
-}
-
 # Library resources under /assets/romm/resources/ are a mix. Covers (?ts=) and
 # manuals (?v=) are versioned by a known cache-busting query, so they can be
 # frozen; screenshots and RA badges reuse stable filenames (0.jpg, ...) and are
@@ -60,8 +45,6 @@ server {
         add_header Access-Control-Allow-Origin *;
         add_header Access-Control-Allow-Methods *;
         add_header Access-Control-Allow-Headers *;
-        add_header Cross-Origin-Embedder-Policy $coep_header;
-        add_header Cross-Origin-Opener-Policy $coop_header;
     }
 
     # Freeze content-hashed frontend bundles (fingerprinted files under /assets)
@@ -94,7 +77,7 @@ server {
         proxy_buffering off;
         proxy_read_timeout 300s;
     }
-    location ~ ^/(ws|netplay) {
+    location ~ ^/ws {
         proxy_pass http://wsgi_server;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

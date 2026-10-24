@@ -63,8 +63,6 @@ function makeStats(overrides: Partial<ScanStats> = {}): ScanStats {
     scanned_roms: 0,
     new_roms: 0,
     identified_roms: 0,
-    scanned_firmware: 0,
-    new_firmware: 0,
     updated_roms: 0,
     new_files: 0,
     ...overrides,

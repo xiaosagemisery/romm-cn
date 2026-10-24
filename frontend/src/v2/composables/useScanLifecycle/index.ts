@@ -51,15 +51,7 @@ export function installScanLifecycle() {
 
   useSocketEvent<ScanningPlatform>(
     "scan:scanning_platform",
-    ({
-      name,
-      display_name,
-      slug,
-      id,
-      fs_slug,
-      is_identified,
-      new_firmware_count,
-    }) => {
+    ({ name, display_name, slug, id, fs_slug, is_identified }) => {
       scanningStore.setScanning(true);
       // De-dupe by display_name so a re-scan of the same platform
       // doesn't render two panels for it.
@@ -75,7 +67,6 @@ export function installScanLifecycle() {
         id,
         fs_slug,
         roms: [],
-        new_firmware_count,
         is_identified,
       });
 
@@ -141,7 +132,6 @@ export function installScanLifecycle() {
           fs_slug: rom.platform_fs_slug,
           is_identified: true,
           roms: [],
-          new_firmware_count: 0,
         });
         scannedPlatform = scanningStore.scanningPlatforms.at(0)!;
       }

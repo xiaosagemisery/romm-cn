@@ -16,7 +16,6 @@ import { useUISettings } from "@/composables/useUISettings";
 import romApi from "@/services/api/rom";
 import storeAuth from "@/stores/auth";
 import storeRoms from "@/stores/roms";
-import { useStreamingStore } from "@/stores/streaming";
 import { toBrowserLocale } from "@/utils";
 import AchievementsTab from "@/v2/components/GameDetails/AchievementsTab.vue";
 import CoverColumn from "@/v2/components/GameDetails/CoverColumn.vue";
@@ -28,7 +27,6 @@ import MetadataTab from "@/v2/components/GameDetails/MetadataTab.vue";
 import NotesTab from "@/v2/components/GameDetails/NotesTab.vue";
 import OverviewTab from "@/v2/components/GameDetails/OverviewTab.vue";
 import PatcherTab from "@/v2/components/GameDetails/PatcherTab.vue";
-import SaveDataTab from "@/v2/components/GameDetails/SaveDataTab.vue";
 import { useBackgroundArt } from "@/v2/composables/useBackgroundArt";
 import { usePageTitle } from "@/v2/composables/usePageTitle";
 import { useRightStickScroll } from "@/v2/composables/useRightStickScroll";
@@ -40,7 +38,6 @@ const route = useRoute();
 const router = useRouter();
 const romsStore = storeRoms();
 const authStore = storeAuth();
-const streamingStore = useStreamingStore();
 const { currentRom } = storeToRefs(romsStore);
 const { toWebp } = useWebpSupport();
 const { showRecommendations } = useUISettings();
@@ -165,19 +162,6 @@ watch(
   { immediate: true },
 );
 
-// Fills the store the Join action reads from. Done here rather than in the
-// action composable because that one is instantiated per button; navigating
-// between ROMs reuses this component, so it re-runs on the id. Forced, since
-// this is the page a user acts on: a session that ended in the meantime must
-// not still be offered.
-watch(
-  () => currentRom.value?.id ?? null,
-  (romId) => {
-    if (romId != null) void streamingStore.fetchJoinableSessions(true);
-  },
-  { immediate: true },
-);
-
 const lastPlayed = computed(() => {
   const ts = currentRom.value?.rom_user?.last_played;
   if (!ts) return null;
@@ -281,10 +265,6 @@ const expansions = computed<IGDBRelatedGame[]>(
 const dlcs = computed<IGDBRelatedGame[]>(() => igdb.value?.dlcs ?? []);
 const ports = computed<IGDBRelatedGame[]>(() => igdb.value?.ports ?? []);
 
-const savesCount = computed(() => currentRom.value?.user_saves?.length ?? 0);
-const statesCount = computed(() => currentRom.value?.user_states?.length ?? 0);
-const saveDataCount = computed(() => savesCount.value + statesCount.value);
-
 const filesCount = computed(() => currentRom.value?.files?.length ?? 0);
 
 // The patcher tab is always available: a base game file can be patched with
@@ -300,11 +280,6 @@ const tabs = computed<RTabNavItem[]>(() => [
     id: "achievements",
     label: t("rom.tab-achievements"),
     badge: `${achievementsEarned.value}/${achievementsTotal.value}`,
-  },
-  {
-    id: "save-data",
-    label: t("rom.save-data"),
-    badge: saveDataCount.value,
   },
   { id: "metadata", label: t("rom.metadata") },
 ]);
@@ -357,7 +332,6 @@ const tabs = computed<RTabNavItem[]>(() => [
             :metadata="raMetadata"
             :earned-achievement-ids="earnedAchievementIds"
           />
-          <SaveDataTab v-if="tab === 'save-data'" :rom="currentRom" />
           <MetadataTab v-if="tab === 'metadata'" :rom="currentRom" />
         </div>
       </div>

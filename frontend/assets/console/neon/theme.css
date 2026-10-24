@@ -119,10 +119,6 @@
   --console-game-section-header: var(--console-text-secondary);
 
   /* Action Buttons */
-  --console-game-play-button-bg: var(--console-accent-primary);
-  --console-game-play-button-text: #ffffff;
-  --console-game-play-button-focus-border: var(--console-accent-secondary);
-
   --console-game-details-button-bg: var(--console-accent-tertiary);
   --console-game-details-button-text: #ffffff;
   --console-game-details-button-focus-border: var(--console-accent-secondary);
@@ -139,10 +135,6 @@
   --console-game-screenshot-thumbnail-focus-border: var(
     --console-accent-secondary
   );
-
-  /* State Cards */
-  --console-game-state-card-border: rgba(0, 0, 0, 0.1);
-  --console-game-state-card-focus-border: var(--console-accent-secondary);
 
   /* ================================ */
   /* GAMESLIST VIEW */

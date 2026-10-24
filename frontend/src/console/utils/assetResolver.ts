@@ -3,7 +3,7 @@ import { useConsoleTheme } from "@/console/composables/useConsoleTheme";
 // supported image formats
 export type SupportedFormat = "svg" | "png" | "jpg" | "jpeg" | "webp";
 
-export type AssetType = "systems" | "bezels" | "backgrounds";
+export type AssetType = "systems" | "backgrounds";
 
 // cache to avoid redundant checks
 const assetCache = new Map<string, string>();

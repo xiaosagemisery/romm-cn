@@ -2,7 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { EmulationDict } from './EmulationDict';
 import type { FilesystemDict } from './FilesystemDict';
 import type { FrontendDict } from './FrontendDict';
 import type { MetadataSourcesDict } from './MetadataSourcesDict';
@@ -13,7 +12,6 @@ export type HeartbeatResponse = {
     SYSTEM: SystemDict;
     METADATA_SOURCES: MetadataSourcesDict;
     FILESYSTEM: FilesystemDict;
-    EMULATION: EmulationDict;
     FRONTEND: FrontendDict;
     OIDC: OIDCDict;
     TASKS: TasksDict;

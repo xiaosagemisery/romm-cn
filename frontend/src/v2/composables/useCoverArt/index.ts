@@ -49,9 +49,9 @@ export type BoxartStyle =
   | "miximage_path"
   | "miximage_v2_path";
 
-/** The surface a cover renders on. Gallery is the default; details and
- *  player surfaces can carry their own boxart-style override. */
-export type BoxartContext = "gallery" | "details" | "player";
+/** The surface a cover renders on. Gallery is the default; the details
+ *  surface can carry its own boxart-style override. */
+export type BoxartContext = "gallery" | "details";
 
 /** Styles that resolve to an alternative artwork on the rom's metadata
  *  (everything except the default box art). These literals are exactly
@@ -104,14 +104,9 @@ export function coverRatio(style: BoxartStyle): number {
  *  gallery-wide preference, else the default box art. */
 export function resolveBoxartStyle(
   context: BoxartContext,
-  prefs: { gallery: unknown; details: unknown; player: unknown },
+  prefs: { gallery: unknown; details: unknown },
 ): BoxartStyle {
-  const override =
-    context === "details"
-      ? prefs.details
-      : context === "player"
-        ? prefs.player
-        : null;
+  const override = context === "details" ? prefs.details : null;
   if (isBoxartStyle(override)) return override;
   return isBoxartStyle(prefs.gallery) ? prefs.gallery : "cover_path";
 }
@@ -121,13 +116,11 @@ export function resolveBoxartStyle(
 export function useBoxartStyle(
   context: MaybeRefOrGetter<BoxartContext | undefined> = "gallery",
 ): ComputedRef<BoxartStyle> {
-  const { boxartStyle, boxartStyleDetails, boxartStylePlayer } =
-    useUISettings();
+  const { boxartStyle, boxartStyleDetails } = useUISettings();
   return computed(() =>
     resolveBoxartStyle(toValue(context) ?? "gallery", {
       gallery: boxartStyle.value,
       details: boxartStyleDetails.value,
-      player: boxartStylePlayer.value,
     }),
   );
 }

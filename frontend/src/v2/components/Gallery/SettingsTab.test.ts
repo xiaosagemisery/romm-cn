@@ -51,7 +51,6 @@ function platform(overrides: Partial<Platform> = {}): Platform {
     is_identified: true,
     missing_from_fs: false,
     display_name: "Family Computer Disk System",
-    firmware_count: 0,
     ...overrides,
   } as Platform;
 }

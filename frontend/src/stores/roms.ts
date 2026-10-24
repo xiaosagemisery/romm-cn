@@ -153,7 +153,6 @@ export default defineStore("roms", {
         filterMatched: galleryFilter.filterMatched,
         filterFavorites: galleryFilter.filterFavorites,
         filterDuplicates: galleryFilter.filterDuplicates,
-        filterPlayables: galleryFilter.filterPlayables,
         filterRA: galleryFilter.filterRA,
         filterMissing: galleryFilter.filterMissing,
         filterVerified: galleryFilter.filterVerified,

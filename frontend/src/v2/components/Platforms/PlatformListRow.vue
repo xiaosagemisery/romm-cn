@@ -8,16 +8,11 @@
 // and list modes lands on the same destination animation.
 import { RPlatformIcon } from "@v2/lib";
 import { computed, ref } from "vue";
-import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { usePlatformPlayable } from "@/v2/composables/usePlatformPlayable";
 import {
   pendingMorphName,
   useViewTransition,
 } from "@/v2/composables/useViewTransition";
-import RIcon from "@/v2/lib/primitives/RIcon/RIcon.vue";
-import RTooltip from "@/v2/lib/structural/RTooltip/RTooltip.vue";
-import PlayModeBadge from "./PlayModeBadge.vue";
 import {
   platformGenerationLabel,
   prettifyPlatformCategory,
@@ -47,7 +42,6 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const router = useRouter();
-const { t } = useI18n();
 const iconEl = ref<HTMLElement | null>(null);
 const { morphTransition } = useViewTransition();
 
@@ -69,8 +63,6 @@ const generationLabel = computed(() =>
     ? platformGenerationLabel(props.generation)
     : null,
 );
-
-const { emulator, mode, streamLabel } = usePlatformPlayable(() => props.slug);
 
 function onRowClick(e: MouseEvent) {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
@@ -119,32 +111,6 @@ function onRowClick(e: MouseEvent) {
       <span v-if="generationLabel">{{ generationLabel }}</span>
       <span v-else class="plat-list-row__placeholder">—</span>
     </div>
-    <div
-      class="plat-list-row__cell plat-list-row__cell--meta plat-list-row__cell--center"
-    >
-      <PlayModeBadge
-        v-if="mode"
-        class="plat-list-row__playable"
-        :mode="mode"
-        :emulator="emulator"
-        :stream-label="streamLabel"
-        :size="18"
-      />
-      <span
-        v-else
-        class="plat-list-row__playable plat-list-row__playable--off"
-        role="img"
-        :aria-label="t('platform.playable-none')"
-      >
-        <RIcon icon="mdi-cancel" size="18" />
-        <RTooltip
-          activator="parent"
-          :text="t('platform.playable-none')"
-          location="top"
-        />
-      </span>
-    </div>
-
     <div class="plat-list-row__cell plat-list-row__cell--end">
       <span v-if="romCount != null">
         {{ romCount }}
@@ -164,7 +130,7 @@ function onRowClick(e: MouseEvent) {
    switch can override without an inline-style override fight). */
 .plat-list-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px 130px 110px 88px 96px;
+  grid-template-columns: minmax(0, 1fr) 160px 130px 110px 96px;
   align-items: center;
   gap: 0 var(--r-space-3);
   padding: 0 var(--r-space-3);
@@ -208,11 +174,6 @@ function onRowClick(e: MouseEvent) {
   justify-content: flex-end;
 }
 
-.plat-list-row__cell--center {
-  display: flex;
-  justify-content: center;
-}
-
 .plat-list-row__title {
   display: flex;
   align-items: center;
@@ -229,16 +190,6 @@ function onRowClick(e: MouseEvent) {
   display: grid;
   place-items: center;
   opacity: 0.9;
-}
-
-.plat-list-row__playable {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.plat-list-row__playable--off {
-  color: var(--r-color-fg-faint);
 }
 
 .plat-list-row__meta {

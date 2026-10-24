@@ -37,7 +37,6 @@ import IndexShell from "@/v2/components/shared/IndexShell.vue";
 import PageHeader from "@/v2/components/shared/PageHeader.vue";
 import { useGalleryMode } from "@/v2/composables/useGalleryMode";
 import { useGalleryViewModeUrl } from "@/v2/composables/useGalleryViewModeUrl";
-import { usePlatformPlayableChecker } from "@/v2/composables/usePlatformPlayable";
 import { useTileSearchUrl } from "@/v2/composables/useTileSearchUrl";
 import { useWrapGridNav } from "@/v2/composables/useWrapGridNav";
 import { patchQuery } from "@/v2/utils/routeQuery";
@@ -49,7 +48,6 @@ const { allPlatforms, fetchingPlatforms } = storeToRefs(platformsStore);
 const { groupBy, layout } = useGalleryMode();
 useGalleryViewModeUrl();
 const searchTerm = useTileSearchUrl();
-const { isPlayable, isStreamable } = usePlatformPlayableChecker();
 
 // Empty (0-game) platforms are leftovers: rows whose folder vanished from
 // disk, whose ROMs were all deleted, or that a config exclusion keeps out
@@ -103,21 +101,6 @@ const visiblePlatforms = computed<Platform[]>(() =>
 const gridRoot = ref<HTMLElement | null>(null);
 useWrapGridNav(gridRoot, { cellSelector: ".plat-tile" });
 
-// Pre-compute the play flag per platform: sort comparator and every row
-// read this map so the column, the badge on the tile, and the playable
-// bucket all agree on a single source of truth. "Playable" here means by
-// any means: in this tab through EmulatorJS or Ruffle, or on a configured
-// streaming container.
-const playableById = computed(() => {
-  const playableFn = isPlayable.value;
-  const streamableFn = isStreamable.value;
-  const map = new Map<number | string, boolean>();
-  for (const p of allPlatforms.value) {
-    map.set(p.id, playableFn(p.slug) || streamableFn(p.slug));
-  }
-  return map;
-});
-
 // Two independent sort states. The list view's column headers drive
 // `listSortKey` + `listSortDir`; the grid view's toolbar asc/desc toggle
 // drives `gridSortDir`, with the implicit axis tied to the active
@@ -149,8 +132,6 @@ const gridSortKey = computed<PlatformSortKey>(() => {
       return "category";
     case "generation":
       return "generation";
-    case "playable":
-      return "playable";
     default:
       return "name";
   }
@@ -189,12 +170,6 @@ function compareBy(
       const cmp = ag - bg;
       return (cmp || byName) * sign;
     }
-    case "playable": {
-      const ap = playableById.value.get(a.id) ? 1 : 0;
-      const bp = playableById.value.get(b.id) ? 1 : 0;
-      const cmp = ap - bp;
-      return (cmp || byName) * sign;
-    }
     case "rom_count": {
       const ar = a.rom_count ?? 0;
       const br = b.rom_count ?? 0;
@@ -205,7 +180,7 @@ function compareBy(
 }
 
 // Toolbar group-by items — order = visual order in the segmented
-// slider (28×28 each, so 5 items still fits the toolbar comfortably on
+// slider (28×28 each, so 5 items still fit the toolbar comfortably on
 // desktop). Tooltips ride on `title`.
 const platformGroupByItems: GroupByItem[] = [
   {
@@ -237,12 +212,6 @@ const platformGroupByItems: GroupByItem[] = [
     icon: "mdi-numeric",
     ariaLabel: "Group by generation",
     title: "Group by generation",
-  },
-  {
-    id: "playable",
-    icon: "mdi-play-circle-outline",
-    ariaLabel: "Group by playable",
-    title: "Group by playable",
   },
 ];
 
@@ -440,20 +409,6 @@ const generationGroups = computed<Bucket[]>(() =>
   ),
 );
 
-// Playable buckets. Two groups in a fixed order ("Playable" first, then
-// "Not playable") so the user always sees the affirmative bucket on
-// top regardless of sort direction.
-const playableGroups = computed<Bucket[]>(() =>
-  bucketBy(
-    sortedForGrid.value,
-    (p) =>
-      playableById.value.get(p.id)
-        ? { key: "playable", label: "Playable" }
-        : { key: "not_playable", label: "Not playable" },
-    (a, b) => (a.key === "playable" ? -1 : b.key === "playable" ? 1 : 0),
-  ),
-);
-
 // Active bucket list per groupBy mode. When the chosen mode produces
 // only one group ("Other" / "Unknown"), the rendering still works —
 // it's just one labelled section, no different from a flat grid with
@@ -470,8 +425,6 @@ const groupedBuckets = computed<Bucket[] | null>(() => {
       return categoryGroups.value;
     case "generation":
       return generationGroups.value;
-    case "playable":
-      return playableGroups.value;
     default:
       return null;
   }

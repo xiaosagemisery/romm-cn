@@ -1,8 +1,6 @@
 {
   "all-loaded": "Всички игри са заредени",
   "filters": "Филтри",
-  "firmware-files-count": "{count} файла",
-  "firmware-selected-count": "{count} избрани",
   "jump-to": "Скочи до {letter}",
   "jump-to-letter": "Скочи до буква",
   "load-more": "Зареди още",

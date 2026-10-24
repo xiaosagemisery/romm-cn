@@ -12,7 +12,6 @@ import FilterFavoritesBtn from "@/components/Gallery/AppBar/common/FilterDrawer/
 import FilterMatchStateBtn from "@/components/Gallery/AppBar/common/FilterDrawer/FilterMatchStateBtn.vue";
 import FilterMissingBtn from "@/components/Gallery/AppBar/common/FilterDrawer/FilterMissingBtn.vue";
 import FilterPlatformBtn from "@/components/Gallery/AppBar/common/FilterDrawer/FilterPlatformBtn.vue";
-import FilterPlayablesBtn from "@/components/Gallery/AppBar/common/FilterDrawer/FilterPlayablesBtn.vue";
 import FilterRaBtn from "@/components/Gallery/AppBar/common/FilterDrawer/FilterRaBtn.vue";
 import FilterVerifiedBtn from "@/components/Gallery/AppBar/common/FilterDrawer/FilterVerifiedBtn.vue";
 import storeGalleryFilter, {
@@ -26,12 +25,10 @@ import { METADATA_PROVIDER_FILTER_OPTIONS } from "@/v2/utils/metadataProviders";
 
 withDefaults(
   defineProps<{
-    showPlayablesFilter?: boolean;
     showPlatformsFilter?: boolean;
     showSearchBar?: boolean;
   }>(),
   {
-    showPlayablesFilter: true,
     showPlatformsFilter: false,
     showSearchBar: false,
   },
@@ -49,7 +46,6 @@ const {
   filterMatched,
   filterFavorites,
   filterDuplicates,
-  filterPlayables,
   filterRA,
   filterMissing,
   filterVerified,
@@ -108,8 +104,6 @@ const onFilterChange = debounce(
         filterFavorites.value === null ? null : String(filterFavorites.value),
       filterDuplicates:
         filterDuplicates.value === null ? null : String(filterDuplicates.value),
-      filterPlayables:
-        filterPlayables.value === null ? null : String(filterPlayables.value),
       filterMissing:
         filterMissing.value === null ? null : String(filterMissing.value),
       filterVerified:
@@ -308,7 +302,6 @@ onMounted(async () => {
     matched: urlMatched,
     filterFavorites: urlFilteredFavorites,
     filterDuplicates: urlFilteredDuplicates,
-    filterPlayables: urlFilteredPlayables,
     filterMissing: urlFilteredMissing,
     filterVerified: urlFilteredVerified,
     filterRA: urlFilteredRa,
@@ -364,15 +357,6 @@ onMounted(async () => {
       galleryFilterStore.setFilterDuplicates(false);
     } else {
       galleryFilterStore.setFilterDuplicates(null);
-    }
-  }
-  if (urlFilteredPlayables !== undefined) {
-    if (urlFilteredPlayables === "true") {
-      galleryFilterStore.setFilterPlayables(true);
-    } else if (urlFilteredPlayables === "false") {
-      galleryFilterStore.setFilterPlayables(false);
-    } else {
-      galleryFilterStore.setFilterPlayables(null);
     }
   }
   if (urlFilteredMissing !== undefined) {
@@ -576,11 +560,6 @@ onMounted(async () => {
           :tabindex="activeFilterDrawer ? 0 : -1"
         />
         <FilterDuplicatesBtn
-          class="mt-2"
-          :tabindex="activeFilterDrawer ? 0 : -1"
-        />
-        <FilterPlayablesBtn
-          v-if="showPlayablesFilter"
           class="mt-2"
           :tabindex="activeFilterDrawer ? 0 : -1"
         />

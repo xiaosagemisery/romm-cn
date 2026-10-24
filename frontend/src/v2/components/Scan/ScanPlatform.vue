@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // ScanPlatform (v2) — one collapsible per scanning platform in the
 // Scan view. Header shows the platform icon + name + per-platform
-// chips (ROM count, firmware count, "not identified" badge).
+// chips (ROM count, "not identified" badge).
 //
 // Body: lists every newly-scanned ROM via ScanPlatformRow, rendered
 // inside an RVirtualScroller whose viewport always equals the total
@@ -77,14 +77,6 @@ function getItemKey(item: unknown) {
     </template>
     <template #header-append>
       <RTag tone="brand" size="x-small" :text="String(platform.roms.length)" />
-      <RTag
-        v-if="platform.new_firmware_count > 0"
-        tone="warning"
-        size="x-small"
-        icon="mdi-memory"
-        :text="String(platform.new_firmware_count)"
-        :title="t('scan.firmware-found', platform.new_firmware_count)"
-      />
       <RTag
         v-if="!platform.is_identified"
         tone="danger"

@@ -11,12 +11,10 @@ import { calculateMainLayoutWidth } from "@/utils";
 
 withDefaults(
   defineProps<{
-    showPlayablesFilter?: boolean;
     showPlatformsFilter?: boolean;
     showSearchBar?: boolean;
   }>(),
   {
-    showPlayablesFilter: true,
     showPlatformsFilter: false,
     showSearchBar: false,
   },
@@ -48,7 +46,6 @@ const { calculatedWidth } = calculateMainLayoutWidth();
   </v-app-bar>
 
   <FilterDrawer
-    :show-playables-filter="showPlayablesFilter"
     :show-platforms-filter="showPlatformsFilter"
     :show-search-bar="showSearchBar"
   />

@@ -6,12 +6,10 @@ import { RPlatformIcon } from "@v2/lib";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import Tile from "@/v2/components/shared/Tile.vue";
-import { usePlatformPlayable } from "@/v2/composables/usePlatformPlayable";
 import {
   pendingMorphName,
   useViewTransition,
 } from "@/v2/composables/useViewTransition";
-import PlayModeBadge from "./PlayModeBadge.vue";
 
 defineOptions({ inheritAttrs: false });
 
@@ -68,8 +66,6 @@ const morphStyle = computed(() =>
     ? { viewTransitionName: morphName.value }
     : undefined,
 );
-
-const { emulator, mode, streamLabel } = usePlatformPlayable(() => props.slug);
 </script>
 
 <template>
@@ -91,15 +87,6 @@ const { emulator, mode, streamLabel } = usePlatformPlayable(() => props.slug);
         />
       </div>
     </template>
-    <template v-if="mode" #badge>
-      <PlayModeBadge
-        class="plat-tile__playable"
-        :mode="mode"
-        :emulator="emulator"
-        :stream-label="streamLabel"
-        :size="16"
-      />
-    </template>
     {{ displayName }}
     <template v-if="romCount != null" #count>
       {{ romCount }} {{ romCount === 1 ? "game" : "games" }}
@@ -113,11 +100,5 @@ const { emulator, mode, streamLabel } = usePlatformPlayable(() => props.slug);
   height: 100%;
   display: grid;
   place-items: center;
-}
-
-.plat-tile__playable {
-  position: absolute;
-  right: 8px;
-  top: 8px;
 }
 </style>

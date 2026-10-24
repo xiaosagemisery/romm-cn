@@ -2,7 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { SyncMode } from './SyncMode';
 export type DeviceSchema = {
     id: string;
     user_id: number;
@@ -14,9 +13,6 @@ export type DeviceSchema = {
     mac_address: (string | null);
     hostname: (string | null);
     client_device_identifier: (string | null);
-    sync_mode: SyncMode;
-    sync_enabled: boolean;
-    sync_config: (Record<string, any> | null);
     last_seen: (string | null);
     created_at: string;
     updated_at: string;

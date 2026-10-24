@@ -27,14 +27,8 @@ import type { RouteLocationNormalized, Router } from "vue-router";
 import { ROUTES } from "@/plugins/router";
 import { useReducedMotion } from "@/v2/composables/useReducedMotion";
 
-// Routes that paint a `rom-cover-<id>` hero, so any pair of them can morph.
-const MORPH_ROM_ROUTES: ReadonlySet<string> = new Set([
-  ROUTES.ROM,
-  ROUTES.EMULATORJS,
-  ROUTES.JSDOS,
-  ROUTES.PICO8,
-  ROUTES.RUFFLE,
-]);
+// Routes that paint a `rom-cover-<id>` hero.
+const MORPH_ROM_ROUTES: ReadonlySet<string> = new Set([ROUTES.ROM]);
 
 export interface MorphSource {
   el: HTMLElement;
@@ -107,8 +101,8 @@ export function useViewTransition() {
 function morphNameForRoute(route: RouteLocationNormalized): string | null {
   const name = route.name;
   const params = route.params as Record<string, string | string[]>;
-  // `rom` (detail) and the players all own a `rom-cover-<id>` hero, so morph
-  // between any of them and the gallery, or each other.
+  // `rom` (detail) owns a `rom-cover-<id>` hero, so it morphs to and from
+  // the gallery.
   if (MORPH_ROM_ROUTES.has(String(name)) && params.rom) {
     return `rom-cover-${params.rom}`;
   }

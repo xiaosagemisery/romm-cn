@@ -13,13 +13,10 @@
 //   ?matched=true|false               (filterMatched)
 //   ?filterFavorites=true|false       (filterFavorites)
 //   ?filterDuplicates=true|false
-//   ?filterPlayables=true|false
 //   ?filterMissing=true|false
 //   ?filterPhysical=true|false
 //   ?filterVerified=true|false
 //   ?filterRA=true|false
-//   ?filterSaves=true|false
-//   ?filterStates=true|false
 //   ?filterSoundtrack=true|false
 //   ?platforms=1,2,3                  (selectedPlatforms IDs)
 //   ?genres=a,b&genresLogic=any|all|none
@@ -113,13 +110,10 @@ export function useGalleryFilterUrl() {
     filterMatched,
     filterFavorites,
     filterDuplicates,
-    filterPlayables,
     filterMissing,
     filterPhysical,
     filterVerified,
     filterRA,
-    filterSaves,
-    filterStates,
     filterSoundtrack,
     selectedPlatforms,
     selectedGenres,
@@ -164,13 +158,10 @@ export function useGalleryFilterUrl() {
       matched: qBool(q.matched),
       filterFavorites: qBool(q.filterFavorites),
       filterDuplicates: qBool(q.filterDuplicates),
-      filterPlayables: qBool(q.filterPlayables),
       filterMissing: qBool(q.filterMissing),
       filterPhysical: qBool(q.filterPhysical),
       filterVerified: qBool(q.filterVerified),
       filterRA: qBool(q.filterRA),
-      filterSaves: qBool(q.filterSaves),
-      filterStates: qBool(q.filterStates),
       filterSoundtrack: qBool(q.filterSoundtrack),
       platformIds: qList(q.platforms)
         .map((s) => Number(s))
@@ -212,8 +203,6 @@ export function useGalleryFilterUrl() {
       filterFavorites.value = url.filterFavorites;
     if (url.filterDuplicates !== filterDuplicates.value)
       filterDuplicates.value = url.filterDuplicates;
-    if (url.filterPlayables !== filterPlayables.value)
-      filterPlayables.value = url.filterPlayables;
     if (url.filterMissing !== filterMissing.value)
       filterMissing.value = url.filterMissing;
     if (url.filterPhysical !== filterPhysical.value)
@@ -221,10 +210,6 @@ export function useGalleryFilterUrl() {
     if (url.filterVerified !== filterVerified.value)
       filterVerified.value = url.filterVerified;
     if (url.filterRA !== filterRA.value) filterRA.value = url.filterRA;
-    if (url.filterSaves !== filterSaves.value)
-      filterSaves.value = url.filterSaves;
-    if (url.filterStates !== filterStates.value)
-      filterStates.value = url.filterStates;
     if (url.filterSoundtrack !== filterSoundtrack.value)
       filterSoundtrack.value = url.filterSoundtrack;
 
@@ -371,13 +356,10 @@ export function useGalleryFilterUrl() {
     setBool("matched", filterMatched.value);
     setBool("filterFavorites", filterFavorites.value);
     setBool("filterDuplicates", filterDuplicates.value);
-    setBool("filterPlayables", filterPlayables.value);
     setBool("filterMissing", filterMissing.value);
     setBool("filterPhysical", filterPhysical.value);
     setBool("filterVerified", filterVerified.value);
     setBool("filterRA", filterRA.value);
-    setBool("filterSaves", filterSaves.value);
-    setBool("filterStates", filterStates.value);
     setBool("filterSoundtrack", filterSoundtrack.value);
 
     setList(
@@ -491,13 +473,10 @@ export function useGalleryFilterUrl() {
       filterMatched,
       filterFavorites,
       filterDuplicates,
-      filterPlayables,
       filterMissing,
       filterPhysical,
       filterVerified,
       filterRA,
-      filterSaves,
-      filterStates,
       filterSoundtrack,
       selectedPlatforms,
       selectedGenres,

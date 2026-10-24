@@ -4,7 +4,7 @@
 //
 // Surface area (matches v1 1:1 so URLs stay compatible):
 //   • Tri-state boolean filters: matched / favourites / duplicates /
-//     playables / missing / physical / verified / RA. Each maps null → "all",
+//     missing / physical / verified / RA. Each maps null → "all",
 //     true → positive, false → negative.
 //   • Optional platform multi-select (only on Search / Collection views
 //     where you can mix platforms).
@@ -68,13 +68,10 @@ const {
   filterMatched,
   filterFavorites,
   filterDuplicates,
-  filterPlayables,
   filterMissing,
   filterPhysical,
   filterVerified,
   filterRA,
-  filterSaves,
-  filterStates,
   filterSoundtrack,
   selectedPlatforms,
   filterGenres,
@@ -187,15 +184,6 @@ const boolFilters: BoolFilterConfig[] = [
     value: filterDuplicates,
   },
   {
-    label: t("platform.show-playables"),
-    icon: "mdi-controller",
-    yesIcon: "mdi-controller",
-    noIcon: "mdi-controller-off",
-    yesAria: t("platform.show-playables-only"),
-    noAria: t("platform.show-not-playables-only"),
-    value: filterPlayables,
-  },
-  {
     label: t("platform.show-missing"),
     icon: "mdi-file-question-outline",
     yesIcon: "mdi-file-question-outline",
@@ -230,24 +218,6 @@ const boolFilters: BoolFilterConfig[] = [
     yesAria: t("platform.show-ra-only"),
     noAria: t("platform.show-not-ra-only"),
     value: filterRA,
-  },
-  {
-    label: t("platform.has-saves"),
-    icon: "mdi-content-save-outline",
-    yesIcon: "mdi-content-save-outline",
-    noIcon: "mdi-content-save-off-outline",
-    yesAria: t("platform.show-saves-only"),
-    noAria: t("platform.show-not-saves-only"),
-    value: filterSaves,
-  },
-  {
-    label: t("platform.has-states"),
-    icon: "mdi-camera-outline",
-    yesIcon: "mdi-camera-outline",
-    noIcon: "mdi-camera-off-outline",
-    yesAria: t("platform.show-states-only"),
-    noAria: t("platform.show-not-states-only"),
-    value: filterStates,
   },
   {
     label: t("platform.has-soundtrack"),

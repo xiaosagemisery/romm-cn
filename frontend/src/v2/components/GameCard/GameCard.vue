@@ -238,16 +238,12 @@ const { morphTransition } = useViewTransition();
 // Only interactive cards need actions: static / decorative cards (list-row
 // thumbnails, dialog tiles) render no overlay, so creating the composable for
 // them is pure waste. When present, share this single instance with every
-// GameActionBtn in the overlay (play / download / collection / favorite /
+// GameActionBtn in the overlay (download / collection / favorite /
 // status / more) instead of each button spinning up its own — the difference
 // between ~1 and ~7 live `useGameActions` per card, which dominates a
 // virtualised grid's cost. Safe to call conditionally (no lifecycle hooks).
 const actions =
-  props.static || props.decorative
-    ? null
-    : useGameActions(() => props.rom, {
-        coverEl: () => coverRef.value?.el() ?? null,
-      });
+  props.static || props.decorative ? null : useGameActions(() => props.rom);
 if (actions) provide(GAME_ACTIONS_KEY, actions);
 
 // Stop propagation so the card's morph + router push doesn't fire when
@@ -489,20 +485,7 @@ function onStaticKeydown(e: KeyboardEvent) {
 
         <!-- Hover overlay — action buttons are the shared GameActionBtn. -->
         <div class="r-gc__overlay">
-          <div class="r-gc__overlay-center">
-            <GameActionBtn
-              v-if="actions?.canPlayInBrowser.value"
-              :rom="rom"
-              action="play"
-              variant="emphasized"
-            />
-            <GameActionBtn
-              v-if="actions?.canPlayStream.value"
-              :rom="rom"
-              action="stream"
-              variant="brand"
-            />
-          </div>
+          <div class="r-gc__overlay-center" />
 
           <div class="r-gc__overlay-bottom">
             <GameActionBtn

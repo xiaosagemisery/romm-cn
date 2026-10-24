@@ -31,10 +31,7 @@ export interface SmartFilterCriteria {
   matched?: boolean;
   favorite?: boolean;
   duplicate?: boolean;
-  playable?: boolean;
   has_ra?: boolean;
-  has_saves?: boolean;
-  has_states?: boolean;
   has_soundtrack?: boolean;
   missing?: boolean;
   physical?: boolean;
@@ -78,10 +75,7 @@ export interface GalleryFilterSnapshot {
   filterMatched: boolean | null;
   filterFavorites: boolean | null;
   filterDuplicates: boolean | null;
-  filterPlayables: boolean | null;
   filterRA: boolean | null;
-  filterSaves: boolean | null;
-  filterStates: boolean | null;
   filterSoundtrack: boolean | null;
   filterMissing: boolean | null;
   filterPhysical: boolean | null;
@@ -167,10 +161,7 @@ export function buildSmartFilterCriteria(
   if (snap.filterMatched !== null) out.matched = snap.filterMatched;
   if (snap.filterFavorites !== null) out.favorite = snap.filterFavorites;
   if (snap.filterDuplicates !== null) out.duplicate = snap.filterDuplicates;
-  if (snap.filterPlayables !== null) out.playable = snap.filterPlayables;
   if (snap.filterRA !== null) out.has_ra = snap.filterRA;
-  if (snap.filterSaves !== null) out.has_saves = snap.filterSaves;
-  if (snap.filterStates !== null) out.has_states = snap.filterStates;
   if (snap.filterSoundtrack !== null)
     out.has_soundtrack = snap.filterSoundtrack;
   if (snap.filterMissing !== null) out.missing = snap.filterMissing;
@@ -347,39 +338,12 @@ const FIELDS: FieldSpec[] = [
     kind: "bool",
   },
   {
-    storage: "playable",
-    icon: "mdi-gamepad-variant-outline",
-    labelKey: "platform.show-playables",
-    defaultLabel: "Playable in browser",
-    negLabelKey: "platform.show-not-playables-only",
-    negDefaultLabel: "Show ROMs not playable in browser only",
-    kind: "bool",
-  },
-  {
     storage: "has_ra",
     icon: "mdi-trophy-outline",
     labelKey: "platform.show-ra",
     defaultLabel: "Has RetroAchievements",
     negLabelKey: "platform.show-not-ra-only",
     negDefaultLabel: "Show ROMs without RetroAchievements only",
-    kind: "bool",
-  },
-  {
-    storage: "has_saves",
-    icon: "mdi-content-save-outline",
-    labelKey: "platform.has-saves",
-    defaultLabel: "Has saves",
-    negLabelKey: "platform.show-not-saves-only",
-    negDefaultLabel: "Show ROMs without saves only",
-    kind: "bool",
-  },
-  {
-    storage: "has_states",
-    icon: "mdi-camera-outline",
-    labelKey: "platform.has-states",
-    defaultLabel: "Has save states",
-    negLabelKey: "platform.show-not-states-only",
-    negDefaultLabel: "Show ROMs without save states only",
     kind: "bool",
   },
   {

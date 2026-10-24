@@ -88,7 +88,6 @@ const activeMenu = ref(false);
 const gameIsHovering = ref(false);
 const showCoverZoom = ref(false);
 const emitter = inject<Emitter<Events>>("emitter");
-emitter?.on("playGame", handlePlayGame);
 
 const emit = defineEmits([
   "hover",
@@ -141,14 +140,9 @@ const videoRef = useTemplateRef<HTMLVideoElement>("hover-video-ref");
 const {
   boxartStyle,
   boxartStyleCover,
-  animateCD,
-  animateCartridge,
   localVideoPath,
   isVideoPlaying,
-  animateCDSpin,
-  animateCDLoad,
   stopCDAnimation,
-  animateLoadCart,
   stopVideo,
 } = useGameAnimation({
   rom: props.rom,
@@ -210,16 +204,6 @@ function showNoteDialog(event: MouseEvent | KeyboardEvent) {
   }
 }
 
-function handlePlayGame(romId: number) {
-  if (romId !== props.rom.id) return;
-  if (animateCD.value) {
-    animateCDSpin();
-    animateCDLoad();
-  } else if (animateCartridge.value) {
-    animateLoadCart();
-  }
-}
-
 onMounted(() => {
   if (tiltCardRef.value && !smAndDown.value && props.enable3DTilt) {
     VanillaTilt.init(tiltCardRef.value, {
@@ -236,7 +220,6 @@ onBeforeUnmount(() => {
   if (tiltCardRef.value?.vanillaTilt && props.enable3DTilt) {
     tiltCardRef.value.vanillaTilt.destroy();
   }
-  emitter?.off("playGame", handlePlayGame);
   stopCDAnimation();
   stopVideo();
 });

@@ -2,45 +2,19 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AdminMenu from "@/components/common/Game/AdminMenu.vue";
-import PlayBtn from "@/components/common/Game/PlayBtn.vue";
 import romApi from "@/services/api/rom";
 import storeAuth from "@/stores/auth";
-import storeConfig from "@/stores/config";
 import storeDownload from "@/stores/download";
-import storeHeartbeat from "@/stores/heartbeat";
 import type { SimpleRom } from "@/stores/roms";
-import { isEJSEmulationSupported, isRuffleEmulationSupported } from "@/utils";
 
 const props = defineProps<{ rom: SimpleRom; sizeActionBar: number }>();
 const { t } = useI18n();
 const emit = defineEmits(["menu-open", "menu-close"]);
 const downloadStore = storeDownload();
 const auth = storeAuth();
-const configStore = storeConfig();
-const heartbeatStore = storeHeartbeat();
 
 const computedSize = computed(() => {
   return props.sizeActionBar === 1 ? "small" : "x-small";
-});
-
-const isAprilFools = computed(() => {
-  const today = new Date();
-  return today.getMonth() === 3 && today.getDate() === 1;
-});
-
-const isEmulationSupported = computed(() => {
-  return (
-    isEJSEmulationSupported(
-      props.rom.platform_slug,
-      heartbeatStore.value,
-      configStore.config,
-    ) ||
-    isRuffleEmulationSupported(
-      props.rom.platform_slug,
-      heartbeatStore.value,
-      configStore.config,
-    )
-  );
 });
 
 const menuOpen = ref(false);
@@ -62,17 +36,6 @@ watch(menuOpen, (val) => {
         rounded="0"
         :aria-label="`${t('rom.download')} ${rom.name}`"
         @click.prevent="romApi.downloadRom({ rom })"
-      />
-    </v-col>
-    <v-col v-if="isEmulationSupported || isAprilFools" class="d-flex">
-      <PlayBtn
-        :rom="rom"
-        icon-embedded
-        class="action-bar-btn-small flex-grow-1"
-        :size="computedSize"
-        variant="text"
-        rounded="0"
-        @click.prevent
       />
     </v-col>
     <v-col

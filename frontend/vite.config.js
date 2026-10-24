@@ -112,10 +112,6 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: "esnext",
-      // AudioWorklet.addModule is only dependable with a real URL, and Vite
-      // inlines any asset under 4KB as a data: URI, so keep the worklet out.
-      assetsInlineLimit: (filePath) =>
-        filePath.endsWith("pico8AudioWorklet.js") ? false : undefined,
       // Browser targets for CSS (prefixing + down-leveling) come from the
       // shared `.browserslistrc`. Never hand-write a `-webkit-` twin next to a
       // standard property: Lightning CSS collapses the pair to whichever is
@@ -172,10 +168,6 @@ export default defineConfig(({ mode }) => {
         ignored: [
           "**/assets/romm/resources/**",
           "**/assets/romm/resources",
-          "**/assets/emulatorjs/**",
-          "**/assets/ruffle/**",
-          "**/assets/jsdos/**",
-          "**/assets/pico8/**",
         ],
       },
       proxy: {
@@ -184,7 +176,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: false,
           secure: false,
         },
-        "^/(?:ws|netplay)": {
+        "/ws": {
           target: `http://127.0.0.1:${backendPort}`,
           changeOrigin: false,
           ws: true,

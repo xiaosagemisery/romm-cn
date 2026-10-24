@@ -14,8 +14,8 @@
 //   • `<body>` gets `overflow: hidden` while open; reference-counted so
 //     stacked overlays unlock correctly.
 //
-// Use cases beyond filters: side info panels (collection / platform /
-// firmware drawers when they get migrated), context-driven settings
+// Use cases beyond filters: side info panels (collection / platform
+// drawers when they get migrated), context-driven settings
 // flyouts, etc.
 import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from "vue";
 import RIcon from "@/v2/lib/primitives/RIcon/RIcon.vue";

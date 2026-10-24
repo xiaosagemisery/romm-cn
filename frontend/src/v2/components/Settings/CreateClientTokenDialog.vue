@@ -105,7 +105,7 @@ const scopeColumns = computed<{ left: ScopeGroup[]; right: ScopeGroup[] }>(
     const library = sortScopes(
       userScopes.value.filter(
         (s) =>
-          /^(platforms|firmware|collections)\./.test(s) ||
+          /^(platforms|collections)\./.test(s) ||
           (/^roms\./.test(s) && !/^roms\.user\./.test(s)),
       ),
     );

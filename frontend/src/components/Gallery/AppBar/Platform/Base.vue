@@ -2,8 +2,6 @@
 import { storeToRefs } from "pinia";
 import { useDisplay } from "vuetify";
 import BaseGalleryAppBar from "@/components/Gallery/AppBar/Base.vue";
-import FirmwareBtn from "@/components/Gallery/AppBar/Platform/FirmwareBtn.vue";
-import FirmwareDrawer from "@/components/Gallery/AppBar/Platform/FirmwareDrawer.vue";
 import PlatformInfoDrawer from "@/components/Gallery/AppBar/Platform/PlatformInfoDrawer.vue";
 import MissingFromFSIcon from "@/components/common/MissingFromFSIcon.vue";
 import PlatformIcon from "@/components/common/Platform/PlatformIcon.vue";
@@ -18,7 +16,7 @@ const { activePlatformInfoDrawer } = storeToRefs(navigationStore);
 </script>
 
 <template>
-  <BaseGalleryAppBar :show-playables-filter="false" :show-search-bar="!xs">
+  <BaseGalleryAppBar :show-search-bar="!xs">
     <template #prepend>
       <MissingFromFSIcon
         v-if="currentPlatform && currentPlatform.missing_from_fs"
@@ -48,11 +46,9 @@ const { activePlatformInfoDrawer } = storeToRefs(navigationStore);
           style="bottom: 4px; right: 4px"
         />
       </v-btn>
-      <FirmwareBtn />
     </template>
   </BaseGalleryAppBar>
 
-  <FirmwareDrawer />
   <PlatformInfoDrawer />
 </template>
 

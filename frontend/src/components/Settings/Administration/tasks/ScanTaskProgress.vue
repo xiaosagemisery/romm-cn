@@ -15,8 +15,6 @@ const scanProgress = computed(() => {
     scanned_roms,
     new_roms,
     identified_roms,
-    scanned_firmware,
-    new_firmware,
   } = props.scanStats;
 
   return {
@@ -28,8 +26,6 @@ const scanProgress = computed(() => {
     romsPercentage: Math.round((scanned_roms / total_roms) * 100),
     newRoms: new_roms,
     metadataRoms: identified_roms,
-    scannedFirmware: scanned_firmware,
-    newFirmware: new_firmware,
   };
 });
 </script>
@@ -46,7 +42,7 @@ const scanProgress = computed(() => {
       />
     </div>
 
-    <div class="grid grid-cols-5 gap-4">
+    <div class="grid grid-cols-4 gap-4">
       <v-card
         variant="tonal"
         class="d-flex align-center ga-3 px-2 py-1 border-l-4 border-primary stat-card--primary"
@@ -114,23 +110,6 @@ const scanProgress = computed(() => {
           <div class="text-uppercase">Metadata</div>
         </div>
       </v-card>
-
-      <v-card
-        variant="tonal"
-        class="d-flex align-center ga-3 px-2 py-1 border-l-4 border-warning stat-card--warning"
-      >
-        <div
-          class="d-flex flex-row align-center justify-center ga-1 flex-grow-1"
-        >
-          <v-avatar variant="text" size="24" class="bg-warning-lighten-1">
-            <v-icon icon="mdi-chip" size="20" />
-          </v-avatar>
-          <div class="font-weight-bold">
-            {{ scanProgress.scannedFirmware }}
-          </div>
-          <div class="text-uppercase">Firmware</div>
-        </div>
-      </v-card>
     </div>
   </div>
 </template>
@@ -173,9 +152,5 @@ const scanProgress = computed(() => {
 
 .stat-card--info {
   background: rgba(var(--v-theme-info), 0.1);
-}
-
-.stat-card--warning {
-  background: rgba(var(--v-theme-error), 0.1);
 }
 </style>

@@ -1,9 +1,5 @@
 import { defineStore } from "pinia";
-import type {
-  ConfigResponse,
-  EjsControlsButton,
-  ExclusionType,
-} from "@/__generated__";
+import type { ConfigResponse, ExclusionType } from "@/__generated__";
 import api from "@/services/api";
 
 export type Config = ConfigResponse;
@@ -25,15 +21,6 @@ const defaultConfig = {
   PLATFORMS_BINDING: {},
   PLATFORMS_VERSIONS: {},
   SKIP_HASH_CALCULATION: false,
-  EJS_DEBUG: false,
-  EJS_NETPLAY_ENABLED: false,
-  EJS_CACHE_LIMIT: null,
-  EJS_DISABLE_AUTO_UNLOAD: false,
-  EJS_DISABLE_BATCH_BOOTUP: false,
-  EJS_ENABLE_AUTO_SAVE_SYNC: false,
-  EJS_NETPLAY_ICE_SERVERS: [],
-  EJS_SETTINGS: {},
-  EJS_CONTROLS: {},
   SCAN_METADATA_PRIORITY: [],
   SCAN_ARTWORK_PRIORITY: [],
   SCAN_ARTWORK_PRIORITY_OVERRIDES: {},
@@ -92,58 +79,6 @@ export default defineStore("config", {
     },
     isExclusionType(type: string): type is ExclusionType {
       return Object.keys(this.config).includes(type);
-    },
-    getEJSCoreOptions(core: string | null): Record<string, string | boolean> {
-      const defaultOptions = this.config.EJS_SETTINGS["default"] || {};
-      if (!core) return defaultOptions;
-      return {
-        ...defaultOptions,
-        ...this.config.EJS_SETTINGS[core],
-      };
-    },
-    getEJSControls(
-      core: string | null,
-    ): Record<number, Record<number, EjsControlsButton>> | null {
-      const defaultControls = this.config.EJS_CONTROLS["default"];
-      if (!core) {
-        if (!defaultControls) return null;
-        return {
-          0: defaultControls["_0"] || {},
-          1: defaultControls["_1"] || {},
-          2: defaultControls["_2"] || {},
-          3: defaultControls["_3"] || {},
-        };
-      }
-
-      const coreControls = this.config.EJS_CONTROLS[core];
-      if (!coreControls) return null;
-      if (!defaultControls) {
-        return {
-          0: coreControls["_0"] || {},
-          1: coreControls["_1"] || {},
-          2: coreControls["_2"] || {},
-          3: coreControls["_3"] || {},
-        };
-      }
-
-      return {
-        0: {
-          ...(defaultControls["_0"] || {}),
-          ...(coreControls["_0"] || {}),
-        },
-        1: {
-          ...(defaultControls["_1"] || {}),
-          ...(coreControls["_1"] || {}),
-        },
-        2: {
-          ...(defaultControls["_2"] || {}),
-          ...(coreControls["_2"] || {}),
-        },
-        3: {
-          ...(defaultControls["_3"] || {}),
-          ...(coreControls["_3"] || {}),
-        },
-      };
     },
     reset() {},
   },

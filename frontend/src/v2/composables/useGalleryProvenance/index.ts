@@ -11,9 +11,8 @@
 // gallery walk from a stale index.
 //
 // Only arrivals at the details view update the flag. Hops that stay
-// inside the chain (rom to rom via the arrows or a related game, and the
-// round trip through a player) leave it untouched, so the arrows survive
-// a play session.
+// inside the chain (rom to rom via the arrows or a related game) leave it
+// untouched.
 import { computed, ref } from "vue";
 import type { Router } from "vue-router";
 import { ROUTES } from "@/plugins/router";
@@ -26,13 +25,7 @@ const GALLERY_ROUTES: ReadonlySet<string> = new Set([
   ROUTES.SEARCH,
 ]);
 
-const CHAIN_ROUTES: ReadonlySet<string> = new Set([
-  ROUTES.ROM,
-  ROUTES.EMULATORJS,
-  ROUTES.PICO8,
-  ROUTES.RUFFLE,
-  ROUTES.STREAM,
-]);
+const CHAIN_ROUTES: ReadonlySet<string> = new Set([ROUTES.ROM]);
 
 const enteredFromGallery = ref(false);
 

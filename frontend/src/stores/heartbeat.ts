@@ -41,12 +41,6 @@ const defaultHeartbeat: Heartbeat = {
     FS_PLATFORMS: [],
     TITLE_ID_EXTRACTION_ENABLED: false,
   },
-  EMULATION: {
-    DISABLE_EMULATOR_JS: false,
-    DISABLE_RUFFLE_RS: false,
-    DISABLE_JSDOS: false,
-    DISABLE_PICO8: false,
-  },
   FRONTEND: {
     DISABLE_USERPASS_LOGIN: false,
     DISABLE_LOGS_VIEWER: false,

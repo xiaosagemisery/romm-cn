@@ -1,8 +1,6 @@
 {
   "all-loaded": "Všechny hry byly načteny",
   "filters": "Filtry",
-  "firmware-files-count": "{count} souborů",
-  "firmware-selected-count": "{count} vybráno",
   "jump-to": "Přejít na {letter}",
   "jump-to-letter": "Přejít na písmeno",
   "load-more": "Načíst více",

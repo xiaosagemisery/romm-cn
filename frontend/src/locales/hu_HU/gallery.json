@@ -1,8 +1,6 @@
 {
   "all-loaded": "Minden játék betöltődött",
   "filters": "Szűrők",
-  "firmware-files-count": "{count} fájl",
-  "firmware-selected-count": "{count} kiválasztva",
   "jump-to": "Ugrás: {letter}",
   "jump-to-letter": "Ugrás betűhöz",
   "load-more": "Továbbiak betöltése",

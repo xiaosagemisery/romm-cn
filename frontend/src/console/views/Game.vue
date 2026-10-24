@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { formatDistanceToNow } from "date-fns";
 import {
   computed,
   onMounted,
@@ -19,51 +18,39 @@ import { useInputScope } from "@/console/composables/useInputScope";
 import type { InputAction } from "@/console/input/actions";
 import { ROUTES } from "@/plugins/router";
 import romApi from "@/services/api/rom";
-import stateApi from "@/services/api/state";
-import storeConfig from "@/stores/config";
 import storeHeartbeat from "@/stores/heartbeat";
 import type { DetailedRom } from "@/stores/roms";
-import storeRoms from "@/stores/roms";
-import { getSupportedEJSCores, toBrowserLocale } from "@/utils";
+import { toBrowserLocale } from "@/utils";
 import {
   getMissingCoverImage,
   getUnmatchedCoverImage,
   EXTENSION_REGEX,
 } from "@/utils/covers";
 
-type FocusZone =
-  "play" | "description" | "details" | "shots" | "lightbox" | "states";
+type FocusZone = "description" | "details" | "shots" | "lightbox";
 
-type PlayerState = "loading" | "unsupported" | "error" | "ready";
+type LoadState = "loading" | "error" | "ready";
 
-const romsStore = storeRoms();
 const heartbeatStore = storeHeartbeat();
-const configStore = storeConfig();
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
 
 const rom = ref<DetailedRom | null>(null);
-const playerState = ref<PlayerState>("loading");
+const loadState = ref<LoadState>("loading");
 const errorMessage = ref<string | null>(null);
 
-const selectedZone = ref<FocusZone>("play");
-const selectedStateIndex = ref(0);
+const selectedZone = ref<FocusZone>("details");
 const showDescription = ref(false);
 const showDetails = ref(false);
 const showLightbox = ref(false);
 const selectedShot = ref(0);
 const screenshotsRef = useTemplateRef<HTMLDivElement>("screenshots-ref");
 const screenshotELs = ref<HTMLButtonElement[]>([]);
-const saveStatesRef = useTemplateRef<HTMLDivElement>("save-states-ref");
-const saveStatesELs = ref<HTMLButtonElement[]>([]);
 const descriptionOverlayRef = useTemplateRef<HTMLDivElement>(
   "description-overlay-ref",
 );
 const detailsOverlayRef = useTemplateRef<HTMLDivElement>("details-overlay-ref");
-const isConsoleEmulationDisabled = computed(
-  () => heartbeatStore.value.EMULATION.DISABLE_EMULATOR_JS,
-);
 
 const releaseDate = computed(() => {
   if (!rom.value?.metadatum.first_release_date) return null;
@@ -195,40 +182,9 @@ function handleAction(action: InputAction): boolean {
 
   // Main focus navigation
   switch (selectedZone.value) {
-    case "play":
-      if (action === "moveUp" && rom.value?.summary) {
-        selectedZone.value = "description";
-        return true;
-      }
-      if (action === "moveRight") {
-        selectedZone.value = "details";
-        return true;
-      }
-      if (action === "moveDown") {
-        if (rom.value?.user_states?.length) {
-          selectedZone.value = "states";
-          selectedStateIndex.value = 0;
-          return true;
-        }
-        if (screenshotUrls.value.length) {
-          selectedZone.value = "shots";
-          selectedShot.value = 0;
-          nextTick(scrollShotsToSelected);
-        }
-        return true;
-      }
-      if (action === "confirm") {
-        play();
-        return true;
-      }
-      if (action === "back") {
-        goBackToPlatform();
-        return true;
-      }
-      return false;
     case "description":
       if (action === "moveDown") {
-        selectedZone.value = "play";
+        selectedZone.value = "details";
         return true;
       }
       if (action === "confirm") {
@@ -241,20 +197,11 @@ function handleAction(action: InputAction): boolean {
       }
       return false;
     case "details":
-      if (action === "moveLeft") {
-        selectedZone.value = "play";
-        return true;
-      }
-      if (action === "moveUp") {
+      if (action === "moveUp" && rom.value?.summary) {
         selectedZone.value = "description";
         return true;
       }
       if (action === "moveDown") {
-        if (rom.value?.user_states?.length) {
-          selectedZone.value = "states";
-          selectedStateIndex.value = 0;
-          return true;
-        }
         if (screenshotUrls.value.length) {
           selectedZone.value = "shots";
           selectedShot.value = 0;
@@ -271,52 +218,9 @@ function handleAction(action: InputAction): boolean {
         return true;
       }
       return false;
-    case "states":
-      if (action === "moveUp") {
-        selectedZone.value = "play";
-        return true;
-      }
-      if (action === "moveDown") {
-        if (screenshotUrls.value.length) {
-          selectedZone.value = "shots";
-          selectedShot.value = 0;
-          nextTick(scrollShotsToSelected);
-        }
-        return true;
-      }
-      if (action === "moveRight") {
-        if (rom.value?.user_states) {
-          selectedStateIndex.value =
-            (selectedStateIndex.value + 1) % rom.value.user_states.length;
-          nextTick(scrollStatesToSelected);
-          return true;
-        }
-      }
-      if (action === "moveLeft") {
-        if (rom.value?.user_states) {
-          selectedStateIndex.value =
-            (selectedStateIndex.value - 1 + rom.value.user_states.length) %
-            rom.value.user_states.length;
-          nextTick(scrollStatesToSelected);
-          return true;
-        }
-      }
-      if (action === "confirm") {
-        startWithState(selectedStateIndex.value);
-        return true;
-      }
-      if (action === "delete") {
-        deleteState(selectedStateIndex.value);
-        return true;
-      }
-      if (action === "back") {
-        goBackToPlatform();
-        return true;
-      }
-      return false;
     case "shots":
       if (action === "moveUp") {
-        selectedZone.value = rom.value?.user_states?.length ? "states" : "play";
+        selectedZone.value = "details";
         return true;
       }
       if (action === "moveRight") {
@@ -350,103 +254,14 @@ function handleAction(action: InputAction): boolean {
   }
 }
 
-async function play() {
-  if (!rom.value || isConsoleEmulationDisabled.value) return;
-
-  romApi
-    .updateUserRomProps({
-      romId: rom.value.id,
-      data: {},
-      updateLastPlayed: true,
-    })
-    .catch((error) => {
-      console.error(error);
-    });
-
-  const query: Record<string, number> = {};
-
-  // Only pass state if we're in the states zone (explicitly selected a state)
-  if (selectedZone.value === "states" && currentStateId.value) {
-    query.state = currentStateId.value;
-  }
-
-  // Preserve navigation origin (platform id or collection) for back navigation
-  const origin = route.query as Record<string, string | undefined>;
-  if (origin.id) query.id = Number(origin.id);
-  if (origin.collection) query.collection = Number(origin.collection);
-
-  await router.push({
-    name: ROUTES.CONSOLE_PLAY,
-    params: { rom: rom.value.id },
-    query: Object.keys(query).length ? query : undefined,
-  });
-  // Force full reload to retrieve COEP/COOP headers from nginx,
-  // required to enable multi-threading in EmulatorJS (e.g., for dosbox_pure/MSDOS).
-  router.go(0);
-}
-
-const currentStateId = computed(
-  () => rom.value?.user_states?.[selectedStateIndex.value]?.id,
-);
-
-function formatRelativeDate(date: string | Date) {
-  return formatDistanceToNow(new Date(date), { addSuffix: true });
-}
-
-function startWithState(index: number) {
-  if (!rom.value?.user_states?.[index]) return;
-  selectedStateIndex.value = index;
-  play();
-}
-
-async function deleteState(index: number) {
-  if (!rom.value?.user_states?.[index]) return;
-  const state = rom.value.user_states[index];
-
-  try {
-    await stateApi.deleteStates({ states: [state] });
-
-    // Remove the state from the local array
-    rom.value.user_states.splice(index, 1);
-    romsStore.update(rom.value);
-
-    // Adjust selected index if needed
-    if (selectedStateIndex.value >= rom.value.user_states.length) {
-      selectedStateIndex.value = Math.max(0, rom.value.user_states.length - 1);
-    }
-
-    // If no more states, switch focus back to play button
-    if (rom.value.user_states.length === 0) {
-      selectedZone.value = "play";
-    }
-  } catch (error) {
-    console.error("Failed to delete save state:", error);
-  }
-}
-
 function registerShotEl(el: HTMLButtonElement | null, idx: number) {
   if (!el) return;
   screenshotELs.value[idx] = el;
 }
 
-function registerStateEl(el: HTMLButtonElement | null, idx: number) {
-  if (!el) return;
-  saveStatesELs.value[idx] = el;
-}
-
 function scrollShotsToSelected() {
   const container = screenshotsRef.value;
   const el = screenshotELs.value[selectedShot.value];
-  if (!container || !el) return;
-  const cr = container.getBoundingClientRect();
-  const er = el.getBoundingClientRect();
-  const desiredLeft = el.offsetLeft - cr.width / 2 + er.width / 2;
-  container.scrollTo({ left: desiredLeft, behavior: "smooth" });
-}
-
-function scrollStatesToSelected() {
-  const container = saveStatesRef.value;
-  const el = saveStatesELs.value[selectedStateIndex.value];
   if (!container || !el) return;
   const cr = container.getBoundingClientRect();
   const er = el.getBoundingClientRect();
@@ -464,28 +279,20 @@ onMounted(async () => {
     const { data: romData } = await romApi.getRom({
       romId: parseInt(route.params.rom as string),
     });
-    const cores = getSupportedEJSCores(
-      romData.platform_slug,
-      configStore.config.EJS_NETPLAY_ENABLED,
-    );
-    if (!cores.length) {
-      playerState.value = "unsupported";
-      throw new Error(`Platform ${romData.platform_slug} not supported yet.`);
-    }
     if (romData.files.length === 0) {
-      playerState.value = "error";
+      loadState.value = "error";
       errorMessage.value = "No game files found";
       throw new Error("No game files found");
     }
     rom.value = romData;
   } catch (err) {
-    playerState.value = "error";
+    loadState.value = "error";
     errorMessage.value =
       err instanceof Error ? err.message : "Failed to load game";
   } finally {
-    playerState.value = "ready";
+    loadState.value = "ready";
   }
-  selectedZone.value = "play";
+  selectedZone.value = rom.value?.summary ? "description" : "details";
   off = subscribe(handleAction);
 });
 
@@ -510,21 +317,14 @@ onUnmounted(() => {
     <template v-if="!rom">
       <!-- States -->
       <div
-        v-if="playerState === 'loading'"
+        v-if="loadState === 'loading'"
         class="m-auto text-lg"
         :style="{ color: 'var(--console-loading-text)' }"
       >
         Loading…
       </div>
-      <div v-else-if="playerState === 'error'" class="m-auto text-red-400 p-4">
+      <div v-else-if="loadState === 'error'" class="m-auto text-red-400 p-4">
         {{ errorMessage }}
-      </div>
-      <div
-        v-else-if="playerState === 'unsupported'"
-        class="m-auto p-4"
-        :style="{ color: 'var(--console-error-text)' }"
-      >
-        This platform is not yet supported in the web player
       </div>
     </template>
     <template v-else>
@@ -626,26 +426,6 @@ onUnmounted(() => {
 
                 <div class="flex gap-3 md:gap-4 mb-2">
                   <button
-                    class="flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold min-w-[130px] md:min-w-[140px] justify-center transition-all"
-                    style="
-                      background-color: var(
-                        --console-game-play-button-bg
-                      ) !important;
-                      color: var(--console-game-play-button-text) !important;
-                    "
-                    :class="{
-                      'scale-105 shadow-[0_8px_28px_rgba(0,0,0,0.35),_0_0_0_2px_var(--console-game-play-button-focus-border),_0_0_16px_var(--console-accent-secondary)]':
-                        selectedZone === 'play',
-                      'opacity-60 cursor-not-allowed':
-                        isConsoleEmulationDisabled,
-                    }"
-                    :disabled="isConsoleEmulationDisabled"
-                    @click="play()"
-                  >
-                    <span class="text-lg md:text-xl">▶</span>
-                    {{ t("console.game-play") }}
-                  </button>
-                  <button
                     class="px-5 md:px-6 py-3 md:py-4 rounded-lg font-semibold transition-all"
                     style="
                       background-color: var(
@@ -662,68 +442,6 @@ onUnmounted(() => {
                   >
                     {{ t("console.game-detail") }}
                   </button>
-                </div>
-
-                <div v-if="rom.user_states.length > 0" class="mt-4">
-                  <h3
-                    class="text-[10px] uppercase tracking-wider font-semibold mb-2"
-                    :style="{ color: 'var(--console-game-section-header)' }"
-                  >
-                    {{ t("console.save-states") }}
-                  </h3>
-                  <div
-                    ref="save-states-ref"
-                    class="w-full overflow-x-auto overflow-y-hidden no-scrollbar"
-                  >
-                    <div class="flex items-center gap-3 py-1 px-2 min-w-max">
-                      <button
-                        v-for="(st, i) in rom.user_states"
-                        :key="st.id"
-                        :ref="
-                          (el) =>
-                            registerStateEl(el as HTMLButtonElement | null, i)
-                        "
-                        :style="{
-                          borderColor: 'var(--console-game-state-card-border)',
-                        }"
-                        class="group relative rounded-md overflow-hidden flex flex-col transition-all w-[140px] h-[80px] border"
-                        :class="{
-                          'ring-2 ring-[var(--console-game-state-card-focus-border)] scale-[1.05] shadow-[0_0_0_2px_var(--console-game-state-card-focus-border)]':
-                            selectedZone === 'states' &&
-                            selectedStateIndex === i,
-                        }"
-                        :aria-label="
-                          'State from ' + formatRelativeDate(st.updated_at)
-                        "
-                        @click="startWithState(i)"
-                      >
-                        <div
-                          v-if="!st.screenshot?.download_path"
-                          class="absolute inset-0 flex items-center justify-center text-[10px] font-medium select-none"
-                          :style="{
-                            color: 'var(--console-game-section-header)',
-                          }"
-                        >
-                          STATE
-                        </div>
-                        <img
-                          v-else
-                          :src="st.screenshot.download_path"
-                          :alt="'State screenshot ' + (i + 1)"
-                          class="w-full h-full object-cover select-none pointer-events-none"
-                          draggable="false"
-                          loading="lazy"
-                        />
-                        <div
-                          class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-black/0 px-2 pt-4 pb-1 text-[10px] text-white/80 tracking-wide flex justify-between items-end"
-                        >
-                          <span class="truncate max-w-[90%]">{{
-                            formatRelativeDate(st.updated_at)
-                          }}</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1027,7 +745,6 @@ onUnmounted(() => {
         :show-back="true"
         :show-toggle-favorite="false"
         :show-menu="false"
-        :show-delete="selectedZone === 'states' && rom.user_states.length > 0"
       />
     </template>
   </div>

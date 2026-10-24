@@ -1,8 +1,6 @@
 {
   "all-loaded": "Все игры загружены",
   "filters": "Фильтры",
-  "firmware-files-count": "{count} файлов",
-  "firmware-selected-count": "{count} выбрано",
   "jump-to": "Перейти к {letter}",
   "jump-to-letter": "Перейти к букве",
   "load-more": "Загрузить еще",

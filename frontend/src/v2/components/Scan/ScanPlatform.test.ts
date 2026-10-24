@@ -16,7 +16,6 @@ function mountPlatform(overrides: Partial<ScanningPlatform> = {}) {
     fs_slug: "gbc",
     is_identified: true,
     roms: [],
-    new_firmware_count: 0,
     ...overrides,
   };
 
@@ -39,27 +38,14 @@ function mountPlatform(overrides: Partial<ScanningPlatform> = {}) {
 }
 
 describe("ScanPlatform", () => {
-  // Firmware already in the library is not a scan result: the header used to
-  // show the platform's total firmware count, so every re-scan looked like it
-  // had discovered firmware (issue #4049).
-  it("hides the firmware tag when the scan found no new firmware", () => {
-    const wrapper = mountPlatform({ new_firmware_count: 0 });
+  it("shows only the rom count tag", () => {
+    const wrapper = mountPlatform();
 
     expect(wrapper.findAll(".r-tag")).toHaveLength(1);
   });
 
-  it("shows the count of firmware discovered by this scan", () => {
-    const wrapper = mountPlatform({ new_firmware_count: 2 });
-
-    const tags = wrapper.findAll(".r-tag");
-    expect(tags).toHaveLength(2);
-    expect(tags[1].text()).toBe("2");
-  });
-
-  // The body only lists ROMs, so a firmware-only platform rendered an empty
-  // panel instead of the "no new roms" message.
-  it("reports no new roms even when firmware was found", () => {
-    const wrapper = mountPlatform({ new_firmware_count: 2 });
+  it("reports no new roms for an empty platform", () => {
+    const wrapper = mountPlatform();
 
     expect(wrapper.text()).toContain("scan.no-new-roms");
   });

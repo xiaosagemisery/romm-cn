@@ -6,7 +6,6 @@ import { computed, inject } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import AdminMenu from "@/components/common/Game/AdminMenu.vue";
-import PlayBtn from "@/components/common/Game/PlayBtn.vue";
 import RAvatarRom from "@/components/common/Game/RAvatar.vue";
 import MissingFromFSIcon from "@/components/common/MissingFromFSIcon.vue";
 import PlatformIcon from "@/components/common/Platform/PlatformIcon.vue";
@@ -438,7 +437,6 @@ function updateOptions({ sortBy }: { sortBy: SortBy }) {
             >
               <v-icon>mdi-download</v-icon>
             </v-btn>
-            <PlayBtn :rom="item" variant="text" size="small" @click.prevent />
             <v-menu
               v-if="
                 auth.scopes.includes('roms.write') ||

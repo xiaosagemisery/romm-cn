@@ -3,7 +3,7 @@
 // view. Mirrors GameListHeader: shared CSS-grid template with every
 // row underneath, clickable sortable columns that toggle asc → desc.
 //
-// The four metadata columns (Family / Category / Generation / Playable)
+// The three metadata columns (Family / Category / Generation)
 // drop out on narrow viewports (see the `html[data-bp~="xs"]` rules
 // below) so the row stays legible on mobile without horizontal scroll.
 // The grid template flips in the same breakpoint so the cells re-align
@@ -45,7 +45,6 @@ function handleClick(col: PlatformColumn) {
         'plat-list-header__cell--meta': col.meta,
         'plat-list-header__cell--sortable': col.sortable,
         'plat-list-header__cell--end': col.align === 'end',
-        'plat-list-header__cell--center': col.align === 'center',
         'plat-list-header__cell--active': col.sortable && sortKey === col.key,
       }"
       :aria-sort="
@@ -73,7 +72,7 @@ function handleClick(col: PlatformColumn) {
 <style scoped>
 .plat-list-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px 130px 110px 88px 96px;
+  grid-template-columns: minmax(0, 1fr) 160px 130px 110px 96px;
   align-items: center;
   gap: 0 var(--r-space-3);
   padding: 0 var(--r-space-3);
@@ -107,10 +106,6 @@ function handleClick(col: PlatformColumn) {
 .plat-list-header__cell--end {
   justify-content: flex-end;
   text-align: end;
-}
-.plat-list-header__cell--center {
-  justify-content: center;
-  text-align: center;
 }
 
 .plat-list-header__cell--sortable {

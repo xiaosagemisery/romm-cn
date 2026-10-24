@@ -30,17 +30,6 @@ const { t } = useI18n();
           {{ platform.roms.length }}
         </v-chip>
         <v-chip
-          v-if="platform.new_firmware_count > 0"
-          class="ml-1"
-          color="secondary"
-          size="x-small"
-          label
-          :title="t('scan.firmware-found', platform.new_firmware_count)"
-        >
-          <v-icon start size="x-small">mdi-memory</v-icon>
-          {{ platform.new_firmware_count }}
-        </v-chip>
-        <v-chip
           v-if="!platform.is_identified"
           color="red"
           size="small"

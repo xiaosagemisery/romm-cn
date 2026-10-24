@@ -1,16 +1,15 @@
 <script setup lang="ts">
 // Platform view — owns the platform-specific load flow (route param →
 // ensure platforms loaded → setCurrentPlatform → fetch metadata) and
-// the three-tab surface that sits above the gallery:
+// the two-tab surface that sits above the gallery:
 //   • Library  — the gallery (delegated to `GalleryShell`).
-//   • Firmware — `FirmwareTab` (upload / download / delete firmware).
 //   • Settings — `SettingsTab` (details + cover-style picker).
 //
 // Layout choice: `PlatformHead` (InfoPanel + RTabNav) lives INSIDE the
 // scrolling container of whichever branch is active. On Library, it
 // rides in `GalleryShell`'s `#header` slot so it scrolls away with
 // the cards and the toolbar pins below it — the same vocabulary the
-// pre-tabs gallery had. On Firmware / Settings it sits in a plain
+// pre-tabs gallery had. On Settings it sits in a plain
 // scroll wrapper above the tab body, so the user gets a single
 // natural scroll for the whole page.
 //
@@ -26,15 +25,12 @@ import { ROUTES } from "@/plugins/router";
 import platformApi from "@/services/api/platform";
 import romApi from "@/services/api/rom";
 import storePlatforms, { type Platform } from "@/stores/platforms";
-import { useStreamingStore } from "@/stores/streaming";
 import type { Events } from "@/types/emitter";
 import { formatBytes } from "@/utils";
-import FirmwareTab from "@/v2/components/Gallery/FirmwareTab.vue";
 import GalleryShell from "@/v2/components/Gallery/GalleryShell.vue";
 import PlatformHead from "@/v2/components/Gallery/PlatformHead.vue";
 import ScanPlatformDialog from "@/v2/components/Gallery/ScanPlatformDialog.vue";
 import SettingsTab from "@/v2/components/Gallery/SettingsTab.vue";
-import MemoryCardManager from "@/v2/components/Player/MemoryCardManager.vue";
 import { useCan } from "@/v2/composables/useCan";
 import { useConfirm } from "@/v2/composables/useConfirm";
 import { useIsAlive } from "@/v2/composables/useIsAlive";
@@ -49,7 +45,6 @@ const platformsStore = storePlatforms();
 const galleryRoms = storeGalleryRoms();
 const snackbar = useSnackbar();
 const confirm = useConfirm();
-const streamingStore = useStreamingStore();
 const emitter = inject<Emitter<Events>>("emitter");
 const { currentPlatform, total } = storeToRefs(galleryRoms);
 
@@ -72,27 +67,14 @@ const canDownload = useCan("rom.download");
 // ── Tabs ─────────────────────────────────────────────────────────
 // URL-persistent via `?tab=` (mirrors the GameDetails pattern). The
 // default tab is `library`.
-type TabId = "library" | "firmware" | "settings" | "memory-cards";
-const VALID_TABS = new Set<TabId>([
-  "library",
-  "firmware",
-  "settings",
-  "memory-cards",
-]);
+type TabId = "library" | "settings";
+const VALID_TABS = new Set<TabId>(["library", "settings"]);
 
 function parseTab(v: unknown): TabId {
   return typeof v === "string" && VALID_TABS.has(v as TabId)
     ? (v as TabId)
     : "library";
 }
-
-// The memory-card tab only exists for platforms whose streaming container
-// syncs whole cards (PCSX2 today). `emulator` is the hard key the manager
-// fetches by; null means "no card tab for this platform".
-const memoryCardEmulator = computed<string | null>(() => {
-  const c = streamingStore.containerForPlatform(currentPlatform.value?.slug);
-  return c?.supports_memory_cards ? c.emulator : null;
-});
 
 const tab = ref<TabId>(parseTab(route.query.tab));
 watch(tab, (value) => {
@@ -113,27 +95,8 @@ watch(
 
 const tabs = computed<RTabNavItem[]>(() => [
   { id: "library", label: t("common.library") },
-  { id: "firmware", label: t("platform.firmware-bios") },
-  ...(memoryCardEmulator.value
-    ? [{ id: "memory-cards", label: t("play.memory-cards") }]
-    : []),
   { id: "settings", label: t("platform.settings") },
 ]);
-
-// Guard a stale `?tab=memory-cards` deep link on a platform that doesn't
-// support cards (or once its container is removed): fall back to library.
-// Both the container config and the platform itself have to have landed:
-// either one still missing reads as "no cards here" and would bounce a deep
-// link that is about to turn out valid.
-watch(
-  [tab, memoryCardEmulator, () => streamingStore.configLoaded, currentPlatform],
-  ([current, emulator, loadedConfig, platform]) => {
-    if (loadedConfig && platform && current === "memory-cards" && !emulator) {
-      tab.value = "library";
-    }
-  },
-  { immediate: true },
-);
 
 const headLabels = computed(() => ({
   upload: t("platform.upload-roms"),
@@ -173,14 +136,6 @@ const platformStats = computed<StatRow[]>(() => {
     },
     { label: t("platform.on-disk"), value: formatBytes(p.fs_size_bytes ?? 0) },
   ];
-  // Firmware whose file is gone can't be booted, so it isn't worth a stat.
-  const usableFirmware = (p.firmware ?? []).filter((f) => !f.missing_from_fs);
-  if (usableFirmware.length) {
-    rows.push({
-      label: t("common.firmware"),
-      value: String(usableFirmware.length),
-    });
-  }
   return rows;
 });
 
@@ -317,11 +272,9 @@ async function loadForId(platformId: number) {
   await galleryRoms.fetchInitialMetadata();
   await nextTick();
   shellRef.value?.applyRestoredScroll();
-  // Refresh the platform record in the background so the Firmware
-  // and Settings tabs see the live state (firmware list, fs_size,
-  // verification flags). The cached `allPlatforms` only holds what
-  // `/platforms` returned on first load; firmware uploaded from other
-  // sessions or other surfaces would otherwise look empty here.
+  // Refresh the platform record in the background so the Settings tab sees
+  // the live state (fs_size, ...). The cached `allPlatforms` only holds what
+  // `/platforms` returned on first load.
   try {
     const { data: fresh } = await platformApi.getPlatform(platformId);
     if (fresh) {
@@ -493,7 +446,7 @@ async function onDelete() {
     </template>
   </GalleryShell>
 
-  <!-- FIRMWARE / SETTINGS — plain scroll wrapper that hosts the same
+  <!-- SETTINGS — plain scroll wrapper that hosts the same
        PlatformHead above the tab body. Whole page scrolls together so
        the user keeps the head band, the divider, and the tab content
        in one natural scroll surface. -->
@@ -522,14 +475,8 @@ async function onDelete() {
       />
       <RDivider class="r-v2-plat-tabs__divider" />
       <div v-if="currentPlatform" class="r-v2-plat-tabs__panel">
-        <FirmwareTab v-if="tab === 'firmware'" :platform="currentPlatform" />
-        <MemoryCardManager
-          v-else-if="tab === 'memory-cards' && memoryCardEmulator"
-          :emulator="memoryCardEmulator"
-          :platform-id="currentPlatform.id"
-        />
         <SettingsTab
-          v-else-if="tab === 'settings'"
+          v-if="tab === 'settings'"
           :platform="currentPlatform"
           :deleting="deleting"
           @delete="onDelete"
@@ -549,7 +496,7 @@ async function onDelete() {
 </template>
 
 <style scoped>
-/* Firmware / Settings branch — single scroll wrapper that owns the
+/* Settings branch — single scroll wrapper that owns the
    page scroll. The PlatformHead and the tab body scroll together as
    one surface, so the user gets the same natural scroll feel as the
    Library tab (where GalleryShell handles it). */
@@ -590,7 +537,7 @@ html[data-bp~="sm-and-down"] .r-v2-plat-tabs__scroll {
 }
 
 .r-v2-plat-tabs__panel {
-  /* Tab body — Firmware / Settings render their own internal layouts
+  /* Tab body — Settings renders its own internal layout
      (lists, two-column grids). The wrapper just provides breathing
      room and stops the inner content from running edge-to-edge with
      the head's icon column. */

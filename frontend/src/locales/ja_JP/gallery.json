@@ -1,8 +1,6 @@
 {
   "all-loaded": "すべてのゲームが読み込まれました",
   "filters": "フィルタ",
-  "firmware-files-count": "{count}件のファイル",
-  "firmware-selected-count": "{count}件選択中",
   "jump-to": "{letter}へジャンプ",
   "jump-to-letter": "文字へジャンプ",
   "load-more": "もっと読み込む",

@@ -8,7 +8,7 @@ classes and the template must sort each request into the right one:
     query (covers ``?ts=``, manuals ``?v=``). The URL changes when the file
     does, so a cached copy is never stale.
   * Revalidating (stable URLs across image upgrades / re-scrapes): the bundled
-    EmulatorJS/Ruffle runtimes, icons/fonts/logos, and the query-less resources
+    icons/fonts/logos, and the query-less resources
     (screenshots, RA badges, which reuse names like ``0.jpg`` and are
     overwritten in place).
   * ``no-cache`` (must always be fresh): ``index.html``, the service worker,
@@ -183,8 +183,8 @@ def _cache_control_for(config, url: str) -> str | None:
 IMMUTABLE_URLS = [
     "/assets/index-C-Cea5tF.js",
     "/assets/index-C-Cea5tF.css",
-    "/assets/EmulatorJS--ZSfrbCp.js",  # hashed vite chunk with hyphens in name
-    "/assets/emulatorjs-logotype-COnXko2R.svg",
+    "/assets/Gallery--ZSfrbCp.js",  # hashed vite chunk with hyphens in name
+    "/assets/isotipo-COnXko2R.svg",
     "/assets/inter-latin-Ckm5tF12.woff2",
     "/assets/romm/resources/roms/1/1/cover/small.png?ts=2026-01-01T00:00:00",
     "/assets/romm/resources/roms/1/1/cover/big.png?ts=1700000000",
@@ -195,9 +195,6 @@ IMMUTABLE_URLS = [
 # includes query-less resources: screenshots and RA badges reuse fixed names
 # and are overwritten in place, so they are NOT safe to freeze.
 REVALIDATING_URLS = [
-    "/assets/emulatorjs/data/loader.js",  # bundled EmulatorJS runtime
-    "/assets/emulatorjs/data/cores/snes9x-wasm.data",
-    "/assets/ruffle/ruffle.js",
     "/assets/scrappers/ss.png",
     "/assets/platforms/default.ico",
     "/assets/isotipo.png",  # non-hashed file directly under /assets

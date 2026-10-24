@@ -10,15 +10,14 @@ import { useRoute, useRouter } from "vue-router";
 import storeConfig from "@/stores/config";
 import ExcludedSection from "@/v2/components/Settings/ExcludedSection.vue";
 import FolderMappingsSection from "@/v2/components/Settings/FolderMappingsSection.vue";
-import MissingFirmwareSection from "@/v2/components/Settings/MissingFirmwareSection.vue";
 import MissingGamesSection from "@/v2/components/Settings/MissingGamesSection.vue";
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-type Tab = "mapping" | "excluded" | "missing" | "missing-firmware";
-const validTabs: Tab[] = ["mapping", "excluded", "missing", "missing-firmware"];
+type Tab = "mapping" | "excluded" | "missing";
+const validTabs: Tab[] = ["mapping", "excluded", "missing"];
 
 const tab = ref<Tab>(
   (validTabs as string[]).includes(route.query.tab as string)
@@ -64,11 +63,6 @@ const tabs = computed<RTabNavItem[]>(() => [
     id: "missing",
     label: t("settings.missing-games-tab"),
     icon: "mdi-folder-question-outline",
-  },
-  {
-    id: "missing-firmware",
-    label: t("settings.missing-firmware-tab"),
-    icon: "mdi-memory",
   },
 ]);
 
@@ -117,7 +111,6 @@ const tabModel = computed<string>({
     <FolderMappingsSection v-if="tab === 'mapping'" />
     <ExcludedSection v-else-if="tab === 'excluded'" />
     <MissingGamesSection v-else-if="tab === 'missing'" />
-    <MissingFirmwareSection v-else-if="tab === 'missing-firmware'" />
   </div>
 </template>
 

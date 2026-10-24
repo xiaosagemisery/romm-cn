@@ -2,7 +2,6 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { FirmwareSchema } from './FirmwareSchema';
 export type PlatformSchema = {
     id: number;
     slug: string;
@@ -30,7 +29,6 @@ export type PlatformSchema = {
     family_slug?: (string | null);
     url?: (string | null);
     url_logo?: (string | null);
-    firmware?: Array<FirmwareSchema>;
     created_at: string;
     updated_at: string;
     fs_size_bytes: number;
@@ -38,6 +36,5 @@ export type PlatformSchema = {
     is_identified: boolean;
     missing_from_fs: boolean;
     readonly display_name: string;
-    readonly firmware_count: number;
 };
 

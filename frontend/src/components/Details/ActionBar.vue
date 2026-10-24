@@ -4,7 +4,6 @@ import { computed, inject, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AdminMenu from "@/components/common/Game/AdminMenu.vue";
 import CopyRomDownloadLinkDialog from "@/components/common/Game/Dialog/CopyDownloadLink.vue";
-import PlayBtn from "@/components/common/Game/PlayBtn.vue";
 import { useGameAnimation } from "@/composables/useGameAnimation";
 import romApi from "@/services/api/rom";
 import storeAuth from "@/stores/auth";
@@ -95,7 +94,6 @@ async function copyDownloadLink(rom: DetailedRom) {
         </v-tooltip>
         <v-icon icon="mdi-content-copy" />
       </v-btn>
-      <PlayBtn :rom="rom" class="flex-grow-1" />
       <v-btn
         v-if="isNDSRom"
         :disabled="rom.missing_from_fs"

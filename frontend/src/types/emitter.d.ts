@@ -1,8 +1,4 @@
-import type {
-  PermissionGroupSchema,
-  SaveSchema,
-  StateSchema,
-} from "@/__generated__";
+import type { PermissionGroupSchema } from "@/__generated__";
 import type { ClientTokenSchema } from "@/services/api/client-token";
 import type { Collection, SmartCollection } from "@/stores/collections";
 import type { Platform } from "@/stores/platforms";
@@ -55,8 +51,6 @@ export type Events = {
   showDeleteRomDialog: SimpleRom[];
   showUploadRomDialog: Platform | null;
   showAddPhysicalGameDialog: Platform | null;
-  showDeleteFirmwareDialog: FirmwareSchema[];
-  addFirmwareDialog: null;
   showAddPlatformDialog: null;
   showCreateFolderMappingDialog: null | {
     fsSlug: string;
@@ -75,16 +69,6 @@ export type Events = {
   showDeleteUserDialog: User;
   // v2 permission administration. `null` opens the group form in create mode.
   showGroupFormDialog: PermissionGroupSchema | null;
-  showDeleteSavesDialog: {
-    rom: DetailedRom;
-    saves: SaveSchema[];
-  };
-  showDeleteStatesDialog: {
-    rom: DetailedRom;
-    states: StateSchema[];
-  };
-  addStatesDialog: DetailedRom;
-  addSavesDialog: DetailedRom;
   toggleDrawer: null;
   toggleDrawerRail: null;
   snackbarShow: SnackbarStatus;
@@ -95,17 +79,11 @@ export type Events = {
   };
   openFabMenu: boolean;
   filterRoms: null;
-  firmwareDrawerShow: null;
   sortBarShow: null;
   // The QR dialog only reads SimpleRom fields (name, fs_name, extension)
   // and the NDS/download helpers all accept SimpleRom, so gallery surfaces
   // (which only ever hold SimpleRom) can trigger it too.
   showQRCodeDialog: SimpleRom;
-  selectSaveDialog: DetailedRom;
-  selectStateDialog: DetailedRom;
-  saveSelected: SaveSchema;
-  openEmulatorJSCacheDialog: null;
-  stateSelected: StateSchema;
   showCreateClientTokenDialog: null;
   showRegenerateClientTokenDialog: ClientTokenSchema;
   showDeleteClientTokenDialog: ClientTokenSchema;
@@ -121,7 +99,6 @@ export type Events = {
     rom: DetailedRom;
     files: File[];
   };
-  playGame: number;
   // v2 only — generic confirmation dialog. Consumers go through
   // `useConfirm()`; the payload carries an id used to route the result
   // back via the matching `confirmResolved` event.

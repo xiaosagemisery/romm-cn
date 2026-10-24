@@ -168,10 +168,7 @@ export interface GetRomsParams {
   filterMatched?: boolean | null;
   filterFavorites?: boolean | null;
   filterDuplicates?: boolean | null;
-  filterPlayables?: boolean | null;
   filterRA?: boolean | null;
-  filterSaves?: boolean | null;
-  filterStates?: boolean | null;
   filterSoundtrack?: boolean | null;
   filterMissing?: boolean | null;
   filterPhysical?: boolean | null;
@@ -233,10 +230,7 @@ async function getRoms({
   filterMatched = null,
   filterFavorites = null,
   filterDuplicates = null,
-  filterPlayables = null,
   filterRA = null,
-  filterSaves = null,
-  filterStates = null,
   filterSoundtrack = null,
   filterMissing = null,
   filterPhysical = null,
@@ -398,12 +392,9 @@ async function getRoms({
     ...(filterMatched !== null ? { matched: filterMatched } : {}),
     ...(filterFavorites !== null ? { favorite: filterFavorites } : {}),
     ...(filterDuplicates !== null ? { duplicate: filterDuplicates } : {}),
-    ...(filterPlayables !== null ? { playable: filterPlayables } : {}),
     ...(filterMissing !== null ? { missing: filterMissing } : {}),
     ...(filterPhysical !== null ? { physical: filterPhysical } : {}),
     ...(filterRA !== null ? { has_ra: filterRA } : {}),
-    ...(filterSaves !== null ? { has_saves: filterSaves } : {}),
-    ...(filterStates !== null ? { has_states: filterStates } : {}),
     ...(filterSoundtrack !== null ? { has_soundtrack: filterSoundtrack } : {}),
     ...(filterVerified !== null ? { verified: filterVerified } : {}),
     released_days:
@@ -514,7 +505,7 @@ async function getRomSimple({
   signal?: AbortSignal;
 }) {
   // `/roms/{id}/simple` — returns `SimpleRomSchema` with no eager-loaded
-  // notes / saves / states / screenshots / collections arrays. Designed
+  // notes / collections arrays. Designed
   // for the v2 gallery card's per-card fetch path. Detail-level data is
   // pulled on demand (game details page, quick-note dialog open).
   return api.get<SimpleRom>(`/roms/${romId}/simple`, { signal });

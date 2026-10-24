@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // PlatformHead — the platform-context strip that sits above the
-// gallery / firmware / settings tab body. Composes the InfoPanel
+// gallery / settings tab body. Composes the InfoPanel
 // (icon + name + stats + provider chips + action ribbon) with the
 // RTabNav. Re-used in two render branches inside Platform.vue:
 //
@@ -8,7 +8,7 @@
 //      head scrolls naturally with the cards (and the toolbar pins
 //      below it). Matches the pre-tabs experience.
 //
-//   2. Firmware / Settings tabs — rendered inline above the tab body
+//   2. Settings tab — rendered inline above the tab body
 //      inside a plain scrollable wrapper. The head scrolls together
 //      with the tab content so the user can move freely; switching
 //      back to Library re-enters the gallery shell.

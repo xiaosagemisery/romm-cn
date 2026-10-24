@@ -38,7 +38,6 @@ const routeHierarchy = {
   [ROUTES.CONSOLE_SMART_COLLECTION]: 1,
   [ROUTES.CONSOLE_VIRTUAL_COLLECTION]: 1,
   [ROUTES.CONSOLE_ROM]: 2,
-  [ROUTES.CONSOLE_PLAY]: 3,
 };
 
 function getTransitionName(route: RouteLocationNormalized): string {
@@ -50,13 +49,6 @@ function getTransitionName(route: RouteLocationNormalized): string {
   const previousLevel = previousRoute
     ? (routeHierarchy[previousRoute as keyof typeof routeHierarchy] ?? 1)
     : 0;
-
-  if (
-    currentName === ROUTES.CONSOLE_PLAY ||
-    previousRoute === ROUTES.CONSOLE_PLAY
-  ) {
-    return currentLevel > previousLevel ? "slide-up" : "slide-down";
-  }
 
   if (currentLevel > previousLevel) return "slide-left";
   return currentLevel < previousLevel ? "slide-right" : "fade";

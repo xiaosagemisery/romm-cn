@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // GameCover — the single "game cover" art box, shared by every surface
-// that shows a rom's cover (gallery GameCard, GameDetails CoverColumn, the
-// EmulatorJS / Ruffle player heroes). It owns everything intrinsic to the
-// cover and nothing about the surrounding surface:
+// that shows a rom's cover (gallery GameCard, GameDetails CoverColumn, ...).
+// It owns everything intrinsic to the cover and nothing about the surrounding
+// surface:
 //   * cover resolution + aspect ratio + object-fit  (useCoverArt)
 //   * the <img>, the hover <video> crossfade, and the procedural
 //     placeholder when there's no cover                (CoverPlaceholder)
 //   * the alt-art "float on transparent" treatment (box3d / physical /
 //     miximage) — no grey box behind a disc / cartridge
-//   * hover spin / hover video + the launch "load" flourish (useCoverAnimation)
+//   * hover spin / hover video                      (useCoverAnimation)
 //   * the shared-element morph paint for back-navigation
 //
 // Chrome that belongs to a *surface* (gallery overlay buttons, badges,
@@ -184,12 +184,11 @@ const coverActive = computed(
   () => props.active || (props.hoverMotion && selfHover.value),
 );
 
-const { isVideoPlaying, playLoad } = useCoverAnimation({
+const { isVideoPlaying } = useCoverAnimation({
   el: imgEl,
   containerEl: rootEl,
   videoEl,
   animateCD: art.animateCD,
-  animateCartridge: art.animateCartridge,
   videoUrl: art.videoUrl,
   motionEnabled: art.motionEnabled,
   active: coverActive,
@@ -237,9 +236,6 @@ onBeforeUnmount(() => {
 });
 
 defineExpose({
-  /** Trigger the one-shot launch flourish (disc drop+spin / cartridge
-   *  slot-in). Returns its duration in ms (0 if nothing animates). */
-  playLoad,
   /** The cover box DOM node — for the forward view-transition morph. */
   el: () => rootEl.value,
   /** Resolved cover URL (for the background-art highlight). */
@@ -334,16 +330,14 @@ defineExpose({
   height: 100%;
   object-fit: cover;
   display: block;
-  /* Four motions ride this <img>, each on its own property so they never
+  /* Three motions ride this <img>, each on its own property so they never
      clobber each other: opacity crossfades to the hover video, filter +
-     scale drive the blur-up reveal on first paint, the spin owns `transform`
-     (set per-frame in useCoverAnimation), and `margin-top` is the
-     cartridge/disc slot-in slide (eased here so it composes with the spin). */
+     scale drive the blur-up reveal on first paint, and the spin owns
+     `transform` (set per-frame in useCoverAnimation). */
   transition:
     opacity 0.35s ease,
     filter 0.6s ease,
-    scale 0.65s cubic-bezier(0.22, 1, 0.36, 1),
-    margin 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    scale 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .game-cover__img--behind {
   opacity: 0;

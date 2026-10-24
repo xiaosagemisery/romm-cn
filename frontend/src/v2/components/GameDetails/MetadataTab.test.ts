@@ -36,8 +36,8 @@ function hashLabels(r: DetailedRom) {
 }
 
 describe("MetadataTab hash rows", () => {
-  // The files list and the firmware list both read SHA-1, CHD SHA-1, MD5,
-  // CRC, RA. This tab used to lead with CRC, so the two tabs disagreed.
+  // The files list reads SHA-1, CHD SHA-1, MD5, CRC, RA. This tab used to
+  // lead with CRC, so the two tabs disagreed.
   it("orders hashes the same way every other surface does", () => {
     expect(hashLabels(rom())).toEqual(["SHA-1", "MD5", "CRC", "RA"]);
   });

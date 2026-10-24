@@ -168,17 +168,10 @@ class CachedApiService {
       ...(params.filterDuplicates !== null
         ? { duplicate: params.filterDuplicates }
         : {}),
-      ...(params.filterPlayables !== null
-        ? { playable: params.filterPlayables }
-        : {}),
       ...(params.filterMissing !== null
         ? { missing: params.filterMissing }
         : {}),
       ...(params.filterRA !== null ? { has_ra: params.filterRA } : {}),
-      ...(params.filterSaves !== null ? { has_saves: params.filterSaves } : {}),
-      ...(params.filterStates !== null
-        ? { has_states: params.filterStates }
-        : {}),
       ...(params.filterVerified !== null
         ? { verified: params.filterVerified }
         : {}),

@@ -7,12 +7,6 @@ import AddRomsToCollectionDialog from "@/components/common/Collection/Dialog/Add
 import RemoveRomsFromCollectionDialog from "@/components/common/Collection/Dialog/RemoveRoms.vue";
 import LoadingDialog from "@/components/common/Dialog/LoadingDialog.vue";
 import SearchCoverDialog from "@/components/common/Dialog/SearchCover.vue";
-import DeleteSavesDialog from "@/components/common/Game/Dialog/Asset/DeleteSaves.vue";
-import DeleteStatesDialog from "@/components/common/Game/Dialog/Asset/DeleteStates.vue";
-import SelectSaveDialog from "@/components/common/Game/Dialog/Asset/SelectSave.vue";
-import SelectStateDialog from "@/components/common/Game/Dialog/Asset/SelectState.vue";
-import UploadSavesDialog from "@/components/common/Game/Dialog/Asset/UploadSaves.vue";
-import UploadStatesDialog from "@/components/common/Game/Dialog/Asset/UploadStates.vue";
 import DeleteManualDialog from "@/components/common/Game/Dialog/DeleteManual.vue";
 import DeleteRomDialog from "@/components/common/Game/Dialog/DeleteRom.vue";
 import EditRomDialog from "@/components/common/Game/Dialog/EditRom.vue";
@@ -92,10 +86,4 @@ onBeforeMount(async () => {
   <ShowQRCodeDialog />
   <NewVersionDialog />
   <TryV2Banner />
-  <UploadSavesDialog />
-  <DeleteSavesDialog />
-  <UploadStatesDialog />
-  <DeleteStatesDialog />
-  <SelectSaveDialog />
-  <SelectStateDialog />
 </template>

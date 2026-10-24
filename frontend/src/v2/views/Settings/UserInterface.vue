@@ -7,9 +7,8 @@
 //   3. Home              (toggle grid)
 //   4. Gallery           (toggle grid + boxart RSelect prefix-label +
 //                         advanced per-page boxart overrides)
-//   5. Gameplay          (launch-confirmation toggle)
-//   6. Virtual collections (RSelect prefix-label)
-//   7. UI version        (v2-only, beta — kept last)
+//   5. Virtual collections (RSelect prefix-label)
+//   6. UI version        (v2-only, beta — kept last)
 //
 // The v1 "Platforms drawer" section was removed (no equivalent in v2).
 // `useUISettings` still exposes `platformsGroupBy` for v1 — we just
@@ -63,9 +62,6 @@ const {
   enableExperimentalCache,
   boxartStyle,
   boxartStyleDetails,
-  boxartStylePlayer,
-  // Gameplay
-  confirmProtectedLaunch,
 } = useUISettings();
 
 type Theme = "dark" | "light" | "auto";
@@ -150,23 +146,12 @@ const boxartDetailsModel = computed<string>({
     boxartStyleDetails.value = value;
   },
 });
-const boxartPlayerModel = computed<string>({
-  get: () =>
-    isBoxartStyle(boxartStylePlayer.value)
-      ? boxartStylePlayer.value
-      : boxartGallery.value,
-  set: (value) => {
-    boxartStylePlayer.value = value;
-  },
-});
-
 // Changing the gallery-wide style resets the per-page styles to match,
 // so pages only diverge when the user explicitly re-picks one (#3943).
 function onBoxartStyleChange(value: unknown) {
   if (!isBoxartStyle(value)) return;
   boxartStyle.value = value;
   boxartStyleDetails.value = value;
-  boxartStylePlayer.value = value;
 }
 
 const showAdvancedBoxart = ref(false);
@@ -425,32 +410,7 @@ function onVirtualCollectionTypeChange(value: unknown) {
               {{ t("settings.boxart-style-details") }}
             </template>
           </RSelect>
-          <RSelect
-            v-model="boxartPlayerModel"
-            :items="boxartStyleItems"
-            prefix-label="stacked"
-            hide-details
-          >
-            <template #prefix-label>
-              <RIcon icon="mdi-play-box-outline" size="14" />
-              {{ t("settings.boxart-style-player") }}
-            </template>
-          </RSelect>
         </template>
-      </div>
-    </SettingsSection>
-
-    <!-- Gameplay -->
-    <SettingsSection
-      :title="t('settings.gameplay')"
-      icon="mdi-play-circle-outline"
-    >
-      <div class="r-v2-ui__toggle-grid r-v2-ui__toggle-grid--single">
-        <SettingsToggleRow
-          v-model="confirmProtectedLaunch"
-          :title="t('settings.confirm-protected-launch')"
-          :description="t('settings.confirm-protected-launch-desc')"
-        />
       </div>
     </SettingsSection>
 

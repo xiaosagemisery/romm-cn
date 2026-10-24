@@ -8,7 +8,6 @@ import { useDisplay } from "vuetify";
 import ActionBar from "@/components/Details/ActionBar.vue";
 import AdditionalContent from "@/components/Details/AdditionalContent.vue";
 import BackgroundHeader from "@/components/Details/BackgroundHeader.vue";
-import GameData from "@/components/Details/GameData.vue";
 import HowLongToBeat from "@/components/Details/HowLongToBeat.vue";
 import FileInfo from "@/components/Details/Info/FileInfo.vue";
 import GameInfo from "@/components/Details/Info/GameInfo.vue";
@@ -35,7 +34,6 @@ const router = useRouter();
 const validTabs = [
   "details",
   "media",
-  "gamedata",
   "personal",
   "timetobeat",
   "additionalcontent",
@@ -47,7 +45,6 @@ const validTabs = [
 const tab = ref<
   | "details"
   | "media"
-  | "gamedata"
   | "personal"
   | "timetobeat"
   | "additionalcontent"
@@ -58,7 +55,6 @@ const tab = ref<
     ? (route.query.tab as
         | "details"
         | "media"
-        | "gamedata"
         | "personal"
         | "timetobeat"
         | "additionalcontent"
@@ -199,7 +195,6 @@ watch(
             <v-tab value="media">
               {{ t("rom.media") }}
             </v-tab>
-            <v-tab value="gamedata">{{ t("rom.save-data") }}</v-tab>
             <v-tab value="personal">
               {{ t("rom.personal") }}
             </v-tab>
@@ -240,9 +235,6 @@ watch(
               </v-window-item>
               <v-window-item value="media">
                 <MediaTab :rom="currentRom" />
-              </v-window-item>
-              <v-window-item value="gamedata">
-                <GameData :rom="currentRom" />
               </v-window-item>
               <v-window-item value="personal">
                 <Personal :rom="currentRom" />

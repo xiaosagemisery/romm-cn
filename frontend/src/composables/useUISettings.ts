@@ -92,16 +92,6 @@ export const UI_SETTINGS_KEYS = {
     key: "settings.boxartStyleDetails",
     default: "cover_path",
   },
-  boxartStylePlayer: {
-    key: "settings.boxartStylePlayer",
-    default: "cover_path",
-  },
-
-  // Gameplay
-  confirmProtectedLaunch: {
-    key: "settings.confirmProtectedLaunch",
-    default: true,
-  },
 } as const;
 
 export type UISettingsKey = keyof typeof UI_SETTINGS_KEYS;

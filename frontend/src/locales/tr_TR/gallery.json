@@ -1,8 +1,6 @@
 {
   "all-loaded": "Tüm oyunlar yüklendi",
   "filters": "Filtreler",
-  "firmware-files-count": "{count} dosya",
-  "firmware-selected-count": "{count} seçildi",
   "jump-to": "{letter} harfine git",
   "jump-to-letter": "Harfe git",
   "load-more": "Daha fazla yükle",

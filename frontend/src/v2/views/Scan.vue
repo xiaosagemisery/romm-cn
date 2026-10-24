@@ -98,8 +98,7 @@ const {
   persistSelection,
 } = useScanProviders();
 
-// Auto-expand a platform's panel the moment it starts reporting roms. The
-// panel body only lists ROMs, so firmware alone leaves nothing to show. We
+// Auto-expand a platform's panel the moment it starts reporting roms. We
 // track by `id:hasRoms` so the watch fires only on the 0 → 1 transition,
 // not per-ROM.
 const platformsWithRomsKey = computed(() =>
@@ -192,8 +191,6 @@ const liveStats = computed(() => {
     scanStats.value.identified_roms ?? 0,
     romsScanned,
   );
-  const firmwareScanned = scanStats.value.scanned_firmware ?? 0;
-  const firmwareNew = scanStats.value.new_firmware ?? 0;
   const romsUpdated = scanStats.value.updated_roms ?? 0;
   const filesNew = scanStats.value.new_files ?? 0;
   return {
@@ -209,7 +206,6 @@ const liveStats = computed(() => {
       new: romsNew,
       identified: romsIdentified,
     },
-    firmware: { scanned: firmwareScanned, new: firmwareNew },
     files: { new: filesNew, updatedRoms: romsUpdated },
   };
 });
@@ -693,28 +689,6 @@ function stopScan() {
             </template>
           </RTooltip>
 
-          <RTooltip
-            v-if="liveStats.firmware.scanned > 0"
-            :text="
-              t('scan.firmware-scanned-with-details', {
-                n_scanned_firmware: liveStats.firmware.scanned,
-                n_new_firmware: liveStats.firmware.new,
-              })
-            "
-            location="bottom"
-          >
-            <template #activator="{ props: tipProps }">
-              <span
-                v-bind="tipProps"
-                class="r-v2-scan-live__chip r-v2-scan-live__chip--alt"
-              >
-                <RIcon icon="mdi-memory" size="14" />
-                <span class="r-v2-scan-live__chip-num">
-                  {{ liveStats.firmware.scanned }}
-                </span>
-              </span>
-            </template>
-          </RTooltip>
           <RTooltip
             v-if="liveStats.files.new > 0 || liveStats.files.updatedRoms > 0"
             :text="

@@ -1,8 +1,6 @@
 {
   "all-loaded": "Todos los juegos han sido cargados",
   "filters": "Filtros",
-  "firmware-files-count": "{count} archivos",
-  "firmware-selected-count": "{count} seleccionados",
   "jump-to": "Saltar a {letter}",
   "jump-to-letter": "Jump to letter",
   "load-more": "Cargar más",

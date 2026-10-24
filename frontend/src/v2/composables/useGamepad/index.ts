@@ -23,15 +23,10 @@
 // (arrows) use the v1 console input cadence: 350ms initial delay, 120ms
 // repeat.
 //
-// Two contexts suppress this translation:
-//   * Game running (storePlaying.playing) — the emulator reads the pad
-//     itself, so all translation is off. Otherwise B (shared by Circle /
-//     Nintendo-A in the standard mapping) would quit the game.
-//   * Controller-test screen (ACTIONS_DISABLED_PATHS) — built-in actions
-//     are muted so every button can be pressed and inspected in place.
+// On the controller-test screen (ACTIONS_DISABLED_PATHS) the built-in
+// actions are muted so every button can be pressed and inspected in place.
 import { onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import storePlaying from "@/stores/playing";
 import { useInputModality } from "@/v2/composables/useInputModality";
 import {
   closeTopEscapable,
@@ -143,8 +138,6 @@ export function useGamepad() {
   const router = useRouter();
   const route = useRoute();
 
-  const playingStore = storePlaying();
-
   function cycleSection(step: -1 | 1) {
     const currentPath = route.path;
 
@@ -219,13 +212,6 @@ export function useGamepad() {
     9: openUserMenu, //             Start / Options — open user menu
   };
 
-  // Buttons that stay live when an escapable overlay is open over a
-  // running game (the player's exit dialog): A activates, B and Back
-  // close. Everything else (LB/RB section cycling, Start user menu,
-  // per-view CustomEvent bindings) stays muted so a stray press cannot
-  // drive the app chrome behind the modal.
-  const OVERLAY_SAFE_BUTTONS = new Set([0, 1, 8]);
-
   function install() {
     if (installed) return;
     if (typeof navigator === "undefined" || !navigator.getGamepads) return;
@@ -265,16 +251,6 @@ export function useGamepad() {
       // mid-browse, or Chrome exposes it once the user moves a stick).
       if (!everSawPad) detectPadPresence();
 
-      // While a game is running (or launching) the emulator owns the pad
-      // directly. Translating presses into navigation here would, for
-      // example, make B (or Circle / Nintendo-A, which share the standard
-      // B index) quit the game. The exception is an open escapable overlay
-      // (the player's exit dialog): translation resumes so the dialog is
-      // navigable by pad, and closing it hands the pad back to the game.
-      const gameOwnsInput = playingStore.playing && !hasOpenEscapable();
-      // In that overlay-over-game state only OVERLAY_SAFE_BUTTONS (and
-      // the dpad/stick synthetic arrows) translate.
-      const overlayOverGame = playingStore.playing && !gameOwnsInput;
       // On the controller-test screen the built-in actions are muted so
       // every button can be pressed and inspected without side effects.
       const actionsDisabled = ACTIONS_DISABLED_PATHS.has(route.path);
@@ -292,7 +268,6 @@ export function useGamepad() {
         const x = pad.axes[0] ?? 0;
         const y = pad.axes[1] ?? 0;
         tickAxis(st, "x", x, t, (dir) => {
-          if (gameOwnsInput) return;
           dispatchKey(
             dir < 0
               ? { key: "ArrowLeft", code: "ArrowLeft" }
@@ -300,7 +275,6 @@ export function useGamepad() {
           );
         });
         tickAxis(st, "y", y, t, (dir) => {
-          if (gameOwnsInput) return;
           dispatchKey(
             dir < 0
               ? { key: "ArrowUp", code: "ArrowUp" }
@@ -313,8 +287,7 @@ export function useGamepad() {
         //   * BUTTON_ACTIONS → one-shot callback, fires on press edge only.
         //   * Always — emit a `gamepad:buttondown` CustomEvent so views
         //     can opt into per-button bindings without needing to touch
-        //     useGamepad (e.g. the Player view subscribes to Y to flip
-        //     the saves/states tab).
+        //     useGamepad.
         // A button can be in any combination; press-edge always emits the
         // CustomEvent regardless of built-in semantics.
         for (let i = 0; i < pad.buttons.length; i++) {
@@ -324,25 +297,19 @@ export function useGamepad() {
           const prev = (st.buttons[i] ||= { pressed: false, nextRepeatAt: 0 });
           if (button.pressed) {
             if (!prev.pressed) {
-              if (!gameOwnsInput) {
-                const suppressed =
-                  overlayOverGame && !OVERLAY_SAFE_BUTTONS.has(i);
-                if (binding) dispatchKey(binding);
-                else if (!actionsDisabled && !suppressed) action?.();
-                // Fire the CustomEvent on every press edge so views can
-                // bind to buttons we don't otherwise reserve.
-                if (!suppressed) {
-                  window.dispatchEvent(
-                    new CustomEvent("gamepad:buttondown", {
-                      detail: { index: i, name: BUTTON_NAMES[i] },
-                    }),
-                  );
-                }
-              }
+              if (binding) dispatchKey(binding);
+              else if (!actionsDisabled) action?.();
+              // Fire the CustomEvent on every press edge so views can
+              // bind to buttons we don't otherwise reserve.
+              window.dispatchEvent(
+                new CustomEvent("gamepad:buttondown", {
+                  detail: { index: i, name: BUTTON_NAMES[i] },
+                }),
+              );
               onAnyInput();
               prev.pressed = true;
               prev.nextRepeatAt = t + INITIAL_DELAY_MS;
-            } else if (!gameOwnsInput && binding && t >= prev.nextRepeatAt) {
+            } else if (binding && t >= prev.nextRepeatAt) {
               // Only synthetic-key bindings repeat while held.
               dispatchKey(binding);
               prev.nextRepeatAt = t + REPEAT_MS;
