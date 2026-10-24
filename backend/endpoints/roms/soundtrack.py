@@ -49,7 +49,7 @@ async def get_rom_soundtrack_metadata(
 ) -> list[SoundtrackTrackMetaSchema]:
     """Return compact audio metadata for every soundtrack file of a ROM."""
 
-    rom = db_rom_handler.get_rom(id)
+    rom = db_rom_handler.get_rom_visibility(id)
     if not rom:
         raise RomNotFoundInDatabaseException(id)
 
@@ -230,7 +230,7 @@ async def delete_rom_soundtrack(
 ) -> Response:
     """Delete a single soundtrack file from a ROM."""
 
-    rom = db_rom_handler.get_rom(id)
+    rom = db_rom_handler.get_rom_visibility_label(id)
     if not rom:
         raise RomNotFoundInDatabaseException(id)
 
