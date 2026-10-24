@@ -1,7 +1,11 @@
+import asyncio
 import os
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Any, Final
+from uuid import uuid4
 
 from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
@@ -65,6 +69,49 @@ def __get_async_cache() -> AsyncRedis:
 
 sync_cache = __get_sync_cache()
 async_cache = __get_async_cache()
+
+
+def __get_async_binary_cache() -> AsyncRedis:
+    """A client that leaves values as bytes, since `async_cache` decodes every
+    response as UTF-8 and a zstd frame is not."""
+    if IS_PYTEST_RUN:
+        # The fake does not decode responses, which is what this client wants.
+        return async_cache
+
+    return AsyncRedis.from_url(REDIS_URL)
+
+
+async_binary_cache = __get_async_binary_cache()
+
+
+@asynccontextmanager
+async def redis_lock(
+    key: str, *, timeout_seconds: int, poll_seconds: float = 0.1
+) -> AsyncIterator[None]:
+    """Hold `key` as a mutex across gunicorn workers, via SET NX (no Lua needed).
+
+    Raises:
+        TimeoutError: The key stayed held for `timeout_seconds`.
+    """
+    token = uuid4().hex
+    for _ in range(int(timeout_seconds / poll_seconds)):
+        if await async_cache.set(key, token, nx=True, ex=timeout_seconds):
+            break
+        await asyncio.sleep(poll_seconds)
+    else:
+        raise TimeoutError(f"Timed out waiting for lock {key}")
+    try:
+        yield
+    finally:
+        # Only the owner releases; an expired lock may belong to someone else.
+        held = await async_cache.get(key)
+        if held in (token, token.encode()):
+            await async_cache.delete(key)
+
+
+def as_text(value: bytes | str) -> str:
+    """A cached value as text, since the fake caches return bytes where Redis decodes."""
+    return value.decode() if isinstance(value, bytes) else value
 
 
 def get_job_func_name(job: Job, fallback: str = "") -> str:

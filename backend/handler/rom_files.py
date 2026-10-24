@@ -1,5 +1,3 @@
-import asyncio
-import weakref
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,6 +7,7 @@ from config.config_manager import config_manager as cm
 from handler.database import db_rom_handler
 from handler.filesystem import fs_rom_handler
 from handler.filesystem.roms_handler import RomFileKey, rom_file_key
+from handler.redis_handler import redis_lock
 from handler.scan_handler import persist_soundtrack_cover
 from logger.formatter import highlight as hl
 from logger.logger import log
@@ -19,17 +18,9 @@ ROM_LEVEL_HASH_COLUMNS = ("crc_hash", "md5_hash", "sha1_hash", "ra_hash")
 
 # A refresh lists the folder and then deletes every row the listing missed, so
 # two of them running for the same rom (parallel uploads into one folder) would
-# let the slower listing drop what the faster one just registered.
-_refresh_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = (
-    weakref.WeakValueDictionary()
-)
-
-
-def _refresh_lock(rom_id: int) -> asyncio.Lock:
-    lock = _refresh_locks.get(rom_id)
-    if lock is None:
-        lock = _refresh_locks[rom_id] = asyncio.Lock()
-    return lock
+# let the slower listing drop what the faster one just registered. The lock
+# lives in Redis because the uploads may land on different gunicorn workers.
+REFRESH_LOCK_TIMEOUT_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -59,7 +50,9 @@ async def refresh_rom_files(rom: Rom) -> RomFilesRefresh:
     Returns:
         What changed, so callers can report it.
     """
-    async with _refresh_lock(rom.id):
+    async with redis_lock(
+        f"rom_files_refresh:{rom.id}", timeout_seconds=REFRESH_LOCK_TIMEOUT_SECONDS
+    ):
         return await _refresh(rom)
 
 
