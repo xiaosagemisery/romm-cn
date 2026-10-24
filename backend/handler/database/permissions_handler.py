@@ -70,7 +70,7 @@ class DBPermissionsHandler(DBBaseHandler):
     ) -> set[int]:
         """Ids of `entity` hidden from the given user OR their group.
 
-        Cascade (a hidden platform hiding its roms/firmware) is applied at query
+        Cascade (a hidden platform hiding its roms) is applied at query
         time by the consuming handlers, not here.
         """
         principals = []

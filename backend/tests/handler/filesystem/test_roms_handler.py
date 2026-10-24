@@ -53,7 +53,6 @@ class TestFSRomsHandler:
             PLATFORMS_VERSIONS={},
             STRUCTURE_TEMPLATES={
                 "default": "{platform}/roms/{game}",
-                "firmware": "{platform}/bios",
             },
         )
 
@@ -352,7 +351,6 @@ class TestFSRomsHandler:
             PLATFORMS_VERSIONS={},
             STRUCTURE_TEMPLATES={
                 "default": "{platform}/roms/{game}",
-                "firmware": "{platform}/bios",
             },
         )
 
@@ -979,7 +977,6 @@ class TestFSRomsHandler:
                 PLATFORMS_VERSIONS={},
                 STRUCTURE_TEMPLATES={
                     "default": "{platform}/roms/{game}",
-                    "firmware": "{platform}/bios",
                 },
             )
             with pytest.MonkeyPatch.context() as m:
@@ -1003,7 +1000,6 @@ class TestFSRomsHandler:
                 PLATFORMS_VERSIONS={},
                 STRUCTURE_TEMPLATES={
                     "default": "{platform}/roms/{game}",
-                    "firmware": "{platform}/bios",
                 },
             )
             with pytest.MonkeyPatch.context() as m:
@@ -1749,7 +1745,6 @@ def sigil_config(monkeypatch):
         PLATFORMS_VERSIONS={},
         STRUCTURE_TEMPLATES={
             "default": "{platform}/roms/{game}",
-            "firmware": "{platform}/bios",
         },
     )
     monkeypatch.setattr("handler.filesystem.roms_handler.cm.get_config", lambda: cnfg)
@@ -2876,7 +2871,6 @@ class TestIncrementalRomFiles:
             PLATFORMS_VERSIONS={},
             STRUCTURE_TEMPLATES={
                 "default": "{platform}/roms/{game}",
-                "firmware": "{platform}/bios",
             },
         )
         mocker.patch(

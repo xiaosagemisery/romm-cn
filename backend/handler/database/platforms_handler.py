@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import delete, or_, select, update
-from sqlalchemy.orm import Query, QueryableAttribute, Session, load_only, selectinload
+from sqlalchemy.orm import Query, QueryableAttribute, Session, load_only
 
 from decorators.database import begin_session
 from models.platform import Platform
@@ -12,12 +12,10 @@ from models.rom import Rom
 from .base_handler import DBBaseHandler
 
 
-def with_firmware(func):
+def with_query(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        kwargs["query"] = select(Platform).options(
-            selectinload(Platform.firmware),
-        )
+        kwargs["query"] = select(Platform)
         return func(*args, **kwargs)
 
     return wrapper
@@ -25,7 +23,7 @@ def with_firmware(func):
 
 class DBPlatformsHandler(DBBaseHandler):
     @begin_session
-    @with_firmware
+    @with_query
     def add_platform(
         self,
         platform: Platform,
@@ -53,7 +51,7 @@ class DBPlatformsHandler(DBBaseHandler):
         return session.query(Platform).filter_by(id=id).one()
 
     @begin_session
-    @with_firmware
+    @with_query
     def get_platform(
         self,
         id: int,
@@ -63,7 +61,7 @@ class DBPlatformsHandler(DBBaseHandler):
         return session.scalar(query.filter_by(id=id).limit(1))
 
     @begin_session
-    @with_firmware
+    @with_query
     def get_platforms(
         self,
         updated_after: datetime | None = None,
@@ -86,7 +84,7 @@ class DBPlatformsHandler(DBBaseHandler):
         return session.scalars(query.order_by(Platform.name.asc())).unique().all()
 
     @begin_session
-    @with_firmware
+    @with_query
     def get_platform_by_fs_slug(
         self,
         fs_slug: str,
@@ -96,7 +94,7 @@ class DBPlatformsHandler(DBBaseHandler):
         return session.scalar(query.filter_by(fs_slug=fs_slug).limit(1))
 
     @begin_session
-    @with_firmware
+    @with_query
     def get_platform_by_slug(
         self,
         slug: str,

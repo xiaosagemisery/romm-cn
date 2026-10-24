@@ -57,8 +57,6 @@ _GRANT_SCOPES: dict[tuple[PermEntity, PermAction], frozenset[Scope]] = {
     (PermEntity.ROMS, PermAction.WRITE): frozenset({Scope.ROMS_WRITE}),
     (PermEntity.PLATFORMS, PermAction.READ): frozenset({Scope.PLATFORMS_READ}),
     (PermEntity.PLATFORMS, PermAction.WRITE): frozenset({Scope.PLATFORMS_WRITE}),
-    (PermEntity.FIRMWARE, PermAction.READ): frozenset({Scope.FIRMWARE_READ}),
-    (PermEntity.FIRMWARE, PermAction.WRITE): frozenset({Scope.FIRMWARE_WRITE}),
     (PermEntity.COLLECTIONS, PermAction.READ): frozenset({Scope.COLLECTIONS_READ}),
     (PermEntity.COLLECTIONS, PermAction.WRITE): frozenset({Scope.COLLECTIONS_WRITE}),
     (PermEntity.PLAYLISTS, PermAction.READ): frozenset({Scope.PLAYLISTS_READ}),
@@ -79,7 +77,6 @@ _GRANT_SCOPES: dict[tuple[PermEntity, PermAction], frozenset[Scope]] = {
 LEGACY_VIEWER_GRANTS: tuple[Grant, ...] = (
     (PermEntity.ROMS, PermAction.READ, False),
     (PermEntity.PLATFORMS, PermAction.READ, False),
-    (PermEntity.FIRMWARE, PermAction.READ, False),
     (PermEntity.COLLECTIONS, PermAction.READ, False),
     (PermEntity.COLLECTIONS, PermAction.WRITE, True),
     (PermEntity.COLLECTIONS, PermAction.DELETE, True),
@@ -95,7 +92,7 @@ LEGACY_VIEWER_GRANTS: tuple[Grant, ...] = (
 )
 
 # "Editor (legacy)" == EDIT_SCOPES: viewer + library-wide write AND delete of
-# roms/platforms/firmware. Delete is True here because today's delete endpoints
+# roms/platforms. Delete is True here because today's delete endpoints
 # gate on *_WRITE -- editors can already delete, so preserving that is required
 # to avoid silently revoking access on upgrade.
 _LEGACY_EDITOR_EXTRA: tuple[Grant, ...] = (
@@ -103,8 +100,6 @@ _LEGACY_EDITOR_EXTRA: tuple[Grant, ...] = (
     (PermEntity.ROMS, PermAction.DELETE, False),
     (PermEntity.PLATFORMS, PermAction.WRITE, False),
     (PermEntity.PLATFORMS, PermAction.DELETE, False),
-    (PermEntity.FIRMWARE, PermAction.WRITE, False),
-    (PermEntity.FIRMWARE, PermAction.DELETE, False),
 )
 
 LEGACY_EDITOR_GRANTS: tuple[Grant, ...] = LEGACY_VIEWER_GRANTS + _LEGACY_EDITOR_EXTRA

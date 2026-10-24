@@ -1,4 +1,4 @@
-"""Tests for startup-time auto-enqueue of the recompute task."""
+"""Tests for startup-time backfills and legacy scheduler cleanup."""
 
 import pytest
 import startup
@@ -13,33 +13,6 @@ def enqueue_task(mocker):
     return mocker.patch.object(startup, "enqueue_task")
 
 
-def test_enqueue_recompute_skips_when_no_missing_hashes(mocker, enqueue_task):
-    """Saves all have content_hash -> no enqueue."""
-    mocker.patch.object(
-        startup.db_save_handler, "count_saves_missing_content_hash", return_value=0
-    )
-
-    startup._enqueue_recompute_save_hashes_if_needed()
-
-    enqueue_task.assert_not_called()
-
-
-def test_enqueue_recompute_fires_when_missing_hashes_present(mocker, enqueue_task):
-    """At least one Save row has NULL content_hash -> enqueue exactly once."""
-    mocker.patch.object(
-        startup.db_save_handler, "count_saves_missing_content_hash", return_value=42
-    )
-
-    startup._enqueue_recompute_save_hashes_if_needed()
-
-    enqueue_task.assert_called_once_with(
-        "recompute_save_content_hashes",
-        job_id=startup.RECOMPUTE_SAVE_HASHES_JOB_ID,
-        # RQ settles the duplicate check and the enqueue in one round trip
-        unique=True,
-    )
-
-
 def test_enqueue_convert_webp_fires_when_not_queued(enqueue_task):
     """No in-flight bootstrap job -> enqueue the backfill exactly once."""
     startup._enqueue_convert_images_to_webp()
@@ -51,20 +24,15 @@ def test_enqueue_convert_webp_fires_when_not_queued(enqueue_task):
     )
 
 
-@pytest.mark.parametrize(
-    "job_id",
-    (startup.RECOMPUTE_SAVE_HASHES_JOB_ID, startup.CONVERT_IMAGES_TO_WEBP_JOB_ID),
-)
-def test_backfill_job_ids_are_valid_rq_ids(job_id):
+def test_backfill_job_id_is_a_valid_rq_id():
     """RQ rejects any job_id not matching [A-Za-z0-9_-]+ (ValueError in set_id),
     which the broad except here would swallow -> backfill silently never
     enqueues. A colon was the original culprit."""
-    assert JOB_ID_PATTERN.fullmatch(job_id)
+    assert JOB_ID_PATTERN.fullmatch(startup.CONVERT_IMAGES_TO_WEBP_JOB_ID)
 
 
-def test_both_backfills_name_a_registered_task():
+def test_the_backfill_names_a_registered_task():
     """The name in the payload is all the runner gets, so it has to resolve."""
-    assert get_task("recompute_save_content_hashes") is not None
     assert get_task("convert_images_to_webp") is not None
 
 
@@ -73,26 +41,9 @@ def test_both_backfills_name_a_registered_task():
 )
 def test_a_failed_backfill_enqueue_does_not_crash_startup(mocker, error):
     """An in-flight job from a previous restart, or a Redis outage, is survivable."""
-    mocker.patch.object(
-        startup.db_save_handler, "count_saves_missing_content_hash", return_value=10
-    )
     mocker.patch.object(startup, "enqueue_task", side_effect=error)
 
-    startup._enqueue_recompute_save_hashes_if_needed()
     startup._enqueue_convert_images_to_webp()
-
-
-def test_enqueue_recompute_swallows_count_error(mocker, enqueue_task):
-    """A failed COUNT query must not crash startup."""
-    mocker.patch.object(
-        startup.db_save_handler,
-        "count_saves_missing_content_hash",
-        side_effect=RuntimeError("db gone"),
-    )
-
-    startup._enqueue_recompute_save_hashes_if_needed()
-
-    enqueue_task.assert_not_called()
 
 
 class TestDropLegacySchedulerState:

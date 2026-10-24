@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate a large, prod-like RomM library for load and UI testing.
 
-Builds platforms, users, devices, firmware, roms (with per-provider fake
-metadata), rom files, tagged soundtracks, saves, states, screenshots, notes,
-play stats, collections and sync data, then bulk-inserts everything.
+Builds platforms, users, devices, roms (with per-provider fake metadata), rom
+files, tagged soundtracks, notes, per-user rom stats and collections, then
+bulk-inserts everything.
 
 Run from the backend directory:
 
@@ -43,7 +43,6 @@ from PIL import Image  # noqa: E402
 from config import RESOURCES_BASE_PATH  # noqa: E402
 from handler.metadata.moby_handler import MOBYGAMES_PLATFORM_LIST  # noqa: E402
 from handler.metadata.ss_handler import SCREENSAVER_PLATFORM_LIST  # noqa: E402
-from models.assets import Save, Screenshot, State  # noqa: E402
 from models.base import compute_file_name_parts  # noqa: E402
 from models.client_token import ClientToken  # noqa: E402
 from models.collection import (  # noqa: E402
@@ -51,11 +50,8 @@ from models.collection import (  # noqa: E402
     CollectionRom,
     SmartCollection,
 )
-from models.device import Device, SyncMode  # noqa: E402
-from models.device_save_sync import DeviceSaveSync  # noqa: E402
-from models.firmware import Firmware  # noqa: E402
+from models.device import Device  # noqa: E402
 from models.platform import Platform  # noqa: E402
-from models.play_session import PlaySession  # noqa: E402
 
 # NOTE: `roms_metadata` and `sibling_roms` are DB VIEWS, not tables: the
 # aggregated metadata and sibling links are derived from each rom's provider
@@ -71,7 +67,6 @@ from models.rom import (  # noqa: E402
     TrackMeta,
     compute_name_sort_key,
 )
-from models.sync_session import SyncSession, SyncSessionStatus  # noqa: E402
 from models.user import Role, User  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -313,22 +308,6 @@ REGIONS = ["USA", "Europe", "Japan", "World", "Asia", "Korea", "Australia", "Bra
 
 LANGUAGES = ["en", "ja", "fr", "de", "es", "it", "pt", "nl", "ko", "zh"]
 
-EMULATORS = [
-    "retroarch",
-    "mednafen",
-    "mame",
-    "snes9x",
-    "mupen64plus",
-    "pcsx2",
-    "ppsspp",
-    "dolphin",
-    "mgba",
-    "desmume",
-    "duckstation",
-    "flycast",
-    "melonds",
-]
-
 DEVICE_CLIENTS = [
     ("Web", "web", "1.0.0"),
     ("muOS", "grout", "2.3.1"),
@@ -336,9 +315,6 @@ DEVICE_CLIENTS = [
     ("Steam Deck", "emudeck", "2.1.0"),
     ("ROCKNIX", "knulli-sync", "1.4.2"),
 ]
-
-SAVE_EXTENSIONS = ["srm", "sav", "state", "mcr", "ldci"]
-STATE_EXTENSIONS = ["state", "ss0", "ss1", "auto"]
 
 # A handful of well-known slug -> rom extension maps; everything else falls
 # back to a generic pool weighted toward the platform's storage medium.
@@ -767,12 +743,6 @@ def main() -> int:
         help="Upper bound on tracks per soundtracked rom (default: 12)",
     )
     parser.add_argument(
-        "--play-sessions",
-        type=int,
-        default=20_000,
-        help="Number of play sessions (default: 20000)",
-    )
-    parser.add_argument(
         "--batch-size",
         type=int,
         default=2000,
@@ -849,18 +819,12 @@ def main() -> int:
     id_tables = {
         "platforms": Platform,
         "users": User,
-        "firmware": Firmware,
         "roms": Rom,
         "rom_files": RomFile,
-        "saves": Save,
-        "states": State,
-        "screenshots": Screenshot,
         "rom_notes": RomNote,
         "rom_user": RomUser,
         "collections": Collection,
         "smart_collections": SmartCollection,
-        "sync_sessions": SyncSession,
-        "play_sessions": PlaySession,
         "client_tokens": ClientToken,
     }
     starts = {name: 1 for name in id_tables}
@@ -875,9 +839,7 @@ def main() -> int:
     ids = Ids(starts)
 
     counts: dict[str, int] = {k: 0 for k in id_tables}
-    counts.update(
-        {"devices": 0, "collections_roms": 0, "device_save_sync": 0, "track_meta": 0}
-    )
+    counts.update({"devices": 0, "collections_roms": 0, "track_meta": 0})
     # Tracks the last standalone rom per platform so a fraction of later roms
     # can reuse its igdb_id, surfacing them as regional siblings via the view.
     sibling_seed: dict[int, dict[str, Any]] = {}
@@ -969,9 +931,6 @@ def main() -> int:
                     "mac_address": ":".join(rand_hex(rng, 1) for _ in range(6)),
                     "hostname": f"host-{rand_hex(rng, 3)}",
                     "client_device_identifier": rand_hex(rng, 8),
-                    "sync_mode": rng.choice(list(SyncMode)),
-                    "sync_enabled": True,
-                    "sync_config": None,
                     "last_seen": seen,
                     "created_at": rand_past(rng, now),
                     "updated_at": seen,
@@ -993,45 +952,16 @@ def main() -> int:
             }
         )
 
-    # ------------------------------ firmware -------------------------------
-    firmware_rows = []
-    for p in platforms:
-        for _ in range(rng.randint(0, 4)):
-            fid = ids.take("firmware")
-            fname = f"{p['slug']}_bios_{rand_hex(rng, 2)}.bin"
-            parts = compute_file_name_parts(fname)
-            firmware_rows.append(
-                {
-                    "id": fid,
-                    "platform_id": p["id"],
-                    "file_name": fname,
-                    "file_name_no_tags": parts.no_tags,
-                    "file_name_no_ext": parts.no_ext,
-                    "file_extension": parts.extension,
-                    "file_path": f"{p['slug']}/bios",
-                    "file_size_bytes": rng.randint(1024, 4 * 1024 * 1024),
-                    "crc_hash": rand_hex(rng, 4),
-                    "md5_hash": rand_hex(rng, 16),
-                    "sha1_hash": rand_hex(rng, 20),
-                    "is_verified": rng.random() < 0.7,
-                    "missing_from_fs": False,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            )
-
     if not args.dry_run:
         with sync_engine.begin() as conn:
             bulk_insert(conn, Platform, platform_rows)
             bulk_insert(conn, User, user_rows)
             bulk_insert(conn, Device, device_rows)
             bulk_insert(conn, ClientToken, token_rows)
-            bulk_insert(conn, Firmware, firmware_rows)
     counts["platforms"] = len(platform_rows)
     counts["users"] = len(user_rows)
     counts["devices"] = len(device_rows)
     counts["client_tokens"] = len(token_rows)
-    counts["firmware"] = len(firmware_rows)
 
     # -------------------------------- roms ---------------------------------
     rom_id_base = starts["roms"]
@@ -1043,8 +973,7 @@ def main() -> int:
         batch_end = min(batch_start + args.batch_size, args.roms)
         rom_rows, file_rows, ru_rows = [], [], []
         track_rows: list[dict[str, Any]] = []
-        save_rows, state_rows, shot_rows, note_rows = [], [], [], []
-        dss_rows: list[dict[str, Any]] = []
+        note_rows = []
 
         for _ in range(batch_start, batch_end):
             platform = rng.choices(platforms, weights=weights, k=1)[0]
@@ -1322,99 +1251,6 @@ def main() -> int:
                     }
                 )
 
-                # Saves / states / screenshots belong to a user who played.
-                if rng.random() < 0.35:
-                    for _ in range(rng.randint(1, 3)):
-                        sid = ids.take("saves")
-                        emu = rng.choice(EMULATORS)
-                        sname = f"{f['title']}.{rng.choice(SAVE_EXTENSIONS)}"
-                        sparts = compute_file_name_parts(sname)
-                        dev = (
-                            rng.choice(user_devices[uid]) if user_devices[uid] else None
-                        )
-                        save_rows.append(
-                            {
-                                "id": sid,
-                                "rom_id": rid,
-                                "user_id": uid,
-                                "file_name": sname,
-                                "file_name_no_tags": sparts.no_tags,
-                                "file_name_no_ext": sparts.no_ext,
-                                "file_extension": sparts.extension,
-                                "file_path": f"users/{uid}/saves/{platform['slug']}/{rid}/{emu}",
-                                "file_size_bytes": rng.randint(1024, 8 * 1024 * 1024),
-                                "emulator": emu,
-                                "slot": rng.choice(["1", "2", "3", "auto", None]),
-                                "content_hash": rand_hex(rng, 16),
-                                "origin_device_id": dev,
-                                "is_public": rng.random() < 0.1,
-                                "missing_from_fs": False,
-                                "created_at": created,
-                                "updated_at": created,
-                            }
-                        )
-                        if dev and rng.random() < 0.6:
-                            dss_rows.append(
-                                {
-                                    "device_id": dev,
-                                    "save_id": sid,
-                                    "last_synced_at": rand_past(rng, now, 10),
-                                    "is_untracked": False,
-                                    "created_at": created,
-                                    "updated_at": now,
-                                }
-                            )
-                if rng.random() < 0.30:
-                    for _ in range(rng.randint(1, 4)):
-                        stid = ids.take("states")
-                        emu = rng.choice(EMULATORS)
-                        stname = f"{f['title']}.{rng.choice(STATE_EXTENSIONS)}"
-                        stparts = compute_file_name_parts(stname)
-                        state_rows.append(
-                            {
-                                "id": stid,
-                                "rom_id": rid,
-                                "user_id": uid,
-                                "file_name": stname,
-                                "file_name_no_tags": stparts.no_tags,
-                                "file_name_no_ext": stparts.no_ext,
-                                "file_extension": stparts.extension,
-                                "file_path": f"users/{uid}/states/{platform['slug']}/{rid}/{emu}",
-                                "file_size_bytes": rng.randint(
-                                    64 * 1024, 32 * 1024 * 1024
-                                ),
-                                "emulator": emu,
-                                "is_public": rng.random() < 0.1,
-                                "missing_from_fs": False,
-                                "created_at": created,
-                                "updated_at": created,
-                            }
-                        )
-                if rng.random() < 0.40:
-                    for _ in range(rng.randint(1, 5)):
-                        scid = ids.take("screenshots")
-                        scname = f"{f['title']}-{rand_hex(rng, 3)}.png"
-                        scparts = compute_file_name_parts(scname)
-                        shot_rows.append(
-                            {
-                                "id": scid,
-                                "rom_id": rid,
-                                "user_id": uid,
-                                "file_name": scname,
-                                "file_name_no_tags": scparts.no_tags,
-                                "file_name_no_ext": scparts.no_ext,
-                                "file_extension": scparts.extension,
-                                "file_path": f"users/{uid}/screenshots/{platform['slug']}/{rid}",
-                                "file_size_bytes": rng.randint(
-                                    20 * 1024, 4 * 1024 * 1024
-                                ),
-                                "is_gallery": rng.random() < 0.5,
-                                "is_public": rng.random() < 0.2,
-                                "missing_from_fs": False,
-                                "created_at": created,
-                                "updated_at": created,
-                            }
-                        )
                 if rng.random() < 0.05:
                     nid = ids.take("rom_notes")
                     note_rows.append(
@@ -1439,21 +1275,13 @@ def main() -> int:
                 bulk_insert(conn, RomFile, file_rows)
                 bulk_insert(conn, TrackMeta, track_rows)
                 bulk_insert(conn, RomUser, ru_rows)
-                bulk_insert(conn, Save, save_rows)
-                bulk_insert(conn, State, state_rows)
-                bulk_insert(conn, Screenshot, shot_rows)
                 bulk_insert(conn, RomNote, note_rows)
-                bulk_insert(conn, DeviceSaveSync, dss_rows)
 
         counts["roms"] += len(rom_rows)
         counts["rom_files"] += len(file_rows)
         counts["track_meta"] += len(track_rows)
         counts["rom_user"] += len(ru_rows)
-        counts["saves"] += len(save_rows)
-        counts["states"] += len(state_rows)
-        counts["screenshots"] += len(shot_rows)
         counts["rom_notes"] += len(note_rows)
-        counts["device_save_sync"] += len(dss_rows)
 
         done = batch_end
         rate = done / max(time.time() - t0, 1e-6)
@@ -1517,69 +1345,14 @@ def main() -> int:
             }
         )
 
-    # --------------------------- sync sessions -----------------------------
-    sync_rows = []
-    all_device_ids = [(uid, d) for uid, ds in user_devices.items() for d in ds]
-    for _ in range(min(len(all_device_ids) * 2, 2000)):
-        uid, dev = rng.choice(all_device_ids)
-        ssid = ids.take("sync_sessions")
-        started = rand_past(rng, now, 30)
-        planned = rng.randint(0, 50)
-        completed = rng.randint(0, planned)
-        sync_rows.append(
-            {
-                "id": ssid,
-                "device_id": dev,
-                "user_id": uid,
-                "status": rng.choice(list(SyncSessionStatus)),
-                "initiated_at": started,
-                "completed_at": started + timedelta(seconds=rng.randint(1, 600)),
-                "operations_planned": planned,
-                "operations_completed": completed,
-                "operations_failed": planned - completed,
-                "error_message": None,
-                "created_at": started,
-                "updated_at": now,
-            }
-        )
-
-    # ---------------------------- play sessions ----------------------------
-    play_rows = []
-    rom_id_list = list(all_rom_ids)
-    for _ in range(args.play_sessions):
-        uid = rng.choice(user_ids)
-        dev = rng.choice(user_devices[uid]) if user_devices[uid] else None
-        psid = ids.take("play_sessions")
-        start = rand_past(rng, now, 180)
-        dur = rng.randint(60_000, 4 * 3600_000)
-        play_rows.append(
-            {
-                "id": psid,
-                "user_id": uid,
-                "device_id": dev,
-                "rom_id": rng.choice(rom_id_list),
-                "sync_session_id": None,
-                "save_slot": rng.choice(["1", "2", "auto", None]),
-                "start_time": start,
-                "end_time": start + timedelta(milliseconds=dur),
-                "duration_ms": dur,
-                "created_at": start,
-                "updated_at": start,
-            }
-        )
-
     if not args.dry_run:
         with sync_engine.begin() as conn:
             bulk_insert(conn, Collection, coll_rows)
             bulk_insert(conn, CollectionRom, coll_rom_rows)
             bulk_insert(conn, SmartCollection, smart_rows)
-            bulk_insert(conn, SyncSession, sync_rows)
-            bulk_insert(conn, PlaySession, play_rows)
     counts["collections"] = len(coll_rows)
     counts["collections_roms"] = len(coll_rom_rows)
     counts["smart_collections"] = len(smart_rows)
-    counts["sync_sessions"] = len(sync_rows)
-    counts["play_sessions"] = len(play_rows)
 
     # ------------------------------- report --------------------------------
     elapsed = time.time() - t0
@@ -1603,22 +1376,15 @@ def _wipe(conn) -> None:
     # roms_metadata and sibling_roms are views, so they are intentionally
     # absent: deleting their underlying roms clears them.
     tables = [
-        "play_sessions",
-        "device_save_sync",
-        "sync_sessions",
         "client_tokens",
         "collections_roms",
         "smart_collections",
         "collections",
         "rom_notes",
         "rom_user",
-        "screenshots",
-        "states",
-        "saves",
         "track_meta",
         "rom_files",
         "roms",
-        "firmware",
         "devices",
         "users",
         "platforms",

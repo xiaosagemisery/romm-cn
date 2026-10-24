@@ -1,7 +1,6 @@
-from pydantic import ConfigDict, Field, computed_field, field_validator
+from pydantic import ConfigDict, computed_field
 
 from .base import BaseModel, UTCDatetime
-from .firmware import FirmwareSchema
 
 
 class PlatformSchema(BaseModel):
@@ -33,7 +32,6 @@ class PlatformSchema(BaseModel):
     family_slug: str | None = None
     url: str | None = None
     url_logo: str | None = None
-    firmware: list[FirmwareSchema] = Field(default_factory=list)
     created_at: UTCDatetime
     updated_at: UTCDatetime
     fs_size_bytes: int
@@ -45,14 +43,3 @@ class PlatformSchema(BaseModel):
     @property
     def display_name(self) -> str:
         return self.custom_name or self.name
-
-    # Counts every row like `rom_count` does; callers wanting only usable
-    # BIOS filter the `firmware` list that ships alongside it.
-    @computed_field  # type: ignore
-    @property
-    def firmware_count(self) -> int:
-        return len(self.firmware)
-
-    @field_validator("firmware")
-    def sort_files(cls, v: list[FirmwareSchema]) -> list[FirmwareSchema]:
-        return sorted(v, key=lambda x: x.file_name)

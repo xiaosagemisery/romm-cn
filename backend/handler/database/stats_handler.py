@@ -8,7 +8,6 @@ from sqlalchemy.sql.selectable import Select
 
 from decorators.database import begin_session
 from endpoints.responses.stats import MetadataCoverageItem, RegionBreakdownItem
-from models.assets import Save, Screenshot, State
 from models.rom import METADATA_SOURCE_FACET_COLUMNS, Rom, RomFacets, RomFile
 
 from .base_handler import DBBaseHandler
@@ -63,27 +62,6 @@ class DBStatsHandler(DBBaseHandler):
             hidden_rom_ids,
         )
         return session.scalar(query) or 0
-
-    @begin_session
-    def get_saves_count(
-        self,
-        session: Session = None,  # type: ignore
-    ) -> int:
-        return session.scalar(select(func.count()).select_from(Save)) or 0
-
-    @begin_session
-    def get_states_count(
-        self,
-        session: Session = None,  # type: ignore
-    ) -> int:
-        return session.scalar(select(func.count()).select_from(State)) or 0
-
-    @begin_session
-    def get_screenshots_count(
-        self,
-        session: Session = None,  # type: ignore
-    ) -> int:
-        return session.scalar(select(func.count()).select_from(Screenshot)) or 0
 
     @begin_session
     def get_total_filesize(

@@ -6,7 +6,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final, NotRequired, TypedDict
+from typing import Any, Final
 
 import pydash
 import yaml
@@ -39,17 +39,13 @@ _STRUCTURE_RESERVED_ROOT: Final = "library"
 
 # Keys of `filesystem.structure` that name a layout rather than a platform.
 STRUCTURE_DEFAULT_KEY: Final = "default"
-STRUCTURE_FIRMWARE_KEY: Final = "firmware"
-RESERVED_STRUCTURE_KEYS: Final = frozenset(
-    {STRUCTURE_DEFAULT_KEY, STRUCTURE_FIRMWARE_KEY}
-)
+RESERVED_STRUCTURE_KEYS: Final = frozenset({STRUCTURE_DEFAULT_KEY})
 
 STRUCTURE_DOCS_URL: Final = (
     "https://docs.romm.app/latest/getting-started/folder-structure/"
 )
 
 DEFAULT_ROM_STRUCTURE: Final = "roms/{platform}/{game}"
-DEFAULT_FIRMWARE_STRUCTURE: Final = "bios/{platform}"
 
 
 @dataclass(frozen=True)
@@ -89,18 +85,6 @@ class StructureTemplate:
     @property
     def has_wildcard_levels(self) -> bool:
         return any(level.literal is None for level in self.levels)
-
-
-@dataclass(frozen=True)
-class FirmwareTemplate:
-    """One parsed firmware layout: literal sections around the platform folder."""
-
-    platform_dir: tuple[str, ...]
-    subdir: tuple[str, ...]
-
-    def firmware_dir(self, fs_slug: str) -> str:
-        """The folder holding the platform's firmware."""
-        return "/".join((*self.platform_dir, fs_slug, *self.subdir))
 
 
 def _template_sections(template: str) -> list[str]:
@@ -194,29 +178,6 @@ def parse_structure_template(
         levels.append(StructureLevel(literal=section if name is None else None))
 
     return StructureTemplate(platform_dir=tuple(platform_dir), levels=tuple(levels))
-
-
-def parse_firmware_template(template: str) -> FirmwareTemplate:
-    """Parse the firmware layout template into the folder it points each platform at.
-
-    Raises ``ValueError`` on an invalid template.
-    """
-    platform_dir, after = _split_at_platform(_template_sections(template), None)
-
-    for section in after:
-        name = _macro_name(section)
-        if name == STRUCTURE_GAME:
-            raise ValueError(
-                "'{game}' is not supported here: the firmware template points at a "
-                "folder, not at games"
-            )
-        if name is not None:
-            raise ValueError(
-                f"'{section}' cannot be a macro: the firmware template takes literal "
-                "folder names around '{platform}'"
-            )
-
-    return FirmwareTemplate(platform_dir=tuple(platform_dir), subdir=tuple(after))
 
 
 def parse_platform_templates(
@@ -315,11 +276,6 @@ class ExclusionType(enum.StrEnum):
     EXCLUDED_MULTI_PARTS_FILES = "EXCLUDED_MULTI_PARTS_FILES"
 
 
-class EjsControlsButton(TypedDict):
-    value: NotRequired[str]  # Keyboard key
-    value2: NotRequired[str]  # Controller button
-
-
 class MetadataMediaType(enum.StrEnum):
     BEZEL = "bezel"
     BOX2D = "box2d"
@@ -400,57 +356,6 @@ VALID_SCAN_PRIORITY_SOURCES = frozenset(
 VALID_SCAN_REGION_MODES = frozenset({"prefer_rom_tags", "prefer_config"})
 
 
-class EjsControls(TypedDict):
-    _0: dict[int, EjsControlsButton]  # button_number -> EjsControlsButton
-    _1: dict[int, EjsControlsButton]
-    _2: dict[int, EjsControlsButton]
-    _3: dict[int, EjsControlsButton]
-
-
-EjsOption = dict[str, str]  # option_name -> option_value
-
-
-class NetplayICEServer(TypedDict):
-    urls: str
-    username: NotRequired[str]
-    credential: NotRequired[str]
-
-
-class StreamingPlatformOverride(TypedDict):
-    # Names the state and card namespace, so it has no container-level default.
-    emulator: str
-    # Anything set here wins over the same key on the container.
-    label: NotRequired[str]
-    memory_card_sync: NotRequired[bool]
-
-
-class StreamingContainer(TypedDict):
-    # A container declares either one platform (the per-emulator mods) or a
-    # `platforms` map (one webstation serving many). Exactly one of the two.
-    platform: NotRequired[str]
-    # Platform slug to the emulator that serves it, or to a block of options
-    # overriding container keys for that platform, replacing platform +
-    # emulator on a container that hosts more than one.
-    platforms: NotRequired[dict[str, str | StreamingPlatformOverride]]
-    host: str
-    # Optional under `protocol: webstation`, which derives the broker host from
-    # `host` and `subfolder` when it is omitted.
-    broker_host: NotRequired[str]
-    label: str
-    library_path: NotRequired[str]
-    # Namespace for stored states/cards; defaults to label (or platform)
-    # lowercased when omitted.
-    emulator: NotRequired[str]
-    # Opt in to whole memory-card sync (broker /memory-card). When true, the
-    # legacy per-file /save-file in-game-save path is skipped for this container.
-    memory_card_sync: NotRequired[bool]
-    # Broker dialect. Omitted (or "broker") is the per-emulator mod contract;
-    # "webstation" is the LSIO webstation container's activate/exit contract.
-    protocol: NotRequired[str]
-    # URL prefix the webstation broker is served under, matching its SUBFOLDER.
-    subfolder: NotRequired[str]
-
-
 class Config:
     CONFIG_FILE_MOUNTED: bool
     CONFIG_FILE_WRITABLE: bool
@@ -469,15 +374,6 @@ class Config:
     SKIP_HASH_CALCULATION: bool
     SKIP_TITLE_ID_EXTRACTION: bool
     EMBED_SWITCH_TITLE_IDS: bool
-    EJS_DEBUG: bool
-    EJS_CACHE_LIMIT: int | None
-    EJS_DISABLE_AUTO_UNLOAD: bool
-    EJS_DISABLE_BATCH_BOOTUP: bool
-    EJS_ENABLE_AUTO_SAVE_SYNC: bool
-    EJS_NETPLAY_ENABLED: bool
-    EJS_NETPLAY_ICE_SERVERS: list[NetplayICEServer]
-    EJS_SETTINGS: dict[str, EjsOption]  # core_name -> EjsOption
-    EJS_CONTROLS: dict[str, EjsControls]  # core_name -> EjsControls
     SCAN_METADATA_PRIORITY: list[str]
     SCAN_ARTWORK_PRIORITY: list[str]
     SCAN_ARTWORK_PRIORITY_OVERRIDES: dict[str, list[str]]
@@ -487,8 +383,6 @@ class Config:
     SCAN_MEDIA: list[str]
     GAMELIST_MEDIA_THUMBNAIL: MetadataMediaType
     GAMELIST_MEDIA_IMAGE: MetadataMediaType
-    STREAMING_ENABLED: bool
-    STREAMING_CONTAINERS: list[StreamingContainer]
 
     def __init__(self, **entries):
         self.__dict__.update(entries)
@@ -505,13 +399,6 @@ class Config:
     def default_structure(self) -> StructureTemplate:
         """The library-wide ROM layout, from `filesystem.structure.default`."""
         return parse_structure_template(self.default_structure_pattern)
-
-    @functools.cached_property
-    def firmware_structure(self) -> FirmwareTemplate:
-        """The firmware layout, from `filesystem.structure.firmware`."""
-        return parse_firmware_template(
-            self._raw_template(STRUCTURE_FIRMWARE_KEY, DEFAULT_FIRMWARE_STRUCTURE)
-        )
 
     def platform_structure(self, fs_slug: str) -> tuple[StructureTemplate, ...]:
         """The ROM layout(s) for a platform, whose discovery is unioned.
@@ -744,27 +631,6 @@ class ConfigManager:
             EMBED_SWITCH_TITLE_IDS=pydash.get(
                 self._raw_config, "filesystem.embed_switch_title_ids", False
             ),
-            EJS_DEBUG=pydash.get(self._raw_config, "emulatorjs.debug", False),
-            EJS_CACHE_LIMIT=pydash.get(
-                self._raw_config, "emulatorjs.cache_limit", None
-            ),
-            EJS_DISABLE_AUTO_UNLOAD=pydash.get(
-                self._raw_config, "emulatorjs.disable_auto_unload", False
-            ),
-            EJS_DISABLE_BATCH_BOOTUP=pydash.get(
-                self._raw_config, "emulatorjs.disable_batch_bootup", False
-            ),
-            EJS_ENABLE_AUTO_SAVE_SYNC=pydash.get(
-                self._raw_config, "emulatorjs.auto_save_sync", False
-            ),
-            EJS_NETPLAY_ENABLED=pydash.get(
-                self._raw_config, "emulatorjs.netplay.enabled", False
-            ),
-            EJS_NETPLAY_ICE_SERVERS=pydash.get(
-                self._raw_config, "emulatorjs.netplay.ice_servers", []
-            ),
-            EJS_SETTINGS=pydash.get(self._raw_config, "emulatorjs.settings", {}),
-            EJS_CONTROLS=self._get_ejs_controls(),
             SCAN_METADATA_PRIORITY=pydash.get(
                 self._raw_config,
                 "scan.priority.metadata",
@@ -853,46 +719,10 @@ class ConfigManager:
             PEGASUS_AUTO_EXPORT_ON_SCAN=pydash.get(
                 self._raw_config, "scan.pegasus.export", False
             ),
-            STREAMING_ENABLED=pydash.get(self._raw_config, "streaming.enabled", False),
-            STREAMING_CONTAINERS=pydash.get(
-                self._raw_config, "streaming.containers", []
-            ),
             STRUCTURE_TEMPLATES=pydash.get(
                 self._raw_config, "filesystem.structure", {}
             ),
         )
-
-    def _get_ejs_controls(self) -> dict[str, EjsControls]:
-        """Get EJS controls with default player entries for each core"""
-        raw_controls = pydash.get(self._raw_config, "emulatorjs.controls", {})
-        controls = {}
-
-        for core, core_controls in raw_controls.items():
-            # Create EjsControls object with default empty player dictionaries
-            controls[core] = EjsControls(
-                _0=core_controls.get(0, {}),
-                _1=core_controls.get(1, {}),
-                _2=core_controls.get(2, {}),
-                _3=core_controls.get(3, {}),
-            )
-
-        return controls
-
-    def _format_ejs_controls_for_yaml(
-        self,
-    ) -> dict[str, dict[int, dict[int, EjsControlsButton]]]:
-        """Format EJS controls back to YAML structure for saving"""
-        yaml_controls = {}
-
-        for core, controls in self.config.EJS_CONTROLS.items():
-            yaml_controls[core] = {
-                0: controls["_0"],
-                1: controls["_1"],
-                2: controls["_2"],
-                3: controls["_3"],
-            }
-
-        return yaml_controls
 
     def _validated_platform_map(self, raw: Any, config_key: str) -> dict[str, str]:
         """Check a folder name to slug mapping.
@@ -923,10 +753,6 @@ class ConfigManager:
             "filesystem.roms_folder": (
                 STRUCTURE_DEFAULT_KEY,
                 lambda folder: f"{folder}/{{platform}}/{{game}}",
-            ),
-            "filesystem.firmware_folder": (
-                STRUCTURE_FIRMWARE_KEY,
-                lambda folder: f"{folder}/{{platform}}",
             ),
         }
         for key, (structure_key, to_template) in retired.items():
@@ -964,7 +790,6 @@ class ConfigManager:
             "  filesystem:\n"
             "    structure:\n"
             '      default: "{platform}/roms/{game}"\n'
-            '      firmware: "{platform}/bios"\n\n'
             f"See {STRUCTURE_DOCS_URL}."
         )
         sys.exit(3)
@@ -1021,84 +846,6 @@ class ConfigManager:
         self.config.PLATFORMS_VERSIONS = self._validated_platform_map(
             self.config.PLATFORMS_VERSIONS, "system.versions"
         )
-
-        if not isinstance(self.config.EJS_DEBUG, bool):
-            log.critical("Invalid config.yml: emulatorjs.debug must be a boolean")
-            sys.exit(3)
-
-        if not isinstance(self.config.EJS_NETPLAY_ENABLED, bool):
-            log.critical(
-                "Invalid config.yml: emulatorjs.netplay.enabled must be a boolean"
-            )
-            sys.exit(3)
-
-        if self.config.EJS_CACHE_LIMIT is not None and not isinstance(
-            self.config.EJS_CACHE_LIMIT, int
-        ):
-            log.critical(
-                "Invalid config.yml: emulatorjs.cache_limit must be an integer"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EJS_DISABLE_AUTO_UNLOAD, bool):
-            log.critical(
-                "Invalid config.yml: emulatorjs.disable_auto_unload must be a boolean"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EJS_DISABLE_BATCH_BOOTUP, bool):
-            log.critical(
-                "Invalid config.yml: emulatorjs.disable_batch_bootup must be a boolean"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EJS_ENABLE_AUTO_SAVE_SYNC, bool):
-            log.critical(
-                "Invalid config.yml: emulatorjs.auto_save_sync must be a boolean"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EJS_NETPLAY_ICE_SERVERS, list):
-            log.critical(
-                "Invalid config.yml: emulatorjs.netplay.ice_servers must be a list"
-            )
-            sys.exit(3)
-
-        if not isinstance(self.config.EJS_SETTINGS, dict):
-            log.critical("Invalid config.yml: emulatorjs.settings must be a dictionary")
-            sys.exit(3)
-        else:
-            for core, options in self.config.EJS_SETTINGS.items():
-                if not isinstance(options, dict):
-                    log.critical(
-                        f"Invalid config.yml: emulatorjs.settings.{core} must be a dictionary"
-                    )
-                    sys.exit(3)
-
-        if not isinstance(self.config.EJS_CONTROLS, dict):
-            log.critical("Invalid config.yml: emulatorjs.controls must be a dictionary")
-            sys.exit(3)
-        else:
-            for core, controls in self.config.EJS_CONTROLS.items():
-                if not isinstance(controls, dict):
-                    log.critical(
-                        f"Invalid config.yml: emulatorjs.controls.{core} must be a dictionary"
-                    )
-                    sys.exit(3)
-
-                for player, buttons in controls.items():
-                    if not isinstance(buttons, dict):
-                        log.critical(
-                            f"Invalid config.yml: emulatorjs.controls.{core}.{player} must be a dictionary"
-                        )
-                        sys.exit(3)
-
-                    for button, value in buttons.items():
-                        if not isinstance(value, dict):
-                            log.critical(
-                                f"Invalid config.yml: emulatorjs.controls.{core}.{player}.{button} must be a dictionary"
-                            )
-                            sys.exit(3)
 
         if not isinstance(self.config.SCAN_METADATA_PRIORITY, list):
             log.critical("Invalid config.yml: scan.priority.metadata must be a list")
@@ -1159,6 +906,11 @@ class ConfigManager:
             str(fs_slug).lower(): value
             for fs_slug, value in self.config.STRUCTURE_TEMPLATES.items()
         }
+        if self.config.STRUCTURE_TEMPLATES.pop("firmware", None) is not None:
+            log.warning(
+                "config.yml: filesystem.structure.firmware is no longer used and "
+                "is ignored"
+            )
         for key, value in self.config.STRUCTURE_TEMPLATES.items():
             is_str = isinstance(value, str)
             is_str_list = isinstance(value, list) and all(
@@ -1180,9 +932,7 @@ class ConfigManager:
             templates: list[str] = [value] if isinstance(value, str) else value
             for template in templates:
                 try:
-                    if key == STRUCTURE_FIRMWARE_KEY:
-                        parse_firmware_template(template)
-                    elif key == STRUCTURE_DEFAULT_KEY:
+                    if key == STRUCTURE_DEFAULT_KEY:
                         parse_structure_template(template)
                     else:
                         parse_structure_template(template, fs_slug=key)
@@ -1255,30 +1005,6 @@ class ConfigManager:
             )
             self.config.GAMELIST_MEDIA_IMAGE = MetadataMediaType.SCREENSHOT
 
-        if not isinstance(self.config.STREAMING_ENABLED, bool):
-            log.critical("Invalid config.yml: streaming.enabled must be a boolean")
-            sys.exit(3)
-
-        if not isinstance(self.config.STREAMING_CONTAINERS, list):
-            log.critical("Invalid config.yml: streaming.containers must be a list")
-            sys.exit(3)
-
-        legacy_containers = [
-            container
-            for container in self.config.STREAMING_CONTAINERS
-            if isinstance(container, dict)
-            and str(container.get("protocol", "")).strip().lower() != "webstation"
-        ]
-        if legacy_containers:
-            log.warning(
-                "config.yml has %d streaming container(s) still using the "
-                "per-emulator broker mods (no `protocol: webstation`). That "
-                "protocol is deprecated and support for it will be removed "
-                "in a future release. See https://docs.romm.app/latest/using/emulator-streaming-migration/ "
-                "to move to a webstation container.",
-                len(legacy_containers),
-            )
-
     def get_config(self) -> Config:
         try:
             with open(self.config_file, "r") as config_file:
@@ -1325,19 +1051,6 @@ class ConfigManager:
                 "platforms": self.config.PLATFORMS_BINDING,
                 "versions": self.config.PLATFORMS_VERSIONS,
             },
-            "emulatorjs": {
-                "debug": self.config.EJS_DEBUG,
-                "cache_limit": self.config.EJS_CACHE_LIMIT,
-                "disable_auto_unload": self.config.EJS_DISABLE_AUTO_UNLOAD,
-                "disable_batch_bootup": self.config.EJS_DISABLE_BATCH_BOOTUP,
-                "auto_save_sync": self.config.EJS_ENABLE_AUTO_SAVE_SYNC,
-                "netplay": {
-                    "enabled": self.config.EJS_NETPLAY_ENABLED,
-                    "ice_servers": self.config.EJS_NETPLAY_ICE_SERVERS,
-                },
-                "settings": self.config.EJS_SETTINGS,
-                "controls": self._format_ejs_controls_for_yaml(),
-            },
             "scan": {
                 "priority": {
                     "metadata": self.config.SCAN_METADATA_PRIORITY,
@@ -1364,15 +1077,6 @@ class ConfigManager:
                 },
             },
         }
-
-        # The streaming section isn't editable at runtime, but it must survive
-        # a rewrite triggered by any other setter. Only emit it when non-default
-        # so we don't add empty keys to configs that never used streaming.
-        if self.config.STREAMING_ENABLED or self.config.STREAMING_CONTAINERS:
-            self._raw_config["streaming"] = {
-                "enabled": self.config.STREAMING_ENABLED,
-                "containers": self.config.STREAMING_CONTAINERS,
-            }
 
         try:
             # Ensure the config directory exists

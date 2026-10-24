@@ -141,7 +141,7 @@ async def get_romfile_content(
     if disposition == "inline" and is_html_document_file(file.file_name):
         headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
 
-    # Serve the file directly in development mode for emulatorjs
+    # Serve the file directly in development mode
     if DEV_MODE:
         rom_path = fs_rom_handler.validate_path(file.full_path)
         # Starlette sets Content-Length and honors Range natively — inline

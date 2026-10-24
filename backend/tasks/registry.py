@@ -8,14 +8,8 @@ from rq.queue import Queue
 from config import TASK_RESULT_TTL
 from exceptions.task_exceptions import TaskNotFoundException
 from handler.redis_handler import low_prio_queue, scan_queue
-from tasks.manual.cleanup_missing_firmware import cleanup_missing_firmware_task
 from tasks.manual.cleanup_missing_roms import cleanup_missing_roms_task
-from tasks.manual.recompute_save_content_hashes import (
-    recompute_save_content_hashes_task,
-)
-from tasks.manual.sync_folder_scan import sync_folder_scan_task
 from tasks.scheduled.build_recommendations import build_recommendations_task
-from tasks.scheduled.cleanup_netplay import cleanup_netplay_task
 from tasks.scheduled.cleanup_orphaned_resources import cleanup_orphaned_resources_task
 from tasks.scheduled.cleanup_upload_tmp import cleanup_upload_tmp_task
 from tasks.scheduled.cleanup_zip_cache import cleanup_zip_cache_task
@@ -26,7 +20,6 @@ from tasks.scheduled.sync_retroachievements_progress import (
 )
 from tasks.scheduled.update_launchbox_metadata import update_launchbox_metadata_task
 from tasks.scheduled.update_switch_titledb import update_switch_titledb_task
-from tasks.sync_push_pull_task import sync_push_pull_task
 from tasks.tasks import PeriodicTask, Task, run_task_by_name
 
 # The keys are the names the API and the cron schedule address a task by, and
@@ -41,17 +34,12 @@ SCHEDULED_TASKS: Final[dict[str, PeriodicTask]] = {
     "convert_images_to_webp": convert_images_to_webp_task,
     "cleanup_zip_cache": cleanup_zip_cache_task,
     "cleanup_orphaned_resources": cleanup_orphaned_resources_task,
-    "cleanup_netplay": cleanup_netplay_task,
     "cleanup_upload_tmp": cleanup_upload_tmp_task,
     "sync_retroachievements_progress": sync_retroachievements_progress_task,
-    "sync_push_pull": sync_push_pull_task,
 }
 
 MANUAL_TASKS: Final[dict[str, Task]] = {
     "cleanup_missing_roms": cleanup_missing_roms_task,
-    "cleanup_missing_firmware": cleanup_missing_firmware_task,
-    "sync_folder_scan": sync_folder_scan_task,
-    "recompute_save_content_hashes": recompute_save_content_hashes_task,
 }
 
 

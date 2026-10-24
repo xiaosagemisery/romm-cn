@@ -297,40 +297,11 @@ SCHEDULED_BUILD_RECOMMENDATIONS_CRON: Final[str] = _get_env(
     "30 5 * * *",  # At 5:30 AM every day, after the nightly scan and metadata tasks
 )
 
-# SYNC
-SYNC_BASE_PATH: Final[str] = f"{ROMM_BASE_PATH}/sync"
-ENABLE_SYNC_FOLDER_WATCHER: Final[bool] = safe_str_to_bool(
-    _get_env("ENABLE_SYNC_FOLDER_WATCHER")
-)
-SYNC_FOLDER_SCAN_DELAY: Final[int] = safe_int(
-    _get_env("SYNC_FOLDER_SCAN_DELAY"), 2  # 2 minutes
-)
-ENABLE_SYNC_PUSH_PULL: Final[bool] = safe_str_to_bool(_get_env("ENABLE_SYNC_PUSH_PULL"))
-SYNC_PUSH_PULL_CRON: Final[str] = _get_env(
-    "SYNC_PUSH_PULL_CRON",
-    "*/30 * * * *",  # Every 30 minutes
-)
-SYNC_SSH_KEYS_PATH: Final[str] = _get_env(
-    "SYNC_SSH_KEYS_PATH", f"{SYNC_BASE_PATH}/keys"
-)
-SYNC_SSH_KNOWN_HOSTS_PATH: Final[str] = _get_env(
-    "SYNC_SSH_KNOWN_HOSTS_PATH", f"{SYNC_BASE_PATH}/known_hosts"
-)
-
-# EMULATION
-DISABLE_EMULATOR_JS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_EMULATOR_JS", "true"))
-DISABLE_RUFFLE_RS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_RUFFLE_RS", "true"))
-DISABLE_JSDOS: Final[bool] = safe_str_to_bool(_get_env("DISABLE_JSDOS", "true"))
-DISABLE_PICO8: Final[bool] = safe_str_to_bool(_get_env("DISABLE_PICO8", "true"))
-
 # FRONTEND
 KIOSK_MODE: Final[bool] = safe_str_to_bool(_get_env("KIOSK_MODE"))
 DISABLE_LOGS_VIEWER: Final[bool] = safe_str_to_bool(_get_env("DISABLE_LOGS_VIEWER"))
 
 # ASSETS
-MAX_ASSET_UPLOAD_SIZE_BYTES: Final[int] = safe_int(
-    _get_env("MAX_ASSET_UPLOAD_SIZE_BYTES"), 512 * 1024 * 1024  # 512 MiB
-)
 MAX_AUTOCLEANUP_LIMIT: Final[int] = max(
     1, safe_int(_get_env("MAX_AUTOCLEANUP_LIMIT"), 100)
 )
@@ -348,24 +319,6 @@ YOUTUBE_BASE_URL: Final[str] = _get_env(
 # TINFOIL
 TINFOIL_WELCOME_MESSAGE: Final[str] = _get_env(
     "TINFOIL_WELCOME_MESSAGE", "RomM Switch Library"
-)
-
-# EMULATOR STREAMING
-STREAMING_BROKER_SECRET: Final[str] = _get_env("STREAMING_BROKER_SECRET", "")
-STREAMING_SAVE_TIMEOUT: Final[int] = safe_int(
-    _get_env("STREAMING_SAVE_TIMEOUT"), 45
-)  # 45 seconds
-# Seconds a webstation activate may take. The broker unpacks pkg and archive
-# ROMs before it can start the emulator, so this has to outlast the slowest
-# extraction rather than just a process spawn.
-STREAMING_LAUNCH_TIMEOUT: Final[int] = safe_int(
-    _get_env("STREAMING_LAUNCH_TIMEOUT"), 600
-)  # 10 minutes
-# How many save states to keep per ROM, emulator and user. Each capture is
-# kept as its own asset rather than overwriting a slot, so the oldest are
-# pruned once this many exist. 0 disables pruning.
-STREAMING_STATE_HISTORY_LIMIT: Final[int] = safe_int(
-    _get_env("STREAMING_STATE_HISTORY_LIMIT"), 50
 )
 
 # SENTRY

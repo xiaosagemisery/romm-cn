@@ -1,6 +1,6 @@
 from typing import TypedDict
 
-from config.config_manager import EjsControls, MetadataMediaType, NetplayICEServer
+from config.config_manager import MetadataMediaType
 
 
 class ConfigResponse(TypedDict):
@@ -20,15 +20,6 @@ class ConfigResponse(TypedDict):
     PLATFORMS_BINDING: dict[str, str]
     PLATFORMS_VERSIONS: dict[str, str]
     SKIP_HASH_CALCULATION: bool
-    EJS_DEBUG: bool
-    EJS_CACHE_LIMIT: int | None
-    EJS_DISABLE_AUTO_UNLOAD: bool
-    EJS_DISABLE_BATCH_BOOTUP: bool
-    EJS_ENABLE_AUTO_SAVE_SYNC: bool
-    EJS_NETPLAY_ENABLED: bool
-    EJS_NETPLAY_ICE_SERVERS: list[NetplayICEServer]
-    EJS_SETTINGS: dict[str, dict[str, str]]
-    EJS_CONTROLS: dict[str, EjsControls]
     SCAN_METADATA_PRIORITY: list[str]
     SCAN_ARTWORK_PRIORITY: list[str]
     SCAN_ARTWORK_PRIORITY_OVERRIDES: dict[str, list[str]]

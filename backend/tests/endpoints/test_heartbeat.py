@@ -43,13 +43,6 @@ def test_heartbeat(client):
     filesystem = heartbeat["FILESYSTEM"]
     assert isinstance(filesystem["FS_PLATFORMS"], list)
 
-    assert "EMULATION" in heartbeat
-    emulation = heartbeat["EMULATION"]
-    assert isinstance(emulation["DISABLE_EMULATOR_JS"], bool)
-    assert isinstance(emulation["DISABLE_RUFFLE_RS"], bool)
-    assert isinstance(emulation["DISABLE_JSDOS"], bool)
-    assert isinstance(emulation["DISABLE_PICO8"], bool)
-
     assert "FRONTEND" in heartbeat
     frontend = heartbeat["FRONTEND"]
     assert isinstance(frontend["DISABLE_USERPASS_LOGIN"], bool)

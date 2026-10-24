@@ -10,7 +10,6 @@ from rq.utils import as_text
 
 from config import ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP, SENTRY_DSN
 from config.config_manager import config_manager as cm
-from handler.database import db_save_handler
 from handler.metadata.base_handler import (
     MAME_XML_KEY,
     METADATA_FIXTURES_DIR,
@@ -29,7 +28,6 @@ from handler.redis_handler import (
 )
 from handler.scan_jobs import drop_stale_scheduled_scans
 from logger.logger import log
-from models.firmware import FIRMWARE_FIXTURES_DIR, KNOWN_BIOS_KEY
 from tasks.registry import enqueue_task
 from utils import get_version
 from utils.cache import conditionally_set_cache
@@ -37,7 +35,6 @@ from utils.context import initialize_context
 
 tracer = trace.get_tracer(__name__)
 
-RECOMPUTE_SAVE_HASHES_JOB_ID = "recompute_save_content_hashes_bootstrap"
 CONVERT_IMAGES_TO_WEBP_JOB_ID = "convert_images_to_webp_bootstrap"
 
 
@@ -57,25 +54,6 @@ def _enqueue_backfill(task_name: str, job_id: str) -> None:
         )
     except Exception:
         log.exception(f"Failed to enqueue {task_name}; admins can run it manually")
-
-
-def _enqueue_recompute_save_hashes_if_needed() -> None:
-    """Backfill content_hash for saves uploaded before the path-resolution fix."""
-    try:
-        missing = db_save_handler.count_saves_missing_content_hash()
-    except Exception:
-        log.exception(
-            "Failed to count saves with NULL content_hash; skipping auto-enqueue "
-            "of recompute_save_content_hashes (admins can run it manually)"
-        )
-        return
-
-    if missing == 0:
-        log.debug("All saves have content_hash; skipping recompute auto-enqueue")
-        return
-
-    log.info(f"{missing} save(s) still have a NULL content_hash")
-    _enqueue_backfill("recompute_save_content_hashes", RECOMPUTE_SAVE_HASHES_JOB_ID)
 
 
 def _enqueue_convert_images_to_webp() -> None:
@@ -146,8 +124,6 @@ async def main() -> None:
         if ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP:
             _enqueue_convert_images_to_webp()
 
-        _enqueue_recompute_save_hashes_if_needed()
-
         log.info("Initializing cache with fixtures data")
         await conditionally_set_cache(
             async_cache, MAME_XML_KEY, METADATA_FIXTURES_DIR / "mame_index.json"
@@ -174,9 +150,6 @@ async def main() -> None:
             async_cache,
             PSP_SERIAL_INDEX_KEY,
             METADATA_FIXTURES_DIR / "psp_serial_index.json",
-        )
-        await conditionally_set_cache(
-            async_cache, KNOWN_BIOS_KEY, FIRMWARE_FIXTURES_DIR / "known_bios_files.json"
         )
 
         log.info("Startup tasks completed")

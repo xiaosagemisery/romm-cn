@@ -24,7 +24,6 @@ from endpoints.responses.rom import SimpleRomSchema
 from endpoints.sockets.activity import get_authenticated_user
 from exceptions.fs_exceptions import (
     FOLDER_STRUCT_MSG,
-    FirmwareNotFoundException,
     FolderStructureNotMatchException,
     RomsNotFoundException,
 )
@@ -32,12 +31,10 @@ from exceptions.socket_exceptions import ScanStoppedException
 from handler.auth.constants import Scope
 from handler.database import (
     db_collection_handler,
-    db_firmware_handler,
     db_platform_handler,
     db_rom_handler,
 )
 from handler.filesystem import (
-    fs_firmware_handler,
     fs_platform_handler,
     fs_resource_handler,
     fs_rom_handler,
@@ -66,7 +63,6 @@ from handler.scan_handler import (
     build_hashless_fs_rom,
     download_rom_resources,
     persist_soundtrack_cover,
-    scan_firmware,
     scan_platform,
     scan_rom,
 )
@@ -80,7 +76,6 @@ from handler.socket_handler import socket_handler
 from logger.formatter import BLUE, LIGHTYELLOW
 from logger.formatter import highlight as hl
 from logger.logger import log
-from models.firmware import Firmware
 from models.platform import Platform
 from models.rom import Rom, RomFile
 from tasks.tasks import update_job_meta
@@ -159,8 +154,6 @@ class ScanStats:
     scanned_roms: int = 0
     new_roms: int = 0
     identified_roms: int = 0
-    scanned_firmware: int = 0
-    new_firmware: int = 0
     updated_roms: int = 0
     new_files: int = 0
 
@@ -225,8 +218,6 @@ class ScanStats:
             "scanned_roms": self.scanned_roms,
             "new_roms": self.new_roms,
             "identified_roms": self.identified_roms,
-            "scanned_firmware": self.scanned_firmware,
-            "new_firmware": self.new_firmware,
             "updated_roms": self.updated_roms,
             "new_files": self.new_files,
         }
@@ -235,59 +226,6 @@ class ScanStats:
 def _get_socket_manager() -> socketio.AsyncRedisManager:
     """Connect to external socketio server"""
     return socketio.AsyncRedisManager(REDIS_URL, write_only=True)
-
-
-async def _identify_firmware(
-    platform: Platform,
-    fs_fw: str,
-    scan_type: ScanType,
-) -> int:
-    # Break early if the flag is set
-    if redis_client.get(STOP_SCAN_FLAG):
-        return 0
-
-    firmware = db_firmware_handler.get_firmware_by_filename(platform.id, fs_fw)
-
-    # The row is consulted before the filesystem, so an entry that could never
-    # be skipped costs no stat.
-    if firmware and not _should_hash_firmware(scan_type, firmware):
-        # The file is stat'd where it was just enumerated, never at the path the
-        # row recorded. A row whose path predates a change in the library layout
-        # is rebuilt below instead, which is what refreshes it.
-        firmware_path = fs_firmware_handler.get_firmware_fs_structure(platform.fs_slug)
-        if firmware.file_path == firmware_path:
-            file_size = await fs_firmware_handler.get_file_size(
-                f"{firmware_path}/{fs_fw}"
-            )
-            if file_size == firmware.file_size_bytes:
-                # Only written when it actually flips, keeping `updated_at`
-                # usable as an incremental signal.
-                if firmware.missing_from_fs:
-                    db_firmware_handler.update_firmware(
-                        firmware.id, {"missing_from_fs": False}
-                    )
-                return 0
-
-    scanned_firmware = await scan_firmware(
-        platform=platform,
-        file_name=fs_fw,
-        firmware=firmware,
-    )
-
-    is_verified = Firmware.verify_file_hashes(
-        platform_slug=platform.slug,
-        file_name=fs_fw,
-        file_size_bytes=scanned_firmware.file_size_bytes,
-        md5_hash=scanned_firmware.md5_hash,
-        sha1_hash=scanned_firmware.sha1_hash,
-        crc_hash=scanned_firmware.crc_hash,
-    )
-
-    scanned_firmware.missing_from_fs = False
-    scanned_firmware.is_verified = is_verified
-    db_firmware_handler.add_firmware(scanned_firmware)
-
-    return 1 if not firmware else 0
 
 
 # `files` is left out so a scan does not ship every file row of every rom.
@@ -454,29 +392,6 @@ def _should_hash_incrementally(
         scan_type in (ScanType.UPDATE, ScanType.UNMATCHED)
         and rom
         and rom.id in roms_ids
-    )
-
-
-def _should_hash_firmware(
-    scan_type: ScanType,
-    firmware: Firmware | None,
-) -> bool:
-    """Decide if a firmware file's hashes should be recalculated or not
-
-    The firmware counterpart of `_should_get_rom_files`: bytes are only re-read
-    for a new entry or a scan that asked for hashes. An entry with no stored
-    hash is treated as new.
-
-    Args:
-        scan_type (ScanType): Type of scan to be performed.
-        firmware (Firmware | None): The firmware entry already in the database.
-    """
-
-    return bool(
-        firmware is None
-        or not firmware.md5_hash
-        or (scan_type == ScanType.COMPLETE)
-        or (scan_type == ScanType.HASHES)
     )
 
 
@@ -784,7 +699,7 @@ async def _scan_selected_roms(
 
     The work is resolved from the database rather than the filesystem, so none of
     the platform-wide reconciliation `_identify_platform` does (directory
-    listings, the firmware pass, the missing-file sync, a skip-and-mark-present
+    listings, the missing-file sync, a skip-and-mark-present
     pass over every other entry) applies here.
     """
     if redis_client.get(STOP_SCAN_FLAG):
@@ -892,51 +807,18 @@ async def _identify_platform(
     if MetadataSource.GAMELIST in metadata_sources:
         await meta_gamelist_handler.populate_cache(platform)
 
-    # Scanning firmware
-    try:
-        fs_firmware = await fs_firmware_handler.get_firmware(platform.fs_slug)
-    except FirmwareNotFoundException:
-        fs_firmware = []
-
-    if len(fs_firmware) == 0:
-        log.warning(
-            f"{hl(emoji.EMOJI_WARNING, color=LIGHTYELLOW)} No firmware found for {hl(platform.custom_name or platform.name, color=BLUE)}[{hl(platform.fs_slug)}]"
-        )
-    else:
-        log.info(f"{hl(str(len(fs_firmware)))} firmware files found")
-
-    new_firmware = 0
-    for fs_fw in fs_firmware:
-        new_firmware += await _identify_firmware(
-            platform=platform,
-            fs_fw=fs_fw,
-            scan_type=scan_type,
-        )
-
-    # `new_firmware_count` is scoped to this scan: the client reports what the
-    # scan discovered, not the platform's total firmware library.
     await socket_manager.emit(
         "scan:scanning_platform",
-        {
-            **PlatformSchema.model_validate(platform).model_dump(
-                include={
-                    "id",
-                    "name",
-                    "display_name",
-                    "slug",
-                    "fs_slug",
-                    "is_identified",
-                }
-            ),
-            "new_firmware_count": new_firmware,
-        },
-    )
-
-    # This reduces the number of socket emissions
-    await scan_stats.increment(
-        socket_manager=socket_manager,
-        scanned_firmware=len(fs_firmware),
-        new_firmware=new_firmware,
+        PlatformSchema.model_validate(platform).model_dump(
+            include={
+                "id",
+                "name",
+                "display_name",
+                "slug",
+                "fs_slug",
+                "is_identified",
+            }
+        ),
     )
 
     try:
@@ -1067,14 +949,6 @@ async def _identify_platform(
                 )
             else:
                 log.warning(f" - {r.fs_name}")
-
-    missing_firmware = db_firmware_handler.mark_missing_firmware(
-        platform.id, [fw for fw in fs_firmware]
-    )
-    if len(missing_firmware) > 0:
-        log.warning(f"{hl('Missing')} firmware from filesystem:")
-        for f in missing_firmware:
-            log.warning(f" - {f}")
 
     if MetadataSource.SS in metadata_sources:
         log_ss_quota()

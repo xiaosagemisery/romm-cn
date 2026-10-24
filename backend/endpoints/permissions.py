@@ -276,9 +276,8 @@ async def add_hidden_entity(
             detail="Exactly one of user_id or group_id must be set",
         )
 
-    # Only platforms and roms are honored by the resolver (firmware is hidden via
-    # its platform cascade), so reject other entity types instead of storing a
-    # row the visibility filter would silently ignore. The id itself is a
+    # Only platforms and roms are honored by the resolver, so reject other entity
+    # types instead of storing a row the visibility filter would silently ignore. The id itself is a
     # denylist entry, so a not-yet-present id is a harmless no-op, not an error.
     if body.entity not in (PermEntity.PLATFORMS, PermEntity.ROMS):
         raise HTTPException(

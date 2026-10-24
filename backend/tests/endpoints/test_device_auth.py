@@ -1,7 +1,6 @@
 """End-to-end tests for the device authorization flow endpoints."""
 
 import json
-from datetime import datetime, timedelta, timezone
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -12,17 +11,6 @@ from handler.database import db_client_token_handler, db_device_handler
 from handler.redis_handler import sync_cache
 from models.user import User
 from utils import device_auth as df
-
-
-def _recent_times(minutes_ago_start: int = 30, duration_minutes: int = 15) -> dict:
-    """Build start/end times anchored to now() so play-session ingest accepts them."""
-    start = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago_start)
-    end = start + timedelta(minutes=duration_minutes)
-    return {
-        "start_time": start.isoformat().replace("+00:00", "Z"),
-        "end_time": end.isoformat().replace("+00:00", "Z"),
-        "duration_ms": duration_minutes * 60 * 1000,
-    }
 
 
 AUTHORIZE_PAYLOAD = {
@@ -596,117 +584,10 @@ class TestHelperFunctions:
         assert all(c in PAIR_ALPHABET for c in uc)
 
 
-class TestBoundTokenInference:
-    """After a device-auth approval, subsequent API calls with the returned
-    access_token have their device_id inferred automatically when the payload
-    omits it."""
-
-    def _run_flow(
-        self, client: TestClient, access_token: str, scopes: list[str]
-    ) -> dict:
-        init = _authorize(
-            client,
-            payload={**AUTHORIZE_PAYLOAD, "requested_scopes": scopes},
-        )
-        approve = _approve(client, access_token, init["user_code"], scopes)
-        assert approve.status_code == status.HTTP_200_OK
-        token_resp = _poll_token(client, init["device_code"])
-        assert token_resp.status_code == status.HTTP_200_OK
-        return token_resp.json()
-
-    def test_play_session_inferred_from_bound_token(
-        self, client: TestClient, access_token: str
-    ):
-        creds = self._run_flow(
-            client, access_token, ["roms.user.write", "roms.user.read"]
-        )
-
-        # POST /play-sessions without device_id — server infers from token
-        resp = client.post(
-            "/api/play-sessions",
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-            json={"sessions": [{"rom_id": 1, **_recent_times(30, 15)}]},
-        )
-        assert resp.status_code == status.HTTP_201_CREATED
-
-        # Session was attached to the bound device
-        list_resp = client.get(
-            f"/api/play-sessions?device_id={creds['device_id']}",
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-        )
-        assert list_resp.status_code == status.HTTP_200_OK
-        sessions = list_resp.json()
-        assert any(s.get("device_id") == creds["device_id"] for s in sessions)
-
-    def test_explicit_device_id_wins_over_bound(
-        self,
-        client: TestClient,
-        access_token: str,
-        admin_user: User,
-    ):
-        from models.device import Device
-
-        creds = self._run_flow(
-            client, access_token, ["roms.user.write", "roms.user.read"]
-        )
-        other = db_device_handler.add_device(
-            Device(
-                id="explicit-wins-device",
-                user_id=admin_user.id,
-                name="Second",
-            )
-        )
-
-        resp = client.post(
-            "/api/play-sessions",
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-            json={
-                "device_id": other.id,
-                "sessions": [{"rom_id": 1, **_recent_times(60, 15)}],
-            },
-        )
-        assert resp.status_code == status.HTTP_201_CREATED
-
-        list_resp = client.get(
-            f"/api/play-sessions?device_id={other.id}",
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-        )
-        assert list_resp.status_code == status.HTTP_200_OK
-        assert len(list_resp.json()) >= 1
-
-    def test_unbound_legacy_token_attaches_sessions_with_null_device(
-        self,
-        client: TestClient,
-        admin_user: User,
-    ):
-        # Simulate the legacy manual token path
-        from handler.auth import auth_handler
-        from models.client_token import ClientToken
-
-        raw = auth_handler.generate_client_token()
-        db_client_token_handler.add_token(
-            ClientToken(
-                user_id=admin_user.id,
-                name="legacy",
-                hashed_token=auth_handler.hash_client_token(raw),
-                scopes="roms.user.write roms.user.read",
-                device_id=None,
-            )
-        )
-
-        resp = client.post(
-            "/api/play-sessions",
-            headers={"Authorization": f"Bearer {raw}"},
-            json={"sessions": [{"rom_id": 1, **_recent_times(90, 15)}]},
-        )
-        # Existing behavior: device_id is None on the created session
-        assert resp.status_code == status.HTTP_201_CREATED
-
-
 class TestEndToEndHappyPath:
     """One narrative test that walks the full flow the way a real device would."""
 
-    def test_grout_pairs_ingests_play_session(
+    def test_grout_pairs_and_registers_a_device(
         self, client: TestClient, access_token: str, admin_user: User
     ):
         # --- 1. Device initiates ---
@@ -775,17 +656,7 @@ class TestEndToEndHappyPath:
         assert creds["device_id"] == approve["device_id"]
         assert creds["expires_at"] is not None
 
-        # --- 6. Device uses its bound token to ingest a play session WITHOUT
-        #        passing device_id — server infers from the bound token ---
-        ingest = client.post(
-            "/api/play-sessions",
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-            json={"sessions": [{"rom_id": 1, **_recent_times(45, 30)}]},
-        )
-        assert ingest.status_code == status.HTTP_201_CREATED
-        assert ingest.json()["created_count"] == 1
-
-        # --- 7. Listing the device via /devices shows the auto-created record
+        # --- 6. Listing the device via /devices shows the auto-created record
         #        with the right metadata from the pairing request ---
         device_resp = client.get(
             f"/api/devices/{approve['device_id']}",
@@ -799,7 +670,7 @@ class TestEndToEndHappyPath:
         assert device_body["client_device_identifier"] == "grout-e2e-001"
         assert device_body["user_id"] == admin_user.id
 
-        # --- 8. Re-running the flow with the same client_device_identifier
+        # --- 7. Re-running the flow with the same client_device_identifier
         #        yields the SAME device_id back ---
         restart = client.post(
             "/api/auth/device/init",
@@ -869,57 +740,3 @@ class TestWhoAmIForBoundToken:
         resp = client.get("/api/users/me", headers={"Authorization": f"Bearer {raw}"})
         assert resp.status_code == status.HTTP_200_OK
         assert resp.json()["current_device_id"] is None
-
-
-class TestSyncNegotiateBoundTokenInference:
-    def test_negotiate_without_device_id_uses_bound_device(
-        self, client: TestClient, access_token: str
-    ):
-        init = _authorize(
-            client,
-            payload={
-                **AUTHORIZE_PAYLOAD,
-                "requested_scopes": ["assets.read", "devices.read"],
-            },
-        )
-        _approve(
-            client,
-            access_token,
-            init["user_code"],
-            ["assets.read", "devices.read"],
-        )
-        token_resp = _poll_token(client, init["device_code"])
-        assert token_resp.status_code == status.HTTP_200_OK
-        creds = token_resp.json()
-
-        resp = client.post(
-            "/api/sync/negotiate",
-            headers={"Authorization": f"Bearer {creds['access_token']}"},
-            json={"saves": []},
-        )
-        # No device_id in payload — inferred from bound token
-        assert resp.status_code == status.HTTP_200_OK
-
-    def test_negotiate_without_bound_or_payload_device_id_is_400(
-        self, client: TestClient, admin_user: User
-    ):
-        from handler.auth import auth_handler
-        from models.client_token import ClientToken
-
-        raw = auth_handler.generate_client_token()
-        db_client_token_handler.add_token(
-            ClientToken(
-                user_id=admin_user.id,
-                name="legacy-sync",
-                hashed_token=auth_handler.hash_client_token(raw),
-                scopes="assets.read devices.read",
-                device_id=None,
-            )
-        )
-
-        resp = client.post(
-            "/api/sync/negotiate",
-            headers={"Authorization": f"Bearer {raw}"},
-            json={"saves": []},
-        )
-        assert resp.status_code == status.HTTP_400_BAD_REQUEST

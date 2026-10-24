@@ -18,26 +18,15 @@ from config.config_manager import ConfigManager
 from handler.auth import auth_handler
 from handler.auth.base_handler import ALGORITHM, oct_key
 from handler.database import (
-    db_firmware_handler,
-    db_memory_card_handler,
     db_permission_handler,
     db_platform_handler,
     db_rom_handler,
-    db_save_handler,
-    db_screenshot_handler,
-    db_state_handler,
     db_user_handler,
 )
-from models.assets import MemoryCard, MemoryCardVersion, Save, Screenshot, State
 from models.client_token import ClientToken
-from models.container_adoption import StreamingContainerAdoption
 from models.device import Device
-from models.device_save_sync import DeviceSaveSync
-from models.firmware import Firmware
 from models.platform import Platform
-from models.play_session import PlaySession
 from models.rom import Rom, RomFile
-from models.sync_session import SyncSession
 from models.user import Role, User
 
 engine = create_engine(ConfigManager.get_db_engine(), pool_pre_ping=True)
@@ -129,20 +118,10 @@ def setup_database():
 @pytest.fixture(autouse=True)
 def clear_database():
     with session.begin() as s:
-        s.query(PlaySession).delete(synchronize_session="evaluate")
         s.query(ClientToken).delete(synchronize_session="evaluate")
-        s.query(SyncSession).delete(synchronize_session="evaluate")
-        s.query(DeviceSaveSync).delete(synchronize_session="evaluate")
         s.query(Device).delete(synchronize_session="evaluate")
-        s.query(MemoryCardVersion).delete(synchronize_session="evaluate")
-        s.query(MemoryCard).delete(synchronize_session="evaluate")
-        s.query(StreamingContainerAdoption).delete(synchronize_session="evaluate")
-        s.query(Save).delete(synchronize_session="evaluate")
-        s.query(State).delete(synchronize_session="evaluate")
-        s.query(Screenshot).delete(synchronize_session="evaluate")
         s.query(RomFile).delete(synchronize_session="evaluate")
         s.query(Rom).delete(synchronize_session="evaluate")
-        s.query(Firmware).delete(synchronize_session="evaluate")
         s.query(Platform).delete(synchronize_session="evaluate")
         s.query(User).delete(synchronize_session="evaluate")
 
@@ -171,39 +150,6 @@ def platform():
 def other_platform():
     platform = Platform(name="other", slug="other_slug", fs_slug="other_slug")
     return db_platform_handler.add_platform(platform)
-
-
-@pytest.fixture
-def add_firmware():
-    """Factory for firmware rows, defaulting to a file still on disk."""
-
-    def _add(platform: Platform, file_name: str, missing: bool = False) -> Firmware:
-        return db_firmware_handler.add_firmware(
-            Firmware(
-                platform_id=platform.id,
-                file_name=file_name,
-                file_path=f"{platform.fs_slug}/bios",
-                file_size_bytes=1024,
-                crc_hash="crc",
-                md5_hash="md5",
-                sha1_hash="sha1",
-                missing_from_fs=missing,
-            )
-        )
-
-    return _add
-
-
-@pytest.fixture
-def firmware(platform: Platform, add_firmware):
-    """Firmware whose file is still on disk."""
-    return add_firmware(platform, "present.bin")
-
-
-@pytest.fixture
-def missing_firmware(platform: Platform, add_firmware):
-    """Firmware flagged by a scan as gone from the filesystem."""
-    return add_firmware(platform, "gone.bin", missing=True)
 
 
 @pytest.fixture
@@ -290,146 +236,6 @@ def multi_file_rom(admin_user: User, platform: Platform):
         )
 
     return db_rom_handler.get_rom(rom.id)
-
-
-@pytest.fixture
-def save(rom: Rom, platform: Platform, admin_user: User):
-    """Slot-bound save (the canonical device-uploaded shape).
-
-    Sync negotiation only considers saves with a non-null slot — null-slot
-    saves are treated as web-UI / archival backups. Tests that need to
-    represent an archival save should use the `archival_save` fixture.
-    """
-    save = Save(
-        rom_id=rom.id,
-        user_id=admin_user.id,
-        file_name="test_save.sav",
-        file_name_no_tags="test_save",
-        file_name_no_ext="test_save",
-        file_extension="sav",
-        emulator="test_emulator",
-        slot="autosave",
-        file_path=f"{platform.slug}/saves/test_emulator",
-        file_size_bytes=1.0,
-    )
-    return db_save_handler.add_save(save)
-
-
-@pytest.fixture
-def second_save(second_rom: Rom, platform: Platform, admin_user: User):
-    """Slot-bound save on `second_rom`, to check ROM-scoped queries exclude it."""
-    save = Save(
-        rom_id=second_rom.id,
-        user_id=admin_user.id,
-        file_name="test_save_2.sav",
-        file_name_no_tags="test_save_2",
-        file_name_no_ext="test_save_2",
-        file_extension="sav",
-        emulator="test_emulator",
-        slot="autosave",
-        file_path=f"{platform.slug}/saves/test_emulator",
-        file_size_bytes=1.0,
-    )
-    return db_save_handler.add_save(save)
-
-
-@pytest.fixture
-def archival_save(rom: Rom, platform: Platform, admin_user: User):
-    """Null-slot save representing a web-UI / archival upload.
-
-    These should never appear in negotiate plans.
-    """
-    save = Save(
-        rom_id=rom.id,
-        user_id=admin_user.id,
-        file_name="archival.sav",
-        file_name_no_tags="archival",
-        file_name_no_ext="archival",
-        file_extension="sav",
-        emulator="test_emulator",
-        slot=None,
-        file_path=f"{platform.slug}/saves/test_emulator",
-        file_size_bytes=1.0,
-    )
-    return db_save_handler.add_save(save)
-
-
-@pytest.fixture
-def state(rom: Rom, platform: Platform, admin_user: User):
-    state = State(
-        rom_id=rom.id,
-        user_id=admin_user.id,
-        file_name="test_state.state",
-        file_name_no_tags="test_state",
-        file_name_no_ext="test_state",
-        file_extension="state",
-        emulator="test_emulator",
-        file_path=f"{platform.slug}/states/test_emulator",
-        file_size_bytes=2.0,
-    )
-    return db_state_handler.add_state(state)
-
-
-@pytest.fixture
-def second_state(second_rom: Rom, platform: Platform, admin_user: User):
-    """State on `second_rom`, to check ROM-scoped queries exclude it."""
-    state = State(
-        rom_id=second_rom.id,
-        user_id=admin_user.id,
-        file_name="test_state_2.state",
-        file_name_no_tags="test_state_2",
-        file_name_no_ext="test_state_2",
-        file_extension="state",
-        emulator="test_emulator",
-        file_path=f"{platform.slug}/states/test_emulator",
-        file_size_bytes=2.0,
-    )
-    return db_state_handler.add_state(state)
-
-
-@pytest.fixture
-def screenshot(rom: Rom, platform: Platform, admin_user: User):
-    screenshot = Screenshot(
-        rom_id=rom.id,
-        user_id=admin_user.id,
-        file_name="test_screenshot.png",
-        file_name_no_tags="test_screenshot",
-        file_name_no_ext="test_screenshot",
-        file_extension="png",
-        file_path=f"{platform.slug}/screenshots",
-        file_size_bytes=3.0,
-    )
-    return db_screenshot_handler.add_screenshot(screenshot)
-
-
-@pytest.fixture
-def memory_card(admin_user: User, platform: Platform):
-    """A private PCSX2 memory card owned by the admin user, no versions yet."""
-    card = MemoryCard(
-        user_id=admin_user.id,
-        emulator="pcsx2",
-        platform_id=platform.id,
-        name="test_card",
-        slot=1,
-        is_public=False,
-    )
-    return db_memory_card_handler.add_card(card)
-
-
-@pytest.fixture
-def memory_card_version(memory_card: MemoryCard, platform: Platform):
-    """A single snapshot attached to the `memory_card` fixture."""
-    version = MemoryCardVersion(
-        memory_card_id=memory_card.id,
-        file_name="test_card.zip",
-        file_name_no_tags="test_card",
-        file_name_no_ext="test_card",
-        file_extension="zip",
-        file_path=f"{platform.slug}/memory_cards/pcsx2",
-        file_size_bytes=4.0,
-        content_hash="0123456789abcdef0123456789abcdef",
-    )
-    return db_memory_card_handler.add_version(version)
 
 
 @functools.cache

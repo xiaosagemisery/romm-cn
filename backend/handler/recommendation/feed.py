@@ -28,10 +28,6 @@ from utils.datetime import to_utc
 NEUTRAL_RATING: Final = 5.5
 MAX_RATING: Final = 10.0
 
-# Playtime saturates: the difference between 1h and 10h says a lot, the
-# difference between 100h and 200h says almost nothing.
-PLAYTIME_SATURATION_HOURS: Final = 20.0
-
 # Taste drifts. A game played last week should steer the feed more than one
 # finished two years ago, without the old one falling off entirely.
 RECENCY_HALFLIFE_DAYS: Final = 60.0
@@ -90,12 +86,6 @@ def seed_affinity(row: UserAffinityRow, *, now: datetime | None = None) -> float
     the feed learn "not this kind of thing".
     """
     signals: list[float] = []
-
-    if row.playtime_ms > 0:
-        hours = row.playtime_ms / 3_600_000
-        signals.append(
-            min(1.0, math.log1p(hours) / math.log1p(PLAYTIME_SATURATION_HOURS))
-        )
 
     if row.rating:
         # Maps 10 -> +1.0 and 1 -> -1.0, crossing zero at the scale midpoint.

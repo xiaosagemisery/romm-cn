@@ -24,7 +24,6 @@ def affinity_row(**overrides) -> UserAffinityRow:
         "last_played": NOW,
         "now_playing": False,
         "hidden": False,
-        "playtime_ms": 0,
     }
     return UserAffinityRow(**{**defaults, **overrides})
 
@@ -47,17 +46,6 @@ def test_negative_seeds_are_damped_relative_to_positive_ones():
     disliked = seed_affinity(affinity_row(rating=1), now=NOW)
 
     assert abs(disliked) < abs(liked)
-
-
-def test_playtime_increases_affinity_with_diminishing_returns():
-    hour = 3_600_000
-    short = seed_affinity(affinity_row(playtime_ms=hour), now=NOW)
-    medium = seed_affinity(affinity_row(playtime_ms=10 * hour), now=NOW)
-    marathon = seed_affinity(affinity_row(playtime_ms=200 * hour), now=NOW)
-
-    assert short < medium <= marathon
-    # Saturation: 20h to 200h must matter far less than 1h to 10h.
-    assert (marathon - medium) < (medium - short)
 
 
 def test_completion_status_outweighs_merely_starting_a_game():

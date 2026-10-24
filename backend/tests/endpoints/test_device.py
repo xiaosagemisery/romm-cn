@@ -112,7 +112,6 @@ class TestDeviceEndpoints:
                 "ip_address": "192.168.1.100",
                 "mac_address": "AA:BB:CC:DD:EE:FF",
                 "hostname": "my-odin3",
-                "sync_enabled": False,
             },
             headers={"Authorization": f"Bearer {access_token}"},
         )
@@ -126,7 +125,6 @@ class TestDeviceEndpoints:
         assert data["ip_address"] == "192.168.1.100"
         assert data["mac_address"] == "AA:BB:CC:DD:EE:FF"
         assert data["hostname"] == "my-odin3"
-        assert data["sync_enabled"] is False
 
     def test_delete_device(self, client, access_token: str, admin_user: User):
         device = db_device_handler.add_device(
@@ -375,58 +373,6 @@ class TestDeviceDuplicateHandling:
         assert data["device_id"] == existing.id
         assert data["name"] == "Existing Device"
 
-    def test_allow_existing_with_reset_syncs(
-        self, client, access_token: str, admin_user: User, rom
-    ):
-        from handler.database import db_device_save_sync_handler, db_save_handler
-        from models.assets import Save
-
-        existing = db_device_handler.add_device(
-            Device(
-                id="reset-syncs-device",
-                user_id=admin_user.id,
-                name="Device With Syncs",
-                mac_address="77:88:99:AA:BB:CC",
-            )
-        )
-
-        save = db_save_handler.add_save(
-            Save(
-                file_name="test.sav",
-                file_name_no_tags="test",
-                file_name_no_ext="test",
-                file_extension="sav",
-                file_path="/saves",
-                file_size_bytes=100,
-                rom_id=rom.id,
-                user_id=admin_user.id,
-            )
-        )
-        db_device_save_sync_handler.upsert_sync(device_id=existing.id, save_id=save.id)
-
-        sync_before = db_device_save_sync_handler.get_sync(
-            device_id=existing.id, save_id=save.id
-        )
-        assert sync_before is not None
-
-        response = client.post(
-            "/api/devices",
-            json={
-                "mac_address": "77:88:99:AA:BB:CC",
-                "allow_existing": True,
-                "reset_syncs": True,
-            },
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json()["device_id"] == existing.id
-
-        sync_after = db_device_save_sync_handler.get_sync(
-            device_id=existing.id, save_id=save.id
-        )
-        assert sync_after is None
-
     def test_allow_duplicate_creates_new_device(
         self, client, access_token: str, admin_user: User
     ):
@@ -492,82 +438,3 @@ class TestDeviceDuplicateHandling:
         )
 
         assert response.status_code == status.HTTP_201_CREATED
-
-
-class TestSyncConfigMasking:
-    def test_ssh_credentials_masked_in_response(
-        self, client, access_token: str, admin_user: User
-    ):
-        db_device_handler.add_device(
-            Device(
-                id="mask-dev-1",
-                user_id=admin_user.id,
-                name="SSH Device",
-                sync_config={
-                    "ssh_host": "192.168.1.100",
-                    "ssh_port": 22,
-                    "ssh_username": "retro",
-                    "ssh_password": "supersecret123",
-                    "ssh_key_path": "/home/retro/.ssh/id_rsa",
-                    "save_directories": [
-                        {"platform_slug": "gba", "path": "/saves/gba"}
-                    ],
-                },
-            )
-        )
-
-        response = client.get(
-            "/api/devices/mask-dev-1",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        config = response.json()["sync_config"]
-        assert config["ssh_host"] == "192.168.1.100"
-        assert config["ssh_port"] == 22
-        assert config["ssh_username"] == "retro"
-        assert config["ssh_password"] == "********"
-        assert config["ssh_key_path"] == "********"
-        assert config["save_directories"] == [
-            {"platform_slug": "gba", "path": "/saves/gba"}
-        ]
-
-    def test_null_sync_config_passes_through(
-        self, client, access_token: str, admin_user: User
-    ):
-        db_device_handler.add_device(
-            Device(
-                id="mask-dev-2",
-                user_id=admin_user.id,
-                name="No Config Device",
-            )
-        )
-
-        response = client.get(
-            "/api/devices/mask-dev-2",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json()["sync_config"] is None
-
-    def test_sync_config_without_sensitive_fields(
-        self, client, access_token: str, admin_user: User
-    ):
-        db_device_handler.add_device(
-            Device(
-                id="mask-dev-3",
-                user_id=admin_user.id,
-                sync_config={"ssh_host": "10.0.0.1", "ssh_port": 2222},
-            )
-        )
-
-        response = client.get(
-            "/api/devices/mask-dev-3",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        config = response.json()["sync_config"]
-        assert config["ssh_host"] == "10.0.0.1"
-        assert config["ssh_port"] == 2222

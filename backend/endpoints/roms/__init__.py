@@ -62,7 +62,6 @@ from handler.database import (
     db_collection_handler,
     db_platform_handler,
     db_rom_handler,
-    db_save_handler,
 )
 from handler.database.base_handler import sync_session
 from handler.filesystem import fs_resource_handler, fs_rom_handler
@@ -516,10 +515,6 @@ def get_roms(
             description="Whether the rom has a last played value for the current user."
         ),
     ] = None,
-    playable: Annotated[
-        bool | None,
-        Query(description="Whether the rom is playable from the browser."),
-    ] = None,
     missing: Annotated[
         bool | None,
         Query(description="Whether the rom is missing from the filesystem."),
@@ -531,14 +526,6 @@ def get_roms(
     has_ra: Annotated[
         bool | None,
         Query(description="Whether the rom has RetroAchievements data."),
-    ] = None,
-    has_saves: Annotated[
-        bool | None,
-        Query(description="Whether the rom has saves for the current user."),
-    ] = None,
-    has_states: Annotated[
-        bool | None,
-        Query(description="Whether the rom has save states for the current user."),
     ] = None,
     verified: Annotated[
         bool | None,
@@ -845,10 +832,7 @@ def get_roms(
         favorite=favorite,
         duplicate=duplicate,
         last_played=last_played,
-        playable=playable,
         has_ra=has_ra,
-        has_saves=has_saves,
-        has_states=has_states,
         missing=missing,
         physical=physical,
         verified=verified,
@@ -934,10 +918,7 @@ def get_roms(
         or favorite is not None
         or duplicate is not None
         or last_played is not None
-        or playable is not None
         or has_ra is not None
-        or has_saves is not None
-        or has_states is not None
         or missing is not None
         or physical is not None
         or verified is not None
@@ -1040,13 +1021,8 @@ def get_roms(
             # Continue-playing rail
             screenshot_by_rom: dict[int, str | None] = {}
             if last_played:
-                latest_saves = db_save_handler.get_latest_saves_for_roms(
-                    user_id=request.user.id, rom_ids=rom_ids, session=session
-                )
                 for item in items:
-                    screenshot_by_rom[item.id] = continue_playing_screenshot(
-                        item, latest_saves.get(item.id)
-                    )
+                    screenshot_by_rom[item.id] = continue_playing_screenshot(item)
 
             return [
                 SimpleRomSchema.from_orm_with_request(
@@ -1471,7 +1447,7 @@ def get_rom_simple(
     id: Annotated[int, PathVar(description="Rom internal id.", ge=1)],
 ) -> SimpleRomSchema:
     """Retrieve a rom by ID with the lightweight schema — no eager-loaded
-    `user_saves` / `user_states` / `user_screenshots` / `user_collections` /
+    `user_collections` /
     `all_user_notes` arrays. Designed for the v2 gallery card which only
     needs the indicator flags (`has_notes`, `ra_id`, status, etc.) already
     present on `SimpleRomSchema`. The full `DetailedRomSchema` is only
@@ -1584,7 +1560,7 @@ async def head_rom_content(
             detail=f"No files found for ROM {id}",
         )
 
-    # Serve the file directly in development mode for emulatorjs
+    # Serve the file directly in development mode
     if DEV_MODE:
         if len(files) == 1:
             file = files[0]
@@ -1701,7 +1677,7 @@ async def get_rom_content(
 
     m3u_files = playlist_files(files)
 
-    # Serve the file directly in development mode for emulatorjs
+    # Serve the file directly in development mode
     if DEV_MODE:
         if len(files) == 1:
             file = files[0]
@@ -2271,7 +2247,9 @@ async def update_rom(
             raise HTTPException(status_code=400, detail=str(e)) from e
 
     name_value = (
-        form_data.name if "name" in provided_fields else cleaned_data.get("name", rom.name)
+        form_data.name
+        if "name" in provided_fields
+        else cleaned_data.get("name", rom.name)
     )
     summary_value = (
         form_data.summary

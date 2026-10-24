@@ -5,7 +5,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from decorators.database import begin_session
-from models.device import Device, SyncMode
+from models.device import Device
 from utils.datetime import to_utc
 
 from .base_handler import DBBaseHandler
@@ -103,15 +103,6 @@ class DBDevicesHandler(DBBaseHandler):
         session: Session = None,  # type: ignore
     ) -> Sequence[Device]:
         return session.scalars(select(Device).filter_by(user_id=user_id)).all()
-
-    @begin_session
-    def get_all_devices_by_sync_mode(
-        self,
-        sync_mode: SyncMode,
-        session: Session = None,  # type: ignore
-    ) -> Sequence[Device]:
-        """Get all devices with a specific sync mode (across all users)."""
-        return session.scalars(select(Device).filter_by(sync_mode=sync_mode)).all()
 
     @begin_session
     def update_device(

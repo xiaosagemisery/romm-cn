@@ -11,8 +11,6 @@ from config.config_manager import config_manager as cm
 from endpoints.responses.rom import SimpleRomSchema
 from handler.database import db_platform_handler, db_rom_handler
 from handler.filesystem import (
-    fs_asset_handler,
-    fs_firmware_handler,
     fs_resource_handler,
     fs_rom_handler,
 )
@@ -72,11 +70,8 @@ from handler.metadata.steam_handler import STEAM_PLATFORMS, SteamRom
 from logger.formatter import BLUE, LIGHTYELLOW
 from logger.formatter import highlight as hl
 from logger.logger import log
-from models.assets import MemoryCardVersion, Save, Screenshot, State
-from models.firmware import Firmware
 from models.platform import Platform
 from models.rom import Rom, RomFile, RomFileCategory, RomIdentity
-from models.user import User
 from utils import emoji
 from utils.audio_tags import persist_embedded_cover, remove_persisted_cover
 from utils.filesystem import sanitize_filename
@@ -366,40 +361,6 @@ async def scan_platform(
 
     platform_attrs["missing_from_fs"] = False
     return Platform(**platform_attrs)
-
-
-async def scan_firmware(
-    platform: Platform,
-    file_name: str,
-    firmware: Firmware | None = None,
-) -> Firmware:
-    firmware_path = fs_firmware_handler.get_firmware_fs_structure(platform.fs_slug)
-
-    # Set default properties
-    firmware_attrs = {
-        "id": firmware.id if firmware else None,
-        "platform_id": platform.id,
-    }
-
-    file_path = f"{firmware_path}/{file_name}"
-    file_size = await fs_firmware_handler.get_file_size(file_path)
-
-    firmware_attrs.update(
-        {
-            "file_path": firmware_path,
-            "file_name": file_name,
-            "file_size_bytes": file_size,
-        }
-    )
-
-    file_hashes = await fs_firmware_handler.calculate_file_hashes(
-        firmware_path=firmware_path,
-        file_name=file_name,
-    )
-
-    firmware_attrs.update(**file_hashes)
-
-    return Firmware(**firmware_attrs)
 
 
 async def resolve_launchbox_rom(
@@ -1665,84 +1626,3 @@ async def download_rom_resources(
             badge_path = ach.get("badge_path", None)
             if badge_url and badge_path:
                 await fs_resource_handler.store_ra_badge(badge_url, badge_path)
-
-
-async def _scan_asset(file_name: str, asset_path: str, should_hash: bool = False):
-    file_path = f"{asset_path}/{file_name}"
-    file_size = await fs_asset_handler.get_file_size(file_path)
-
-    result = {
-        "file_path": asset_path,
-        "file_name": file_name,
-        "file_size_bytes": file_size,
-    }
-
-    if should_hash:
-        result["content_hash"] = await fs_asset_handler.compute_content_hash(file_path)
-
-    return result
-
-
-async def scan_save(
-    file_name: str,
-    user: User,
-    platform_fs_slug: str,
-    rom_id: int,
-    emulator: str | None = None,
-) -> Save:
-    saves_path = fs_asset_handler.build_saves_file_path(
-        user=user, platform_fs_slug=platform_fs_slug, rom_id=rom_id, emulator=emulator
-    )
-    scanned_asset = await _scan_asset(file_name, saves_path, should_hash=True)
-    return Save(**scanned_asset)
-
-
-async def scan_state(
-    file_name: str,
-    user: User,
-    platform_fs_slug: str,
-    rom_id: int,
-    emulator: str | None = None,
-) -> State:
-    states_path = fs_asset_handler.build_states_file_path(
-        user=user, platform_fs_slug=platform_fs_slug, rom_id=rom_id, emulator=emulator
-    )
-    scanned_asset = await _scan_asset(file_name, states_path)
-    return State(**scanned_asset)
-
-
-async def scan_memory_card_version(
-    file_name: str,
-    user: User,
-    emulator: str,
-    card_id: int,
-    content_hash: str | None = None,
-) -> MemoryCardVersion:
-    """Scan a card archive that is already on disk.
-
-    `content_hash` skips the re-read: a caller that hashed the same bytes in
-    memory has the answer already, and a card archive runs to hundreds of
-    megabytes.
-    """
-    cards_path = fs_asset_handler.build_memory_cards_file_path(
-        user=user, emulator=emulator, card_id=card_id
-    )
-    scanned_asset = await _scan_asset(
-        file_name, cards_path, should_hash=content_hash is None
-    )
-    if content_hash is not None:
-        scanned_asset["content_hash"] = content_hash
-    return MemoryCardVersion(**scanned_asset, memory_card_id=card_id)
-
-
-async def scan_screenshot(
-    file_name: str,
-    user: User,
-    platform_fs_slug: str,
-    rom_id: int,
-) -> Screenshot:
-    screenshots_path = fs_asset_handler.build_screenshots_file_path(
-        user=user, platform_fs_slug=platform_fs_slug, rom_id=rom_id
-    )
-    scanned_asset = await _scan_asset(file_name, screenshots_path)
-    return Screenshot(**scanned_asset)

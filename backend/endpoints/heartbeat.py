@@ -8,11 +8,7 @@ from fastapi import HTTPException, Request, status
 
 from adapters.services.sigil import SigilService
 from config import (
-    DISABLE_EMULATOR_JS,
-    DISABLE_JSDOS,
     DISABLE_LOGS_VIEWER,
-    DISABLE_PICO8,
-    DISABLE_RUFFLE_RS,
     DISABLE_SETUP_WIZARD,
     DISABLE_USERPASS_LOGIN,
     ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP,
@@ -153,12 +149,6 @@ async def heartbeat() -> HeartbeatResponse:
         "FILESYSTEM": {
             "FS_PLATFORMS": await fs_platform_handler.get_platforms(),
             "TITLE_ID_EXTRACTION_ENABLED": title_id_extraction_enabled,
-        },
-        "EMULATION": {
-            "DISABLE_EMULATOR_JS": DISABLE_EMULATOR_JS,
-            "DISABLE_RUFFLE_RS": DISABLE_RUFFLE_RS,
-            "DISABLE_JSDOS": DISABLE_JSDOS,
-            "DISABLE_PICO8": DISABLE_PICO8,
         },
         "FRONTEND": {
             "DISABLE_USERPASS_LOGIN": DISABLE_USERPASS_LOGIN,

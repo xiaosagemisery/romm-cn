@@ -13,23 +13,10 @@ POSTGRESQL_FK_INDEXES: tuple[tuple[str, str, str], ...] = (
     ("collections", "ix_collections_user_id", "user_id"),
     ("smart_collections", "ix_smart_collections_user_id", "user_id"),
     ("rom_notes", "ix_rom_notes_user_id", "user_id"),
-    ("firmware", "ix_firmware_platform_id", "platform_id"),
     ("collections_roms", "ix_collections_roms_rom_id", "rom_id"),
     ("music_playlist_tracks", "ix_music_playlist_tracks_rom_file_id", "rom_file_id"),
     ("music_favorite_tracks", "ix_music_favorite_tracks_rom_file_id", "rom_file_id"),
-    ("play_sessions", "ix_play_sessions_rom_id", "rom_id"),
-    ("play_sessions", "ix_play_sessions_device_id", "device_id"),
-    ("play_sessions", "ix_play_sessions_sync_session_id", "sync_session_id"),
-    ("saves", "ix_saves_user_id", "user_id"),
-    ("states", "ix_states_user_id", "user_id"),
-    ("screenshots", "ix_screenshots_user_id", "user_id"),
     ("rom_file_user", "ix_rom_file_user_user_id", "user_id"),
-    ("memory_cards", "ix_memory_cards_platform_id", "platform_id"),
-    (
-        "streaming_container_adoptions",
-        "ix_streaming_container_adoptions_decided_by_user_id",
-        "decided_by_user_id",
-    ),
 )
 
 # Indexes that exist in some databases but cannot be declared on a model.

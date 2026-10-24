@@ -14,8 +14,6 @@ class ScanStats(TypedDict):
     scanned_roms: int
     new_roms: int
     identified_roms: int
-    scanned_firmware: int
-    new_firmware: int
     updated_roms: int
     new_files: int
 

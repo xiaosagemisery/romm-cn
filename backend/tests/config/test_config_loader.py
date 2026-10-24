@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 
@@ -10,7 +9,6 @@ from config.config_manager import (
     DEFAULT_EXCLUDED_MULTI_FILE_DIRS,
     DEFAULT_EXCLUDED_PLATFORM_DIRS,
     ConfigManager,
-    parse_firmware_template,
     parse_platform_templates,
     parse_structure_template,
 )
@@ -55,32 +53,6 @@ def test_config_loader():
     assert loader.config.PLATFORMS_BINDING == {"gc": "ngc"}
     assert loader.config.PLATFORMS_VERSIONS == {"naomi": "arcade"}
     assert loader.config.SKIP_HASH_CALCULATION
-    assert loader.config.EJS_DEBUG
-    assert loader.config.EJS_DISABLE_AUTO_UNLOAD
-    assert loader.config.EJS_DISABLE_BATCH_BOOTUP
-    assert loader.config.EJS_ENABLE_AUTO_SAVE_SYNC
-    assert loader.config.EJS_CACHE_LIMIT == 1000
-    assert loader.config.EJS_NETPLAY_ENABLED
-    assert loader.config.EJS_NETPLAY_ICE_SERVERS == [
-        {"urls": "stun:stun.relay.metered.ca:80"},
-        {
-            "urls": "turn:global.relay.metered.ca:80",
-            "username": "user",
-            "credential": "password",
-        },
-    ]
-    assert loader.config.EJS_SETTINGS == {
-        "parallel_n64": {"vsync": "disabled"},
-        "snes9x": {"snes9x_region": "ntsc"},
-    }
-    assert loader.config.EJS_CONTROLS == {
-        "snes9x": {
-            "_0": {0: {"value": "x", "value2": "BUTTON_2"}},
-            "_1": {},
-            "_2": {},
-            "_3": {},
-        },
-    }
     assert loader.config.SCAN_METADATA_PRIORITY == ["ss", "launchbox"]
     assert loader.config.SCAN_ARTWORK_PRIORITY == ["igdb", "ss"]
     assert loader.config.SCAN_ARTWORK_PRIORITY_OVERRIDES == {
@@ -94,13 +66,11 @@ def test_config_loader():
     assert loader.config.GAMELIST_MEDIA_IMAGE == "title_screen"
     assert loader.config.STRUCTURE_TEMPLATES == {
         "default": "ROMS/{platform}/{game}",
-        "firmware": "BIOS/{platform}",
         "psx": "ROMS/{platform}/{category}/{game}",
         "nes": ["ROMS/{platform}/{game}", "ROMS/{platform}/{category}/{game}"],
     }
     assert loader.config.default_structure.platform_dir == ("ROMS",)
     assert loader.config.platforms_dir == "ROMS"
-    assert loader.config.firmware_structure.firmware_dir("psx") == "BIOS/psx"
 
     # The accessor parses templates on demand.
     psx = loader.config.platform_structure("psx")
@@ -151,17 +121,7 @@ def test_empty_config_loader():
     assert loader.config.PLATFORMS_BINDING == {}
     assert loader.config.PLATFORMS_VERSIONS == {}
     assert loader.config.platforms_dir == "roms"
-    assert loader.config.firmware_structure.firmware_dir("nes") == "bios/nes"
     assert not loader.config.SKIP_HASH_CALCULATION
-    assert not loader.config.EJS_DEBUG
-    assert loader.config.EJS_CACHE_LIMIT is None
-    assert not loader.config.EJS_DISABLE_AUTO_UNLOAD
-    assert not loader.config.EJS_DISABLE_BATCH_BOOTUP
-    assert not loader.config.EJS_ENABLE_AUTO_SAVE_SYNC
-    assert not loader.config.EJS_NETPLAY_ENABLED
-    assert loader.config.EJS_NETPLAY_ICE_SERVERS == []
-    assert loader.config.EJS_SETTINGS == {}
-    assert loader.config.EJS_CONTROLS == {}
     assert loader.config.SCAN_ARTWORK_PRIORITY_OVERRIDES == {}
     assert loader.config.SCAN_REGION_MODE == "prefer_rom_tags"
     assert loader.config.GAMELIST_MEDIA_THUMBNAIL == "box2d"
@@ -220,35 +180,6 @@ def test_parse_structure_template_accepts_the_platform_folder_by_name():
 def test_parse_structure_template_invalid(template):
     with pytest.raises(ValueError):
         parse_structure_template(template)
-
-
-@pytest.mark.parametrize(
-    ("template", "platform_dir", "subdir"),
-    [
-        ("bios/{platform}", ("bios",), ()),
-        ("{platform}/bios", (), ("bios",)),
-        ("{platform}/firmware/bios", (), ("firmware", "bios")),
-    ],
-)
-def test_parse_firmware_template_valid(template, platform_dir, subdir):
-    template_parsed = parse_firmware_template(template)
-    assert template_parsed.platform_dir == platform_dir
-    assert template_parsed.subdir == subdir
-
-
-@pytest.mark.parametrize(
-    "template",
-    [
-        "",
-        "bios",  # no platform folder
-        "bios/{platform}/{game}",  # firmware is a folder, not a set of games
-        "bios/{platform}/{region}",  # no wildcard levels
-        "bios/{platform}/..",
-    ],
-)
-def test_parse_firmware_template_invalid(template):
-    with pytest.raises(ValueError):
-        parse_firmware_template(template)
 
 
 def test_structure_templates_are_keyed_case_insensitively(monkeypatch, tmp_path):
@@ -343,7 +274,6 @@ def test_malformed_yaml_falls_back_to_defaults():
     )
 
     assert loader.config.platforms_dir == "roms"
-    assert loader.config.firmware_structure.firmware_dir("nes") == "bios/nes"
     assert loader.config.SCAN_MEDIA == ["box2d", "screenshot", "manual"]
     # The parse error is surfaced so the UI can warn the user their whole
     # config (not just the broken part) was discarded.
@@ -475,118 +405,6 @@ def test_update_scan_settings_round_trip(tmp_path):
     assert reloaded.config.PEGASUS_AUTO_EXPORT_ON_SCAN is True
 
 
-def test_config_update_preserves_streaming_section(tmp_path):
-    """A runtime write (e.g. saving scan settings) must not drop the
-    streaming section, which isn't otherwise re-serialized."""
-    config_file = tmp_path / "config.yml"
-    config_file.write_text(
-        "streaming:\n"
-        "  enabled: true\n"
-        "  containers:\n"
-        "    - platform: ps2\n"
-        "      host: https://192.168.1.51:3001\n"
-        "      broker_host: http://192.168.1.51:8000\n"
-        "      label: PCSX2\n"
-    )
-    loader = ConfigManager(str(config_file))
-    assert loader.config.STREAMING_ENABLED
-
-    loader.add_platform_binding("gc", "ngc")
-
-    reloaded = ConfigManager(str(config_file))
-    assert reloaded.config.STREAMING_ENABLED
-    assert reloaded.config.STREAMING_CONTAINERS == [
-        {
-            "platform": "ps2",
-            "host": "https://192.168.1.51:3001",
-            "broker_host": "http://192.168.1.51:8000",
-            "label": "PCSX2",
-        }
-    ]
-
-
-def test_legacy_streaming_container_logs_deprecation_warning(caplog, tmp_path):
-    """A container without `protocol: webstation` is the deprecated
-    per-emulator broker shape and must warn, not fail, so it keeps working
-    for one more release while pointing operators at the migration guide."""
-    config_file = tmp_path / "config.yml"
-    config_file.write_text(
-        "streaming:\n"
-        "  enabled: true\n"
-        "  containers:\n"
-        "    - platform: ps2\n"
-        "      host: https://192.168.1.51:3001\n"
-        "      broker_host: http://192.168.1.51:8000\n"
-        "      label: PCSX2\n"
-    )
-    # The "romm" logger has propagate=False, so caplog's handler must be
-    # added directly to it rather than relying on root-logger propagation.
-    romm_logger = logging.getLogger("romm")
-    romm_logger.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.WARNING, logger="romm"):
-            loader = ConfigManager(str(config_file))
-    finally:
-        romm_logger.removeHandler(caplog.handler)
-
-    assert loader.config.STREAMING_CONTAINERS
-    assert "deprecated" in caplog.text
-    assert "emulator-streaming-migration" in caplog.text
-
-
-def test_webstation_streaming_container_does_not_warn(caplog, tmp_path):
-    config_file = tmp_path / "config.yml"
-    config_file.write_text(
-        "streaming:\n"
-        "  enabled: true\n"
-        "  containers:\n"
-        "    - host: https://192.168.1.56:3010\n"
-        "      protocol: webstation\n"
-        "      subfolder: /streaming\n"
-        "      label: Emulation station\n"
-        "      platforms:\n"
-        "        ps2: pcsx2\n"
-    )
-    romm_logger = logging.getLogger("romm")
-    romm_logger.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.WARNING, logger="romm"):
-            ConfigManager(str(config_file))
-    finally:
-        romm_logger.removeHandler(caplog.handler)
-
-    assert "deprecated" not in caplog.text
-
-
-def test_config_update_preserves_nested_container_platforms(tmp_path):
-    """A container's `platforms` map is the only nested mapping inside the
-    containers list, so it is the shape a runtime rewrite could flatten."""
-    config_file = tmp_path / "config.yml"
-    config_file.write_text(
-        "streaming:\n"
-        "  enabled: true\n"
-        "  containers:\n"
-        "    - host: https://192.168.1.51:3001\n"
-        "      broker_host: http://192.168.1.51:8000\n"
-        "      label: WEBSTATION\n"
-        "      platforms:\n"
-        "        ps2: pcsx2\n"
-        "        ngc: dolphin\n"
-    )
-    loader = ConfigManager(str(config_file))
-    loader.add_platform_binding("gc", "ngc")
-
-    reloaded = ConfigManager(str(config_file))
-    assert reloaded.config.STREAMING_CONTAINERS == [
-        {
-            "host": "https://192.168.1.51:3001",
-            "broker_host": "http://192.168.1.51:8000",
-            "label": "WEBSTATION",
-            "platforms": {"ps2": "pcsx2", "ngc": "dolphin"},
-        }
-    ]
-
-
 def _write_config(tmp_path: Path, system_block: str) -> ConfigManager:
     config_file = tmp_path / "config.yml"
     config_file.write_text(f"system:\n{system_block}")
@@ -642,7 +460,6 @@ def _write_filesystem_config(tmp_path: Path, block: str) -> ConfigManager:
     ("key", "folder", "expected"),
     [
         ("roms_folder", "retro_games", 'default: "retro_games/{platform}/{game}"'),
-        ("firmware_folder", "fw", 'firmware: "fw/{platform}"'),
     ],
 )
 def test_retired_folder_keys_exit_with_the_replacement(
@@ -672,22 +489,12 @@ def test_an_override_may_not_move_the_platform_folder(tmp_path, critical):
     assert "disc-games" in critical()
 
 
-@pytest.mark.parametrize("key", ["default", "firmware"])
-def test_a_reserved_structure_key_takes_a_single_template(tmp_path, key):
+def test_a_reserved_structure_key_takes_a_single_template(tmp_path):
     """Only a platform can union several layouts; the library has just one."""
     with pytest.raises(SystemExit) as excinfo:
         _write_filesystem_config(
             tmp_path,
-            f'  structure:\n    {key}:\n      - "roms/{{platform}}/{{game}}"\n',
-        )
-
-    assert excinfo.value.code == 3
-
-
-def test_an_invalid_firmware_template_is_rejected(tmp_path):
-    with pytest.raises(SystemExit) as excinfo:
-        _write_filesystem_config(
-            tmp_path, '  structure:\n    firmware: "bios/{platform}/{game}"\n'
+            '  structure:\n    default:\n      - "roms/{platform}/{game}"\n',
         )
 
     assert excinfo.value.code == 3
@@ -721,12 +528,9 @@ def test_the_retired_library_layout_check_passes_once_declared(tmp_path, mocker)
     loader.check_library_layout()
 
 
-def test_a_platform_named_like_a_layout_key_uses_the_default(tmp_path):
-    """`structure.firmware` is a firmware folder, not a template for a platform
-    whose folder happens to be called `firmware`."""
+def test_a_leftover_firmware_layout_is_ignored(tmp_path):
     loader = _write_filesystem_config(
         tmp_path, '  structure:\n    firmware: "bios/{platform}"\n'
     )
 
-    config = loader.get_config()
-    assert config.platform_structure("firmware") == (config.default_structure,)
+    assert "firmware" not in loader.config.STRUCTURE_TEMPLATES

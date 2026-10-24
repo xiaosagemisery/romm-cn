@@ -248,24 +248,18 @@ def test_get_smart_collection_criteria_passes_metadata_providers(admin_user: Use
     assert criteria["metadata_providers_logic"] == "all"
 
 
-def test_get_smart_collection_criteria_passes_asset_and_soundtrack_filters(
+def test_get_smart_collection_criteria_passes_soundtrack_filters(
     admin_user: User,
 ):
     smart_collection = SmartCollection(
-        name="Games with saves and music",
+        name="Games with music",
         description="",
         user_id=admin_user.id,
-        filter_criteria={
-            "has_saves": True,
-            "has_states": True,
-            "has_soundtrack": True,
-        },
+        filter_criteria={"has_soundtrack": True},
     )
 
     criteria = db_collection_handler.get_smart_collection_criteria(smart_collection)
 
-    assert criteria["has_saves"] is True
-    assert criteria["has_states"] is True
     assert criteria["has_soundtrack"] is True
 
 

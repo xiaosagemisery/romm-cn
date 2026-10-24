@@ -32,9 +32,6 @@ def stats(request: Request, include_platform_stats: bool = False) -> StatsReturn
             hidden_platform_ids, hidden_rom_ids
         ),
         "ROMS": db_stats_handler.get_roms_count(hidden_platform_ids, hidden_rom_ids),
-        "SAVES": db_stats_handler.get_saves_count(),
-        "STATES": db_stats_handler.get_states_count(),
-        "SCREENSHOTS": db_stats_handler.get_screenshots_count(),
         "TOTAL_FILESIZE_BYTES": db_stats_handler.get_total_filesize(
             hidden_platform_ids, hidden_rom_ids
         ),

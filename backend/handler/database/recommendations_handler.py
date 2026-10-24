@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from decorators.database import begin_session
 from models.collection import CollectionRom
-from models.play_session import PlaySession
 from models.recommendation import RomSimilarity
 from models.rom import IDENTITY_ID_FIELDS, Rom, RomFacets, RomMetadata, RomUser
 
@@ -65,7 +64,6 @@ class UserAffinityRow(NamedTuple):
     last_played: Any | None
     now_playing: bool
     hidden: bool
-    playtime_ms: int
 
 
 class SimilarRomEdge(NamedTuple):
@@ -354,36 +352,15 @@ class DBRecommendationsHandler(DBBaseHandler):
         user_id: int,
         session: Session = None,  # type: ignore
     ) -> list[UserAffinityRow]:
-        """Everything the user has done with each ROM, plus total playtime.
-
-        Playtime comes from `play_sessions` (the accurate signal) while the
-        rest comes from `rom_user`; a ROM can appear with either or both.
-        """
-        playtime_subq = (
-            select(
-                PlaySession.rom_id.label("rom_id"),
-                func.coalesce(func.sum(PlaySession.duration_ms), 0).label(
-                    "playtime_ms"
-                ),
-            )
-            .where(PlaySession.user_id == user_id, PlaySession.rom_id.is_not(None))
-            .group_by(PlaySession.rom_id)
-            .subquery()
-        )
-
-        stmt = (
-            select(
-                RomUser.rom_id,
-                RomUser.rating,
-                RomUser.status,
-                RomUser.last_played,
-                RomUser.now_playing,
-                RomUser.hidden,
-                func.coalesce(playtime_subq.c.playtime_ms, 0),
-            )
-            .outerjoin(playtime_subq, playtime_subq.c.rom_id == RomUser.rom_id)
-            .where(RomUser.user_id == user_id)
-        )
+        """Everything the user has done with each ROM, from `rom_user`."""
+        stmt = select(
+            RomUser.rom_id,
+            RomUser.rating,
+            RomUser.status,
+            RomUser.last_played,
+            RomUser.now_playing,
+            RomUser.hidden,
+        ).where(RomUser.user_id == user_id)
 
         return [
             UserAffinityRow(
@@ -393,7 +370,6 @@ class DBRecommendationsHandler(DBBaseHandler):
                 last_played=row[3],
                 now_playing=bool(row[4]),
                 hidden=bool(row[5]),
-                playtime_ms=int(row[6] or 0),
             )
             for row in session.execute(stmt).all()
         ]

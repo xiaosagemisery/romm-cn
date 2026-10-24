@@ -48,15 +48,11 @@ def test_admin_projects_to_full_scopes():
 
 
 def test_editor_strictly_extends_viewer():
-    # The only coarse difference is library-wide write of roms/platforms/firmware.
+    # The only coarse difference is library-wide write of roms/platforms.
     extra = set(grants_to_scopes(LEGACY_EDITOR_GRANTS)) - set(
         grants_to_scopes(LEGACY_VIEWER_GRANTS)
     )
-    assert {s.value for s in extra} == {
-        "roms.write",
-        "platforms.write",
-        "firmware.write",
-    }
+    assert {s.value for s in extra} == {"roms.write", "platforms.write"}
 
 
 # --- Seed integrity: migration rows match the in-code matrices ---------------

@@ -41,7 +41,6 @@ from handler.filesystem.roms_handler import (
 from handler.rom_files import RomFilesRefresh
 from handler.scan_handler import MetadataSource, ScanType
 from handler.scan_jobs import SCAN_PLATFORMS_FUNC
-from models.firmware import Firmware
 from models.platform import Platform
 from models.rom import Rom, RomFile, RomFileCategory, RomIdentity
 from utils.platform_slugs import UniversalPlatformSlug as UPS
@@ -127,8 +126,6 @@ def test_scan_stats():
     assert stats.scanned_roms == 0
     assert stats.new_roms == 0
     assert stats.identified_roms == 0
-    assert stats.scanned_firmware == 0
-    assert stats.new_firmware == 0
 
     stats.scanned_platforms += 1
     stats.new_platforms += 1
@@ -136,8 +133,6 @@ def test_scan_stats():
     stats.scanned_roms += 1
     stats.new_roms += 1
     stats.identified_roms += 1
-    stats.scanned_firmware += 1
-    stats.new_firmware += 1
 
     assert stats.scanned_platforms == 1
     assert stats.new_platforms == 1
@@ -145,8 +140,6 @@ def test_scan_stats():
     assert stats.scanned_roms == 1
     assert stats.new_roms == 1
     assert stats.identified_roms == 1
-    assert stats.scanned_firmware == 1
-    assert stats.new_firmware == 1
 
 
 async def test_merging_scan_stats():
@@ -157,8 +150,6 @@ async def test_merging_scan_stats():
         scanned_roms=4,
         new_roms=5,
         identified_roms=6,
-        scanned_firmware=7,
-        new_firmware=8,
     )
 
     await stats.update(
@@ -169,8 +160,6 @@ async def test_merging_scan_stats():
         scanned_roms=stats.scanned_roms + 13,
         new_roms=stats.new_roms + 14,
         identified_roms=stats.identified_roms + 15,
-        scanned_firmware=stats.scanned_firmware + 16,
-        new_firmware=stats.new_firmware + 17,
     )
 
     assert stats.scanned_platforms == 11
@@ -179,8 +168,6 @@ async def test_merging_scan_stats():
     assert stats.scanned_roms == 17
     assert stats.new_roms == 19
     assert stats.identified_roms == 21
-    assert stats.scanned_firmware == 23
-    assert stats.new_firmware == 25
 
 
 @pytest.fixture
@@ -1191,11 +1178,6 @@ class TestIdentifyPlatformMarksMissingBeforeScan:
             "model_validate",
             return_value=Mock(model_dump=Mock(return_value={})),
         )
-        mocker.patch.object(
-            scan_module.fs_firmware_handler,
-            "get_firmware",
-            AsyncMock(return_value=[]),
-        )
         fs_rom: FSRom = {
             "fs_name": "New Name.zip",
             "fs_path": "test/roms",
@@ -1217,9 +1199,6 @@ class TestIdentifyPlatformMarksMissingBeforeScan:
         db_rom = mocker.patch.object(scan_module, "db_rom_handler")
         db_rom.get_roms_by_fs_name.return_value = {}
         db_rom.mark_missing_roms.side_effect = record_mark_missing
-        db_firmware = mocker.patch.object(scan_module, "db_firmware_handler")
-        db_firmware.mark_missing_firmware.return_value = []
-
         async def fake_identify(**kwargs):
             calls.append("identify")
 
@@ -1271,11 +1250,6 @@ class TestIdentifyPlatformEmitsRestoredRoms:
             "model_validate",
             return_value=Mock(model_dump=Mock(return_value={})),
         )
-        mocker.patch.object(
-            scan_module.fs_firmware_handler,
-            "get_firmware",
-            AsyncMock(return_value=[]),
-        )
 
         fs_rom: FSRom = {
             "fs_name": "Game.zip",
@@ -1298,9 +1272,6 @@ class TestIdentifyPlatformEmitsRestoredRoms:
         db_rom.get_roms_by_fs_name.return_value = {"test/roms/Game.zip": rom}
         db_rom.mark_missing_roms.return_value = []
         db_rom.get_rom.return_value = rom
-
-        db_firmware = mocker.patch.object(scan_module, "db_firmware_handler")
-        db_firmware.mark_missing_firmware.return_value = []
 
         mocker.patch.object(
             scan_module.SimpleRomSchema,
@@ -1363,281 +1334,6 @@ class TestIdentifyPlatformEmitsRestoredRoms:
         )
 
 
-class TestIdentifyPlatformFirmwareReporting:
-    """The platform emit reports firmware discovered by this scan only.
-
-    Reporting the platform's total firmware count made every re-scan look like
-    it had found new firmware.
-    """
-
-    @pytest.fixture
-    def patched(self, mocker):
-        mocker.patch.object(
-            scan_module, "redis_client", Mock(get=Mock(return_value=None))
-        )
-
-        platform = Platform(name="Test", slug="test", fs_slug="test")
-        platform.id = 1
-        platform.missing_from_fs = False
-        db_platform = mocker.patch.object(scan_module, "db_platform_handler")
-        db_platform.get_platform_by_fs_slug.return_value = platform
-        db_platform.add_platform.return_value = platform
-
-        mocker.patch.object(
-            scan_module, "scan_platform", AsyncMock(return_value=platform)
-        )
-        mocker.patch.object(
-            scan_module.PlatformSchema,
-            "model_validate",
-            return_value=Mock(model_dump=Mock(return_value={"id": platform.id})),
-        )
-        mocker.patch.object(
-            scan_module.fs_firmware_handler,
-            "get_firmware",
-            AsyncMock(return_value=["known.bin", "brand-new.bin"]),
-        )
-        mocker.patch.object(
-            scan_module,
-            "scan_firmware",
-            AsyncMock(return_value=Firmware(file_name="known.bin", platform_id=1)),
-        )
-        mocker.patch.object(
-            scan_module.Firmware, "verify_file_hashes", return_value=True
-        )
-        mocker.patch.object(
-            scan_module.fs_rom_handler, "get_roms", AsyncMock(return_value=[])
-        )
-
-        db_rom = mocker.patch.object(scan_module, "db_rom_handler")
-        db_rom.get_roms_by_fs_name.return_value = {}
-        db_rom.mark_missing_roms.return_value = []
-        db_rom.get_missing_rom_ids.return_value = set()
-
-        db_firmware = mocker.patch.object(scan_module, "db_firmware_handler")
-        db_firmware.mark_missing_firmware.return_value = []
-        # Only "brand-new.bin" is missing from the database.
-        db_firmware.get_firmware_by_filename.side_effect = (
-            lambda platform_id, file_name: (
-                Firmware(file_name=file_name, platform_id=platform_id)
-                if file_name == "known.bin"
-                else None
-            )
-        )
-        return db_firmware
-
-    async def _emitted_platform_payload(self, socket_manager):
-        await scan_module._identify_platform(
-            platform_slug="test",
-            scan_type=ScanType.QUICK,
-            fs_platforms=["test"],
-            roms_ids=[],
-            metadata_sources=[],
-            launchbox_remote_enabled=False,
-            playmatch_enabled=False,
-            socket_manager=socket_manager,
-            scan_stats=AsyncMock(),
-            scanned_rom_ids=set(),
-        )
-        return next(
-            call.args[1]
-            for call in socket_manager.emit.call_args_list
-            if call.args[0] == "scan:scanning_platform"
-        )
-
-    async def test_counts_only_firmware_missing_from_the_database(self, patched):
-        payload = await self._emitted_platform_payload(AsyncMock())
-
-        assert payload["new_firmware_count"] == 1
-        assert "firmware_count" not in payload
-
-    async def test_reports_zero_when_all_firmware_is_already_known(self, patched):
-        patched.get_firmware_by_filename.side_effect = (
-            lambda platform_id, file_name: Firmware(
-                file_name=file_name, platform_id=platform_id
-            )
-        )
-
-        payload = await self._emitted_platform_payload(AsyncMock())
-
-        assert payload["new_firmware_count"] == 0
-
-
-class TestShouldHashFirmware:
-    """The firmware counterpart of `_should_get_rom_files`."""
-
-    def _stored(self, md5: str = "d41d8cd9") -> Firmware:
-        firmware = Firmware(file_name="bios.bin", platform_id=1)
-        firmware.md5_hash = md5
-        return firmware
-
-    @pytest.mark.parametrize("scan_type", [ScanType.COMPLETE, ScanType.HASHES])
-    def test_hashes_when_the_scan_asked_for_hashes(self, scan_type):
-        assert scan_module._should_hash_firmware(scan_type, self._stored()) is True
-
-    @pytest.mark.parametrize(
-        "scan_type",
-        [
-            ScanType.QUICK,
-            ScanType.NEW_PLATFORMS,
-            ScanType.UPDATE,
-            ScanType.UNMATCHED,
-        ],
-    )
-    def test_skips_a_known_entry_on_every_other_scan(self, scan_type):
-        assert scan_module._should_hash_firmware(scan_type, self._stored()) is False
-
-    def test_hashes_an_entry_missing_from_the_database(self):
-        assert scan_module._should_hash_firmware(ScanType.QUICK, None) is True
-
-    def test_hashes_an_entry_with_no_stored_hash(self):
-        assert (
-            scan_module._should_hash_firmware(ScanType.QUICK, self._stored(md5=""))
-            is True
-        )
-
-
-class TestIdentifyFirmwareRehashing:
-    """Firmware follows the same re-read rule as ROM files.
-
-    `_should_get_rom_files` only re-reads a file's bytes for a new entry or a
-    COMPLETE/HASHES scan. Firmware had no such gate, so a scan of any type
-    re-hashed every BIOS file on the platform.
-    """
-
-    @pytest.fixture
-    def patched(self, mocker):
-        mocker.patch.object(
-            scan_module, "redis_client", Mock(get=Mock(return_value=None))
-        )
-        mocker.patch.object(
-            scan_module.Firmware, "verify_file_hashes", return_value=True
-        )
-
-        patches = SimpleNamespace(
-            scan_firmware=mocker.patch.object(
-                scan_module,
-                "scan_firmware",
-                AsyncMock(return_value=Firmware(file_name="bios.bin", platform_id=1)),
-            ),
-            get_file_size=mocker.patch.object(
-                scan_module.fs_firmware_handler,
-                "get_file_size",
-                AsyncMock(return_value=1024),
-            ),
-            get_fs_structure=mocker.patch.object(
-                scan_module.fs_firmware_handler,
-                "get_firmware_fs_structure",
-                return_value="bios/test",
-            ),
-            db_firmware=mocker.patch.object(scan_module, "db_firmware_handler"),
-        )
-        patches.db_firmware.get_firmware_by_filename.return_value = self._stored()
-        return patches
-
-    def _stored(
-        self,
-        *,
-        size: int = 1024,
-        md5: str = "d41d8cd9",
-        missing=False,
-        file_path: str = "bios/test",
-    ):
-        firmware = Firmware(file_name="bios.bin", file_path=file_path, platform_id=1)
-        firmware.id = 7
-        firmware.md5_hash = md5
-        firmware.file_size_bytes = size
-        firmware.missing_from_fs = missing
-        return firmware
-
-    async def _run(self, scan_type: ScanType = ScanType.QUICK) -> int:
-        platform = Platform(name="Test", slug="test", fs_slug="test")
-        platform.id = 1
-        return await scan_module._identify_firmware(
-            platform=platform, fs_fw="bios.bin", scan_type=scan_type
-        )
-
-    @pytest.mark.parametrize(
-        "scan_type",
-        [
-            ScanType.QUICK,
-            ScanType.NEW_PLATFORMS,
-            ScanType.UPDATE,
-            ScanType.UNMATCHED,
-        ],
-    )
-    async def test_skips_rehashing_an_unchanged_file(self, patched, scan_type):
-        assert await self._run(scan_type) == 0
-
-        patched.scan_firmware.assert_not_called()
-        patched.db_firmware.add_firmware.assert_not_called()
-
-    @pytest.mark.parametrize("scan_type", [ScanType.COMPLETE, ScanType.HASHES])
-    async def test_rehashes_when_the_scan_asked_for_hashes(self, patched, scan_type):
-        await self._run(scan_type)
-
-        patched.scan_firmware.assert_called_once()
-
-    async def test_rehashes_when_the_file_size_changed(self, patched):
-        patched.get_file_size.return_value = 2048
-
-        await self._run()
-
-        patched.scan_firmware.assert_called_once()
-
-    async def test_rehashes_an_entry_with_no_stored_hash(self, patched):
-        patched.db_firmware.get_firmware_by_filename.return_value = self._stored(md5="")
-
-        await self._run()
-
-        patched.scan_firmware.assert_called_once()
-        # The database row already rules out a skip, so the file is never stat'd.
-        patched.get_file_size.assert_not_called()
-
-    async def test_hashes_firmware_missing_from_the_database(self, patched):
-        patched.db_firmware.get_firmware_by_filename.return_value = None
-
-        assert await self._run() == 1
-
-        patched.scan_firmware.assert_called_once()
-
-    async def test_clears_the_missing_flag_without_rehashing(self, patched):
-        patched.db_firmware.get_firmware_by_filename.return_value = self._stored(
-            missing=True
-        )
-
-        await self._run()
-
-        patched.scan_firmware.assert_not_called()
-        patched.db_firmware.update_firmware.assert_called_once_with(
-            7, {"missing_from_fs": False}
-        )
-
-    async def test_leaves_an_unchanged_row_untouched(self, patched):
-        await self._run()
-
-        patched.db_firmware.update_firmware.assert_not_called()
-
-    async def test_stats_the_file_where_it_was_enumerated(self, patched):
-        await self._run()
-
-        patched.get_file_size.assert_awaited_once_with("bios/test/bios.bin")
-
-    async def test_rebuilds_a_row_recorded_at_a_stale_path(self, patched):
-        """A library layout change leaves the recorded path pointing nowhere.
-
-        Statting it would raise FileNotFoundError out of the whole scan, so a
-        row whose path no longer matches is rehashed, which refreshes it.
-        """
-        patched.db_firmware.get_firmware_by_filename.return_value = self._stored(
-            file_path="test/bios"
-        )
-
-        await self._run()
-
-        patched.scan_firmware.assert_called_once()
-        patched.get_file_size.assert_not_called()
-
-
 class TestScanSelectedRoms:
     """A ROM-id-scoped scan works off the database, not the platform folder."""
 
@@ -1665,9 +1361,6 @@ class TestScanSelectedRoms:
         get_roms = mocker.patch.object(
             scan_module.fs_rom_handler, "get_roms", AsyncMock(return_value=[])
         )
-        get_firmware = mocker.patch.object(
-            scan_module.fs_firmware_handler, "get_firmware", AsyncMock(return_value=[])
-        )
         db_rom = mocker.patch.object(scan_module, "db_rom_handler")
         identify = mocker.patch.object(
             scan_module, "_identify_rom", side_effect=AsyncMock()
@@ -1692,7 +1385,6 @@ class TestScanSelectedRoms:
 
         # None of the platform-wide reconciliation a library scan does applies.
         get_roms.assert_not_called()
-        get_firmware.assert_not_called()
         db_rom.mark_missing_roms.assert_not_called()
         db_rom.get_missing_rom_ids.assert_not_called()
         db_rom.bulk_mark_present.assert_not_called()
@@ -2699,11 +2391,6 @@ class TestIdentifyPlatformLoadsFilesForQuickScan:
             "model_validate",
             return_value=Mock(model_dump=Mock(return_value={})),
         )
-        mocker.patch.object(
-            scan_module.fs_firmware_handler,
-            "get_firmware",
-            AsyncMock(return_value=[]),
-        )
         fs_rom: FSRom = {
             "fs_name": "Game",
             "fs_path": "test/roms",
@@ -2725,8 +2412,6 @@ class TestIdentifyPlatformLoadsFilesForQuickScan:
         db_rom.get_roms_by_fs_name.return_value = {"test/roms/Game": rom}
         db_rom.get_missing_rom_ids.return_value = set()
         db_rom.mark_missing_roms.return_value = []
-        db_firmware = mocker.patch.object(scan_module, "db_firmware_handler")
-        db_firmware.mark_missing_firmware.return_value = []
         return db_rom
 
     @pytest.mark.parametrize(

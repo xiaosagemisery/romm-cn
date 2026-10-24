@@ -7,8 +7,7 @@ memory and writing it back on every read (see #4029).
 
 from collections.abc import Sequence
 
-from handler.database import db_collection_handler, db_rom_handler, db_save_handler
-from models.assets import Save
+from handler.database import db_collection_handler, db_rom_handler
 from models.collection import Collection, SmartCollection
 from models.platform import Platform
 from models.rom import Rom
@@ -181,12 +180,12 @@ def test_filter_roms_by_smart_collection_scoped_to_a_regular_collection(
 def test_filter_roms_by_smart_collection_with_joined_criteria(
     platform: Platform, admin_user: User
 ):
-    # `playable` joins platforms and `has_soundtrack` is a correlated column
-    # property; both have to survive being applied to a bare-column subquery.
+    # `has_soundtrack` is a correlated column property; it has to survive being
+    # applied to a bare-column subquery.
     rom = _add_rom(platform, "Rally One")
 
     smart_collection = _add_smart_collection(
-        admin_user, {"playable": False, "has_soundtrack": False, "missing": False}
+        admin_user, {"has_soundtrack": False, "missing": False}
     )
 
     roms = db_rom_handler.get_roms_scalar(
@@ -305,59 +304,6 @@ def test_refresh_for_roms_leaves_untouched_collections_alone(
 
     refresh = mocker.spy(db_collection_handler, "refresh_smart_collection")
     db_collection_handler.refresh_smart_collections_for_roms([bystander.id])
-
-    assert refresh.call_count == 0
-
-
-def _add_save(rom: Rom, user: User, name: str = "save.sav") -> Save:
-    return db_save_handler.add_save(
-        Save(
-            rom_id=rom.id,
-            user_id=user.id,
-            file_name=name,
-            file_name_no_tags=name,
-            file_name_no_ext=name,
-            file_extension="sav",
-            emulator="test_emulator",
-            file_path="test/saves",
-            file_size_bytes=1.0,
-        )
-    )
-
-
-def test_refresh_for_roms_follows_per_user_state(platform: Platform, admin_user: User):
-    # A save is not a ROM edit, but it moves anything filtering on `has_saves`.
-    collection = _add_smart_collection(admin_user, {"has_saves": True})
-    rom = _add_rom(platform, "Rally One")
-    db_collection_handler.refresh_smart_collections()
-    seeded = db_collection_handler.get_smart_collection(collection.id)
-    assert seeded is not None and seeded.rom_count == 0
-
-    _add_save(rom, admin_user)
-    db_collection_handler.refresh_smart_collections_for_roms(
-        [rom.id], membership_only=True
-    )
-
-    after = db_collection_handler.get_smart_collection(collection.id)
-    assert after is not None
-    assert after.rom_ids == [rom.id]
-
-
-def test_refresh_for_roms_membership_only_skips_a_member_that_stayed(
-    platform: Platform, admin_user: User, mocker
-):
-    # Autosaves land constantly. Once the ROM is already a member, another save
-    # changes nothing about the collection, so it must not force a recount.
-    _add_smart_collection(admin_user, {"has_saves": True})
-    rom = _add_rom(platform, "Rally One")
-    _add_save(rom, admin_user, "first.sav")
-    db_collection_handler.refresh_smart_collections()
-
-    _add_save(rom, admin_user, "second.sav")
-    refresh = mocker.spy(db_collection_handler, "refresh_smart_collection")
-    db_collection_handler.refresh_smart_collections_for_roms(
-        [rom.id], membership_only=True
-    )
 
     assert refresh.call_count == 0
 

@@ -27,7 +27,6 @@ from handler.auth.permissions import ResolvedPermissions, resolve_permissions
 from models.permission import PermAction, PermEntity
 
 if TYPE_CHECKING:
-    from models.firmware import Firmware
     from models.platform import Platform
     from models.rom import Rom
 
@@ -138,14 +137,3 @@ def assert_platform_visible(
                 status_code=status.HTTP_404_NOT_FOUND, detail=not_found_detail
             )
         raise PlatformNotFoundInDatabaseException(platform.id)
-
-
-def assert_firmware_visible(request: Request, firmware: Firmware) -> None:
-    """Raise 404 when the firmware's platform is hidden (firmware inherits it)."""
-    if request.user.is_authenticated and not get_permissions(request).can_see_platform(
-        firmware.platform_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Firmware with ID {firmware.id} not found",
-        )

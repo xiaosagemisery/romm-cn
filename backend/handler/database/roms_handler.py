@@ -50,7 +50,6 @@ from config import ROMM_DB_DRIVER
 from config.config_manager import config_manager as cm
 from decorators.database import begin_session
 from handler.redis_handler import sync_cache
-from models.assets import Save, Screenshot, State
 from models.base import PRERELEASE_FILENAME_TAGS, compute_file_name_parts
 from models.collection import Collection, CollectionRom, SmartCollection
 from models.music import MusicFavoriteTrack, MusicPlaylistTrack
@@ -83,64 +82,8 @@ from utils.database import (
     json_array_contains_value,
     release_day_ranges,
 )
-from utils.platform_slugs import UniversalPlatformSlug as UPS
 
 from .base_handler import DBBaseHandler
-
-EJS_SUPPORTED_PLATFORMS = [
-    UPS._3DO,
-    UPS.AMIGA,
-    UPS.AMIGA_CD,
-    UPS.AMIGA_CD32,
-    UPS.ARCADE,
-    UPS.NEOGEOAES,
-    UPS.NEOGEOMVS,
-    UPS.ATARI2600,
-    UPS.ATARI5200,
-    UPS.ATARI7800,
-    UPS.C_PLUS_4,
-    UPS.CPET,
-    UPS.C64,
-    UPS.C128,
-    UPS.COLECOVISION,
-    UPS.JAGUAR,
-    UPS.LYNX,
-    UPS.DOOM,
-    UPS.DOS,
-    UPS.NEO_GEO_POCKET,
-    UPS.NEO_GEO_POCKET_COLOR,
-    UPS.NES,
-    UPS.FAMICOM,
-    UPS.FDS,
-    UPS.N64,
-    UPS.N64DD,
-    UPS.NDS,
-    UPS.NINTENDO_DSI,
-    UPS.GB,
-    UPS.GBA,
-    UPS.GBC,
-    UPS.PC_FX,
-    UPS.PHILIPS_CD_I,
-    UPS.PSX,
-    UPS.PSP,
-    UPS.SEGACD,
-    UPS.SEGA32,
-    UPS.GENESIS,
-    UPS.SMS,
-    UPS.GAMEGEAR,
-    UPS.SATURN,
-    UPS.SNES,
-    UPS.SFAM,
-    UPS.TG16,
-    UPS.VIC_20,
-    UPS.VIRTUALBOY,
-    UPS.WONDERSWAN,
-    UPS.WONDERSWAN_COLOR,
-]
-
-RUFFLE_SUPPORTED_PLATFORMS = [
-    UPS.BROWSER,
-]
 
 # Used to remove native full-text SQL operators
 FULLTEXT_BOOLEAN_OPERATORS_REGEX = re.compile(r'[+\-~<>()"@*]')
@@ -389,17 +332,6 @@ def with_details(func):
         kwargs["query"] = select(Rom).options(
             # Ensure platform is loaded for main ROM objects
             selectinload(Rom.platform),
-            selectinload(Rom.saves).options(
-                noload(Save.rom),
-                noload(Save.user),
-            ),
-            selectinload(Rom.states).options(
-                noload(State.rom),
-                noload(State.user),
-            ),
-            selectinload(Rom.screenshots).options(
-                noload(Screenshot.rom),
-            ),
             selectinload(Rom.rom_users).options(
                 noload(RomUser.rom), noload(RomUser.user)
             ),
@@ -923,16 +855,6 @@ class DBRomsHandler(DBBaseHandler):
             predicate = not_(predicate)
         return query.filter(predicate)
 
-    def _filter_by_playable(self, query: Query, value: bool) -> Query:
-        """Filter based on whether the rom is playable on supported platforms."""
-        predicate = or_(
-            Platform.slug.in_(EJS_SUPPORTED_PLATFORMS),
-            Platform.slug.in_(RUFFLE_SUPPORTED_PLATFORMS),
-        )
-        if not value:
-            predicate = not_(predicate)
-        return query.join(Platform).filter(predicate)
-
     def _filter_by_last_played(
         self, query: Query, value: bool, user_id: int | None = None
     ) -> Query:
@@ -949,30 +871,6 @@ class DBRomsHandler(DBBaseHandler):
 
     def _filter_by_has_ra(self, query: Query, value: bool) -> Query:
         predicate = Rom.ra_id.isnot(None)
-        if not value:
-            predicate = not_(predicate)
-        return query.filter(predicate)
-
-    def _filter_by_has_saves(
-        self, query: Query, value: bool, user_id: int | None = None
-    ) -> Query:
-        """Filter based on whether the rom has saves visible to the current
-        user: their own plus other users' public (community) saves."""
-        if not user_id:
-            return query
-        predicate = Rom.saves.any(or_(Save.user_id == user_id, Save.is_public))
-        if not value:
-            predicate = not_(predicate)
-        return query.filter(predicate)
-
-    def _filter_by_has_states(
-        self, query: Query, value: bool, user_id: int | None = None
-    ) -> Query:
-        """Filter based on whether the rom has save states visible to the
-        current user: their own plus other users' public (community) states."""
-        if not user_id:
-            return query
-        predicate = Rom.states.any(or_(State.user_id == user_id, State.is_public))
         if not value:
             predicate = not_(predicate)
         return query.filter(predicate)
@@ -1250,10 +1148,7 @@ class DBRomsHandler(DBBaseHandler):
         favorite: bool | None = None,
         duplicate: bool | None = None,
         last_played: bool | None = None,
-        playable: bool | None = None,
         has_ra: bool | None = None,
-        has_saves: bool | None = None,
-        has_states: bool | None = None,
         missing: bool | None = None,
         physical: bool | None = None,
         verified: bool | None = None,
@@ -1390,17 +1285,8 @@ class DBRomsHandler(DBBaseHandler):
                 query, value=last_played, user_id=user_id
             )
 
-        if playable is not None:
-            query = self._filter_by_playable(query, value=playable)
-
         if has_ra is not None:
             query = self._filter_by_has_ra(query, value=has_ra)
-
-        if has_saves is not None:
-            query = self._filter_by_has_saves(query, value=has_saves, user_id=user_id)
-
-        if has_states is not None:
-            query = self._filter_by_has_states(query, value=has_states, user_id=user_id)
 
         if missing is not None:
             query = self._filter_by_missing_from_fs(query, value=missing)
@@ -1729,10 +1615,7 @@ class DBRomsHandler(DBBaseHandler):
             favorite=kwargs.get("favorite", None),
             duplicate=kwargs.get("duplicate", None),
             last_played=kwargs.get("last_played", None),
-            playable=kwargs.get("playable", None),
             has_ra=kwargs.get("has_ra", None),
-            has_saves=kwargs.get("has_saves", None),
-            has_states=kwargs.get("has_states", None),
             has_soundtrack=kwargs.get("has_soundtrack", None),
             missing=kwargs.get("missing", None),
             physical=kwargs.get("physical", None),

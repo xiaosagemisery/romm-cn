@@ -502,10 +502,7 @@ class DBCollectionsHandler(DBBaseHandler):
             "matched": criteria.get("matched"),
             "favorite": criteria.get("favorite"),
             "duplicate": criteria.get("duplicate"),
-            "playable": criteria.get("playable"),
             "has_ra": criteria.get("has_ra"),
-            "has_saves": criteria.get("has_saves"),
-            "has_states": criteria.get("has_states"),
             "has_soundtrack": criteria.get("has_soundtrack"),
             "missing": criteria.get("missing"),
             "physical": criteria.get("physical"),
@@ -612,7 +609,7 @@ class DBCollectionsHandler(DBBaseHandler):
         Those columns back the collections list and the ROM detail page, and are
         maintained on write: when the collection changes, and when the library
         does. They describe the owner's view, since the row is shared and
-        criteria like `favorite` or `has_saves` answer differently per user.
+        criteria like `favorite` or `last_played` answer differently per user.
         """
         smart_collection = session.scalar(
             select(SmartCollection).filter_by(id=id).limit(1)

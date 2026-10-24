@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from sqlalchemy import Index, Integer, String, Text, func, select
 from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from models.base import BaseModel
 from models.rom import Rom
-
-if TYPE_CHECKING:
-    from models.firmware import Firmware
-
 
 DEFAULT_COVER_ASPECT_RATIO = "2 / 3"
 
@@ -53,9 +47,6 @@ class Platform(BaseModel):
     url_logo: Mapped[str | None] = mapped_column(String(length=1000), default="")
 
     roms: Mapped[list[Rom]] = relationship(lazy="raise", back_populates="platform")
-    firmware: Mapped[list[Firmware]] = relationship(
-        lazy="raise", back_populates="platform"
-    )
 
     aspect_ratio: Mapped[str] = mapped_column(
         String(length=10), server_default=DEFAULT_COVER_ASPECT_RATIO

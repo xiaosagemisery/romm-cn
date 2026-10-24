@@ -33,7 +33,7 @@ from handler.database import db_client_token_handler, db_device_handler
 from handler.database.base_handler import sync_session
 from logger.logger import log
 from models.client_token import ClientToken
-from models.device import Device, SyncMode
+from models.device import Device
 from utils.client_tokens import parse_expiry
 from utils.device_auth import (
     PENDING_TTL_SECONDS,
@@ -221,7 +221,6 @@ def approve(
                     platform=data.get("platform"),
                     client_version=data.get("client_version"),
                     client_device_identifier=data["client_device_identifier"],
-                    sync_mode=SyncMode.API,
                     last_seen=now,
                 ),
                 session=session,

@@ -1,8 +1,6 @@
 import pytest
 
-from models.assets import Save
 from models.base import compute_file_name_parts
-from models.firmware import Firmware
 from models.rom import Rom, compute_name_sort_key
 
 
@@ -62,20 +60,3 @@ def test_rom_validator_resyncs_on_mutation():
     assert rom.fs_name_no_tags == "Sonic"
     assert rom.fs_extension == "md"
     assert rom.name_sort_key == "new game 000000000002"
-
-
-def test_asset_validator_derives_file_name_parts():
-    # Defined on the abstract BaseAsset, inherited by every asset subclass.
-    save = Save(file_name="Sonic [!] (proto).srm")
-
-    assert save.file_name_no_tags == "Sonic"
-    assert save.file_name_no_ext == "Sonic [!] (proto)"
-    assert save.file_extension == "srm"
-
-
-def test_firmware_validator_derives_file_name_parts():
-    firmware = Firmware(file_name="bios (world).bin")
-
-    assert firmware.file_name_no_tags == "bios"
-    assert firmware.file_name_no_ext == "bios (world)"
-    assert firmware.file_extension == "bin"

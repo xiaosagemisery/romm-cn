@@ -32,13 +32,6 @@ class FilesystemDict(TypedDict):
     TITLE_ID_EXTRACTION_ENABLED: bool
 
 
-class EmulationDict(TypedDict):
-    DISABLE_EMULATOR_JS: bool
-    DISABLE_RUFFLE_RS: bool
-    DISABLE_JSDOS: bool
-    DISABLE_PICO8: bool
-
-
 class FrontendDict(TypedDict):
     DISABLE_USERPASS_LOGIN: bool
     DISABLE_LOGS_VIEWER: bool
@@ -67,7 +60,6 @@ class HeartbeatResponse(TypedDict):
     SYSTEM: SystemDict
     METADATA_SOURCES: MetadataSourcesDict
     FILESYSTEM: FilesystemDict
-    EMULATION: EmulationDict
     FRONTEND: FrontendDict
     OIDC: OIDCDict
     TASKS: TasksDict

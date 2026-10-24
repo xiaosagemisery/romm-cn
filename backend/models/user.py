@@ -14,12 +14,10 @@ from models.permission import PermissionGroup
 from utils.database import CustomJSON
 
 if TYPE_CHECKING:
-    from models.assets import MemoryCard, Save, Screenshot, State
     from models.client_token import ClientToken
     from models.collection import Collection, SmartCollection
     from models.device import Device
     from models.music import MusicPlaylist
-    from models.play_session import PlaySession
     from models.rom import RomNote, RomUser
 
 
@@ -94,14 +92,6 @@ class User(BaseModel, SimpleUser):
         CustomJSON(), default=dict
     )
 
-    saves: Mapped[list[Save]] = relationship(lazy="raise", back_populates="user")
-    states: Mapped[list[State]] = relationship(lazy="raise", back_populates="user")
-    memory_cards: Mapped[list[MemoryCard]] = relationship(
-        lazy="raise", back_populates="user"
-    )
-    screenshots: Mapped[list[Screenshot]] = relationship(
-        lazy="raise", back_populates="user"
-    )
     rom_users: Mapped[list[RomUser]] = relationship(lazy="raise", back_populates="user")
     notes: Mapped[list[RomNote]] = relationship(lazy="raise", back_populates="user")
     collections: Mapped[list[Collection]] = relationship(
@@ -117,9 +107,6 @@ class User(BaseModel, SimpleUser):
         lazy="raise", back_populates="user", cascade="all, delete-orphan"
     )
     client_tokens: Mapped[list["ClientToken"]] = relationship(
-        lazy="raise", back_populates="user", cascade="all, delete-orphan"
-    )
-    play_sessions: Mapped[list["PlaySession"]] = relationship(
         lazy="raise", back_populates="user", cascade="all, delete-orphan"
     )
     # Loaded explicitly by the permission resolver; lazy="raise" keeps it off

@@ -11,13 +11,9 @@ from handler.auth import auth_handler
 from handler.database import (
     db_platform_handler,
     db_rom_handler,
-    db_save_handler,
-    db_screenshot_handler,
-    db_state_handler,
     db_user_handler,
 )
 from handler.database.base_handler import sync_session
-from models.assets import Save, Screenshot, State
 from models.platform import Platform
 from models.rom import Rom, compute_name_sort_key
 from models.user import Role, User
@@ -1310,113 +1306,6 @@ def test_users(admin_user):
                 role=Role.ADMIN,
             )
         )
-
-
-def test_saves(save: Save, platform: Platform, admin_user: User):
-    db_save_handler.add_save(
-        Save(
-            rom_id=save.rom_id,
-            user_id=admin_user.id,
-            file_name="test_save_2.sav",
-            file_name_no_tags="test_save_2",
-            file_name_no_ext="test_save_2",
-            file_extension="sav",
-            emulator="test_emulator",
-            file_path=f"{platform.slug}/saves/test_emulator",
-            file_size_bytes=1.0,
-        )
-    )
-
-    rom = db_rom_handler.get_rom(save.rom_id)
-    assert rom is not None
-    assert len(rom.saves) == 2
-
-    new_save = db_save_handler.get_save(user_id=admin_user.id, id=rom.saves[0].id)
-    assert new_save is not None
-    assert new_save.file_name == "test_save.sav"
-
-    db_save_handler.update_save(new_save.id, {"file_name": "test_save_2.sav"})
-    new_save = db_save_handler.get_save(user_id=admin_user.id, id=new_save.id)
-    assert new_save is not None
-    assert new_save.file_name == "test_save_2.sav"
-
-    db_save_handler.delete_save(new_save.id)
-
-    rom = db_rom_handler.get_rom(save.rom_id)
-    assert rom is not None
-    assert len(rom.saves) == 1
-
-
-def test_states(state: State, platform: Platform, admin_user: User):
-    db_state_handler.add_state(
-        State(
-            rom_id=state.rom_id,
-            user_id=admin_user.id,
-            file_name="test_state_2.state",
-            file_name_no_tags="test_state_2",
-            file_name_no_ext="test_state_2",
-            file_extension="state",
-            file_path=f"{platform.slug}/states",
-            file_size_bytes=1.0,
-        )
-    )
-
-    rom = db_rom_handler.get_rom(id=state.rom_id)
-    assert rom is not None
-    assert len(rom.states) == 2
-
-    new_state = db_state_handler.get_state(user_id=admin_user.id, id=rom.states[0].id)
-    assert new_state is not None
-    assert new_state.file_name == "test_state.state"
-
-    db_state_handler.update_state(new_state.id, {"file_name": "test_state_2.state"})
-    new_state = db_state_handler.get_state(user_id=admin_user.id, id=new_state.id)
-    assert new_state is not None
-    assert new_state.file_name == "test_state_2.state"
-
-    db_state_handler.delete_state(id=new_state.id)
-
-    rom = db_rom_handler.get_rom(id=state.rom_id)
-    assert rom is not None
-    assert len(rom.states) == 1
-
-
-def test_screenshots(screenshot: Screenshot, platform: Platform, admin_user: User):
-    db_screenshot_handler.add_screenshot(
-        Screenshot(
-            rom_id=screenshot.rom_id,
-            user_id=admin_user.id,
-            file_name="test_screenshot_2.png",
-            file_name_no_tags="test_screenshot_2",
-            file_name_no_ext="test_screenshot_2",
-            file_extension="png",
-            file_path=f"{platform.slug}/screenshots",
-            file_size_bytes=1.0,
-        )
-    )
-
-    rom = db_rom_handler.get_rom(screenshot.rom_id)
-    assert rom is not None
-    assert len(rom.screenshots) == 2
-
-    # Fetch the original screenshot by its known id; rom.screenshots has no
-    # guaranteed order, so indexing into it is nondeterministic across backends.
-    new_screenshot = db_screenshot_handler.get_screenshot_by_id(id=screenshot.id)
-    assert new_screenshot is not None
-    assert new_screenshot.file_name == "test_screenshot.png"
-
-    db_screenshot_handler.update_screenshot(
-        new_screenshot.id, {"file_name": "test_screenshot_2.png"}
-    )
-    new_screenshot = db_screenshot_handler.get_screenshot_by_id(id=new_screenshot.id)
-    assert new_screenshot is not None
-    assert new_screenshot.file_name == "test_screenshot_2.png"
-
-    db_screenshot_handler.delete_screenshot(id=new_screenshot.id)
-
-    rom = db_rom_handler.get_rom(id=screenshot.rom_id)
-    assert rom is not None
-    assert len(rom.screenshots) == 1
 
 
 def _add_rom_with_providers(platform: Platform, slug: str, **provider_ids) -> Rom:

@@ -95,7 +95,6 @@ def create_or_find_web_device(request: Request, user: User) -> Device:
         platform=device_type.platform,
         client=device_type.client,
         client_version=client_version,
-        sync_mode=device_type.sync_mode,
         ip_address=ip_address,
         last_seen=datetime.now(timezone.utc),
     )

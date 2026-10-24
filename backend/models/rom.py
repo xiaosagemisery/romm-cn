@@ -110,7 +110,6 @@ def _ra_achievement_sort_key(achievement: dict) -> tuple[int, int]:
 
 
 if TYPE_CHECKING:
-    from models.assets import Save, Screenshot, State
     from models.collection import Collection
     from models.platform import Platform
     from models.recommendation import RomSimilarity
@@ -836,11 +835,6 @@ class Rom(BaseModel):
         lazy="raise",
     )
     files: Mapped[list[RomFile]] = relationship(lazy="raise", back_populates="rom")
-    saves: Mapped[list[Save]] = relationship(lazy="raise", back_populates="rom")
-    states: Mapped[list[State]] = relationship(lazy="raise", back_populates="rom")
-    screenshots: Mapped[list[Screenshot]] = relationship(
-        lazy="raise", back_populates="rom"
-    )
     rom_users: Mapped[list[RomUser]] = relationship(lazy="raise", back_populates="rom")
     notes: Mapped[list[RomNote]] = relationship(lazy="raise", back_populates="rom")
     metadatum: Mapped[RomMetadata] = relationship(

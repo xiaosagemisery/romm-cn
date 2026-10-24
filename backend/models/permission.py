@@ -29,7 +29,6 @@ class PermEntity(enum.StrEnum):
     ROMS = "roms"
     COLLECTIONS = "collections"
     PLAYLISTS = "playlists"
-    FIRMWARE = "firmware"
     ASSETS = "assets"
     DEVICES = "devices"
     USERS = "users"
@@ -141,8 +140,7 @@ class HiddenEntity(BaseModel):
     """An opt-out visibility row: hide a specific entity from a user or group.
 
     Exactly one principal is set (``user_id`` XOR ``group_id``). Practically
-    only platforms and roms are hidden; firmware is excluded via the platform
-    cascade computed at query time, never materialized here.
+    only platforms and roms are hidden.
     """
 
     __tablename__ = "hidden_entities"

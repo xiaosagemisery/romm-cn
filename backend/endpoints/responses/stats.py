@@ -14,9 +14,6 @@ class RegionBreakdownItem(TypedDict):
 class StatsReturn(TypedDict, total=False):
     PLATFORMS: int
     ROMS: int
-    SAVES: int
-    STATES: int
-    SCREENSHOTS: int
     TOTAL_FILESIZE_BYTES: int
     METADATA_COVERAGE: dict[int, list[MetadataCoverageItem]]
     REGION_BREAKDOWN: dict[int, list[RegionBreakdownItem]]

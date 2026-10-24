@@ -8,14 +8,6 @@ from typing import NotRequired, TypedDict, get_type_hints
 from fastapi import Request
 from pydantic import ConfigDict, Field, computed_field, field_validator, model_validator
 
-from endpoints.responses.assets import (
-    SaveSchema,
-    ScreenshotSchema,
-    StateSchema,
-    UserSaveSchema,
-    UserScreenshotSchema,
-    UserStateSchema,
-)
 from handler.metadata.csdb_handler import CsdbMetadata
 from handler.metadata.demozoo_handler import DemozooMetadata
 from handler.metadata.flashpoint_handler import FlashpointMetadata
@@ -599,12 +591,6 @@ class UserCollectionSchema(BaseModel):
 
 
 class DetailedRomSchema(RomSchema):
-    user_saves: list[SaveSchema]
-    user_states: list[StateSchema]
-    all_user_saves: list[UserSaveSchema]
-    all_user_states: list[UserStateSchema]
-    user_screenshots: list[ScreenshotSchema]
-    all_user_screenshots: list[UserScreenshotSchema]
     user_collections: list[UserCollectionSchema]
     all_user_notes: list[UserNoteSchema]
 
@@ -629,17 +615,6 @@ class DetailedRomSchema(RomSchema):
         db_rom.included_sibling_roms = sorted_siblings  # type: ignore[assignment]
         db_rom.included_files = sorted(db_rom.files, key=lambda x: x.file_name)  # type: ignore[assignment]
 
-        db_rom.user_saves = [  # type: ignore[assignment]
-            SaveSchema.model_validate(s) for s in db_rom.saves if s.user_id == user_id
-        ]
-        db_rom.user_states = [  # type: ignore[assignment]
-            StateSchema.model_validate(s) for s in db_rom.states if s.user_id == user_id
-        ]
-        db_rom.user_screenshots = [  # type: ignore[assignment]
-            ScreenshotSchema.model_validate(s)
-            for s in db_rom.screenshots
-            if s.user_id == user_id
-        ]
         from handler.database import db_collection_handler
 
         # Standard collections come off the already-loaded join relationship;
@@ -681,78 +656,7 @@ class DetailedRomSchema(RomSchema):
         all_notes.sort(key=lambda x: x.updated_at, reverse=True)
         db_rom.all_user_notes = all_notes  # type: ignore[assignment]
 
-        # Gallery screenshots visible to this user: own (public + private) plus
-        # other users' public ones. Mirrors the notes flow above. Excludes the
-        # auto-captured save/state thumbnails (is_gallery == False).
-        from handler.database import db_screenshot_handler
-
-        gallery_screenshots = db_screenshot_handler.get_rom_gallery_screenshots(
-            rom_id=db_rom.id, user_id=user_id
-        )
-        db_rom.all_user_screenshots = [  # type: ignore[assignment]
-            UserScreenshotSchema.model_validate(
-                {
-                    **{
-                        field: getattr(s, field)
-                        for field in ScreenshotSchema.model_fields
-                    },
-                    "username": s.user.username,
-                    "user_avatar_path": s.user.avatar_path,
-                    "user_updated_at": s.user.updated_at,
-                }
-            )
-            for s in gallery_screenshots
-        ]
-
-        # Saves/states visible to this user: own (public + private) plus other
-        # users' public ones. Mirrors the screenshots flow above.
-        from handler.database import db_save_handler, db_state_handler
-
-        # SaveSchema.model_validate handles the lazy `device_syncs` relationship
-        # (skips it when unloaded); reuse it rather than getattr-ing raw fields.
-        shared_saves = db_save_handler.get_rom_shared_saves(
-            rom_id=db_rom.id, user_id=user_id
-        )
-        db_rom.all_user_saves = [  # type: ignore[assignment]
-            UserSaveSchema.model_validate(
-                {
-                    **SaveSchema.model_validate(s).model_dump(),
-                    "username": s.user.username,
-                    "user_avatar_path": s.user.avatar_path,
-                    "user_updated_at": s.user.updated_at,
-                }
-            )
-            for s in shared_saves
-        ]
-
-        shared_states = db_state_handler.get_rom_shared_states(
-            rom_id=db_rom.id, user_id=user_id
-        )
-        db_rom.all_user_states = [  # type: ignore[assignment]
-            UserStateSchema.model_validate(
-                {
-                    **StateSchema.model_validate(s).model_dump(),
-                    "username": s.user.username,
-                    "user_avatar_path": s.user.avatar_path,
-                    "user_updated_at": s.user.updated_at,
-                }
-            )
-            for s in shared_states
-        ]
-
         return cls.model_validate(db_rom)
-
-    @field_validator("user_saves")
-    def sort_user_saves(cls, v: list[SaveSchema]) -> list[SaveSchema]:
-        return sorted(v, key=lambda x: x.updated_at, reverse=True)
-
-    @field_validator("user_states")
-    def sort_user_states(cls, v: list[StateSchema]) -> list[StateSchema]:
-        return sorted(v, key=lambda x: x.updated_at, reverse=True)
-
-    @field_validator("user_screenshots")
-    def sort_user_screenshots(cls, v: list[ScreenshotSchema]) -> list[ScreenshotSchema]:
-        return sorted(v, key=lambda x: x.created_at, reverse=True)
 
 
 class RomFiltersDict(TypedDict):
