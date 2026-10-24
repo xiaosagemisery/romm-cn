@@ -7,8 +7,10 @@ import pydash
 from fastapi import status
 
 from adapters.services.igdb import (
+    IGDB_PLATFORM_FAMILIES,
     IGDB_PLATFORM_LIST,
     IGDB_PLATFORM_VERSIONS,
+    IGDB_SIBLING_PLATFORMS,
     IGDBService,
 )
 from adapters.services.igdb_types import (
@@ -800,7 +802,18 @@ class IGDBHandler(MetadataHandler):
                 ),
             )
 
-        return IGDBPlatform(igdb_id=None, slug=slug)
+        unlisted_platform = IGDBPlatform(igdb_id=None, slug=slug)
+        if slug in IGDB_SIBLING_PLATFORMS:
+            sibling = IGDB_PLATFORM_LIST[IGDB_SIBLING_PLATFORMS[UPS(slug)]]
+            unlisted_platform["category"] = sibling["category"]
+            unlisted_platform["family_name"] = sibling["family_name"]
+            unlisted_platform["family_slug"] = sibling["family_slug"]
+        if slug in IGDB_PLATFORM_FAMILIES:
+            family = IGDB_PLATFORM_FAMILIES[UPS(slug)]
+            unlisted_platform["family_name"] = family["family_name"]
+            unlisted_platform["family_slug"] = family["family_slug"]
+
+        return unlisted_platform
 
     async def get_rom(self, rom: Rom, fs_name: str, platform_igdb_id: int) -> IGDBRom:
         from handler.filesystem import fs_rom_handler
