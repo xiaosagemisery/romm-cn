@@ -112,5 +112,6 @@ export type DetailedRomSchema = {
     sibling_roms: Array<SiblingRomSchema>;
     user_collections: Array<UserCollectionSchema>;
     all_user_notes: Array<UserNoteSchema>;
+    download_formats: Array<string>;
 };
 

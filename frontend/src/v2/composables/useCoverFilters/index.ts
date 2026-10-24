@@ -9,7 +9,7 @@
 // and every derived view of those two lists.
 import { computed, ref, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
-import type { SearchCoverSchema, SGDBResource } from "@/__generated__";
+import type { SearchCoverSchema, CoverResource } from "@/__generated__";
 import type { MatchedSource } from "@/v2/components/MatchRom/types";
 
 export type CoverType = "all" | "static" | "animated";
@@ -108,7 +108,7 @@ export function useCoverFilters(
   ]);
 
   // Does a single SGDB resource pass all active filters?
-  function matchesFilters(r: SGDBResource): boolean {
+  function matchesFilters(r: CoverResource): boolean {
     if (coverType.value !== "all" && r.type !== coverType.value) return false;
     if (
       resolutionFilter.value !== "all" &&

@@ -2,9 +2,11 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { ConvertoDict } from './ConvertoDict';
 import type { FilesystemDict } from './FilesystemDict';
 import type { FrontendDict } from './FrontendDict';
 import type { MetadataSourcesDict } from './MetadataSourcesDict';
+import type { NotificationsDict } from './NotificationsDict';
 import type { OIDCDict } from './OIDCDict';
 import type { SystemDict } from './SystemDict';
 import type { TasksDict } from './TasksDict';
@@ -14,6 +16,8 @@ export type HeartbeatResponse = {
     FILESYSTEM: FilesystemDict;
     FRONTEND: FrontendDict;
     OIDC: OIDCDict;
+    NOTIFICATIONS: NotificationsDict;
+    CONVERTO: ConvertoDict;
     TASKS: TasksDict;
 };
 

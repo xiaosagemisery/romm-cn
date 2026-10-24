@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { ConvertoConfig } from './ConvertoConfig';
 import type { MetadataMediaType } from './MetadataMediaType';
 export type ConfigResponse = {
     CONFIG_FILE_MOUNTED: boolean;
@@ -30,5 +31,7 @@ export type ConfigResponse = {
     GAMELIST_MEDIA_THUMBNAIL: MetadataMediaType;
     GAMELIST_MEDIA_IMAGE: MetadataMediaType;
     PEGASUS_AUTO_EXPORT_ON_SCAN: boolean;
+    CONVERTO: ConvertoConfig;
+    CONVERTO_LIBRARY_TARGETS: Record<string, Array<string>>;
 };
 

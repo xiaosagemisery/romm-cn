@@ -15,6 +15,7 @@ export type MetadataOption = {
 const defaultHeartbeat: Heartbeat = {
   SYSTEM: {
     VERSION: "0.0.0",
+    GIT_BRANCH: null,
     SHOW_SETUP_WIZARD: false,
   },
   METADATA_SOURCES: {
@@ -61,6 +62,13 @@ const defaultHeartbeat: Heartbeat = {
     SCHEDULED_UPDATE_LAUNCHBOX_METADATA_CRON: "",
     ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP: false,
     SCHEDULED_CONVERT_IMAGES_TO_WEBP_CRON: "",
+  },
+  NOTIFICATIONS: {
+    EMAIL_ENABLED: false,
+    EMAILS_RESET_LINKS: false,
+  },
+  CONVERTO: {
+    ENABLED: false,
   },
 };
 

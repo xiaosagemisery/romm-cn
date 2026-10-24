@@ -88,6 +88,8 @@ function platform(overrides: Partial<Platform>): Platform {
     is_identified: true,
     missing_from_fs: true,
     display_name: "Platform",
+    abbreviation: "Platform",
+    alternative_names: [],
     ...overrides,
   };
 }

@@ -23,7 +23,7 @@ import { useI18n } from "vue-i18n";
 import type {
   SearchCoverSchema,
   SearchRomSchema,
-  SGDBResource,
+  CoverResource,
 } from "@/__generated__";
 import romApi from "@/services/api/rom";
 import sgdbApi from "@/services/api/sgdb";
@@ -105,7 +105,7 @@ const sortByVotes = computed({
 // element can't render those (broken-image icon). Detect by type or
 // extension and swap to a `<video>` for those resources so the preview
 // actually plays.
-function isAnimated(resource: SGDBResource): boolean {
+function isAnimated(resource: CoverResource): boolean {
   return (
     resource.type === "animated" || /\.(webm|mp4)(\?|$)/i.test(resource.thumb)
   );
