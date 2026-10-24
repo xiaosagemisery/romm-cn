@@ -1,4 +1,5 @@
 # Stages:
+#   - python-runtime: Patch the Python image's libraries before they ship
 #   - frontend-build: Build frontend
 #   - backend-build: Build backend environment
 #   - backend-dev-build: Similar to `backend-build`, but also compiles and installs development dependencies
@@ -18,8 +19,10 @@ ARG ALPINE_SHA256=25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f6
 # Pins the base image tag, so it cannot read ../.python-version; keep the two in sync.
 ARG PYTHON_VERSION=3.14
 ARG PYTHON_ALPINE_SHA256=8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5
-ARG NODE_VERSION=24.16
-ARG NODE_ALPINE_SHA256=2bdb65ed1dab192432bc31c95f94155ca5ad7fc1392fb7eb7526ab682fa5bf14
+# The image's pip comes from CPython's bundled ensurepip, which lags pip's security releases.
+ARG PIP_VERSION=26.2.2
+ARG NODE_VERSION=24.22
+ARG NODE_ALPINE_SHA256=0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
 ARG NGINX_VERSION=1.29.5
 ARG NGINX_SHA256=1d13701a5f9f3fb01aaa88cef2344d65b6b5bf6b7d9fa4cf0dca557a8d7702ba
 ARG UV_VERSION=0.11.2
@@ -27,6 +30,15 @@ ARG UV_SHA256=f661eb5c4ea5aae705674c4bc5052a4a0b5148db95452395dbececa1e9e7a1ec
 
 
 FROM python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}@sha256:${PYTHON_ALPINE_SHA256} AS python-alias
+ARG PIP_VERSION
+RUN pip install --no-cache-dir --upgrade pip==${PIP_VERSION}
+
+
+# PATCHED PYTHON RUNTIME
+# production-stage copies /usr/lib from here over its own, so these libraries
+# need the same patches, or the stale ones land in the final image.
+FROM python-alias AS python-runtime
+RUN apk upgrade --no-cache
 
 
 # FRONTEND BUILD
@@ -167,7 +179,9 @@ RUN git clone https://github.com/evanmiller/mod_zip.git && \
 FROM nginx:${NGINX_VERSION}-alpine${ALPINE_VERSION}@sha256:${NGINX_SHA256} AS production-stage
 ARG WEBSERVER_FOLDER=/var/www/html
 
-RUN apk add --no-cache \
+# Alpine backports security fixes to its repo faster than the base image is
+# rebuilt, so the digest pin alone leaves known-vulnerable packages in the image.
+RUN apk upgrade --no-cache && apk add --no-cache \
     bash \
     libarchive-tools \
     libmagic \
@@ -184,11 +198,11 @@ RUN apk add --no-cache \
 # TODO: Replace with a bundled installation of Python using `uv`, when it is supported.
 #       Related issue: https://github.com/astral-sh/uv/issues/7865
 ARG PYTHON_VERSION
-COPY --from=python-alias /usr/lib/* /usr/lib/
-COPY --from=python-alias /usr/local/bin/* /usr/local/bin/
-COPY --from=python-alias /usr/local/include/python${PYTHON_VERSION} /usr/local/include/python${PYTHON_VERSION}
-COPY --from=python-alias /usr/local/lib/libpython* /usr/local/lib/
-COPY --from=python-alias /usr/local/lib/python${PYTHON_VERSION} /usr/local/lib/python${PYTHON_VERSION}
+COPY --from=python-runtime /usr/lib/* /usr/lib/
+COPY --from=python-runtime /usr/local/bin/* /usr/local/bin/
+COPY --from=python-runtime /usr/local/include/python${PYTHON_VERSION} /usr/local/include/python${PYTHON_VERSION}
+COPY --from=python-runtime /usr/local/lib/libpython* /usr/local/lib/
+COPY --from=python-runtime /usr/local/lib/python${PYTHON_VERSION} /usr/local/lib/python${PYTHON_VERSION}
 
 COPY --from=rahasher-build /RALibretro/bin64/RAHasher /usr/bin/RAHasher
 COPY --from=nginx-build ./nginx/objs/ngx_http_zip_module.so /usr/lib/nginx/modules/
