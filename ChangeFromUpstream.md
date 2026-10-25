@@ -80,10 +80,11 @@ Change commit: `36322f67ed5434df356f8332ccb25b4e72bf17de`.
 
 | File | Specific change |
 | --- | --- |
-| `backend/utils/translator.py` | Added asynchronous translation through Google's public Translate endpoint. Results are cached in memory by trimmed text and target language; the default target is `zh-CN`, and failed requests return the original text. |
-| `backend/handler/scan_handler.py` | Translates a scanned game's name and summary after metadata selection and before the attributes are persisted. |
-| `backend/endpoints/roms/__init__.py` | Translates automatically supplied name/summary values during ROM updates while retaining explicitly submitted values; translated values are used when available. |
-| `backend/tests/utils/test_translator.py` | Added tests for empty input, successful translation, cache hits, error fallback, paired metadata translation, and missing values. |
+| `backend/utils/translator.py` | Added asynchronous translation through Google's public Translate endpoint. Results are cached in memory by trimmed text and target language; the default target is `zh-CN`, and failed requests return the original text. Game titles are never machine translated: a title with an entry in `official_names_zh.json` becomes that official Chinese title, any other title is kept as the provider returned it. Summaries are translated with the title swapped for a placeholder, so the title inside the summary matches the displayed one. |
+| `backend/utils/official_names_zh.json` | Verified official Chinese titles, keyed by English title (case, accents and punctuation are ignored). Only titles confirmed against a reliable source belong here. |
+| `backend/handler/scan_handler.py` | Resolves a scanned game's title and translates its summary after metadata selection and before the attributes are persisted. |
+| `backend/endpoints/roms/__init__.py` | Resolves and translates values that came from a provider during ROM updates, including the name and summary the manual match dialog posts back when they equal the refetched provider values. Values the user typed are kept as typed. |
+| `backend/tests/utils/test_translator.py` | Tests for empty input, successful translation, cache hits, error fallback, title resolution, summary title protection and its fallback, and the official-names lookup. |
 
 ## Configuration, startup, and database helpers
 
