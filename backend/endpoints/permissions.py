@@ -55,6 +55,9 @@ async def emit_permissions_changed(*user_ids: int) -> None:
     only when the affected user is the current user. Call this from any path that
     mutates a user's role, group, overrides or hidden entities.
     """
+    # The gallery's cached id index, counts and filter values are computed per
+    # user with visibility applied, so they go stale with it.
+    db_rom_handler.invalidate_filter_values_cache()
     if not user_ids:
         return
     await asyncio.gather(*(_broadcast_permissions_changed(u) for u in user_ids))
@@ -154,7 +157,7 @@ def list_permission_groups(request: Request) -> list[PermissionGroupSchema]:
 @protected_route(
     router.post, "/groups", [Scope.USERS_WRITE], status_code=status.HTTP_201_CREATED
 )
-def create_permission_group(
+async def create_permission_group(
     request: Request, body: PermissionGroupCreate
 ) -> PermissionGroupSchema:
     """Create a permission group."""
@@ -171,6 +174,10 @@ def create_permission_group(
         color=body.color,
         grants=[(g.entity, g.action, g.own_only) for g in body.grants],
     )
+    if body.is_default:
+        await emit_permissions_changed(
+            *db_permission_handler.get_group_follower_ids(group.id)
+        )
     record(
         AuditAction.PERMISSION_GROUP_CREATE,
         request,
@@ -225,8 +232,7 @@ async def update_permission_group(
     )
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    # Grant changes alter every member's effective permissions.
-    await emit_permissions_changed(*db_permission_handler.get_group_member_ids(id))
+    await emit_permissions_changed(*db_permission_handler.get_group_follower_ids(id))
     record(
         AuditAction.PERMISSION_GROUP_EDIT,
         request,
@@ -361,8 +367,9 @@ async def add_hidden_entity(
         )
 
     # Only platforms and roms are honored by the resolver, so reject other entity
-    # types instead of storing a row the visibility filter would silently ignore. The id itself is a
-    # denylist entry, so a not-yet-present id is a harmless no-op, not an error.
+    # types instead of storing a row the visibility filter would silently ignore.
+    # The id itself is a denylist entry, so a not-yet-present id is a harmless
+    # no-op, not an error.
     if body.entity not in (PermEntity.PLATFORMS, PermEntity.ROMS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -427,5 +434,5 @@ async def _emit_for_principal(user_id: int | None, group_id: int | None) -> None
         await emit_permissions_changed(user_id)
     elif group_id is not None:
         await emit_permissions_changed(
-            *db_permission_handler.get_group_member_ids(group_id)
+            *db_permission_handler.get_group_follower_ids(group_id)
         )

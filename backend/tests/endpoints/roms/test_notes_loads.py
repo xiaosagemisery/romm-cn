@@ -12,9 +12,6 @@ from models.user import User
 EAGER_TABLES = (
     "rom_files",
     "roms_metadata",
-    "saves",
-    "states",
-    "screenshots",
     "rom_user",
     "collections_roms",
     "sibling_roms",

@@ -44,9 +44,16 @@ async def translate_text(
             )
             response.raise_for_status()
             data = response.json()
-            if data and isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+            if (
+                data
+                and isinstance(data, list)
+                and len(data) > 0
+                and isinstance(data[0], list)
+            ):
                 translated_segments = [
-                    seg[0] for seg in data[0] if isinstance(seg, list) and len(seg) > 0 and seg[0]
+                    seg[0]
+                    for seg in data[0]
+                    if isinstance(seg, list) and len(seg) > 0 and seg[0]
                 ]
                 translated = "".join(translated_segments)
                 if translated:

@@ -9,7 +9,7 @@ from tests.factories import make_device_token
 from config import OAUTH_ACCESS_TOKEN_EXPIRE_SECONDS
 from endpoints import permissions as permissions_endpoints
 from handler.auth.base_handler import oauth_handler
-from handler.database import db_user_handler
+from handler.database import db_permission_handler, db_user_handler
 from handler.database.base_handler import sync_session
 from handler.database.permissions_handler import DBPermissionsHandler
 from models.permission import PermissionGroup
@@ -189,6 +189,36 @@ def test_a_group_edit_closes_every_members_device_sockets_at_once(
         assert sorted(close.await_args.args[0]) == sorted(
             [viewer_token.id, editor_token.id]
         )
+    finally:
+        _cleanup()
+
+
+def test_users_without_a_group_follow_only_the_default(
+    client, access_token, viewer_user, editor_user
+):
+    try:
+        client.put(
+            f"/api/permissions/users/{viewer_user.id}",
+            headers=_bearer(access_token),
+            json={"set_group": True, "permission_group_id": None},
+        )
+        gid = client.post(
+            "/api/permissions/groups",
+            headers=_bearer(access_token),
+            json={"name": "Curators"},
+        ).json()["id"]
+        client.put(
+            f"/api/permissions/users/{editor_user.id}",
+            headers=_bearer(access_token),
+            json={"set_group": True, "permission_group_id": gid},
+        )
+        default = db_permission_handler.get_default_group()
+        assert default is not None
+
+        assert db_permission_handler.get_group_follower_ids(gid) == [editor_user.id]
+        default_followers = db_permission_handler.get_group_follower_ids(default.id)
+        assert viewer_user.id in default_followers
+        assert editor_user.id not in default_followers
     finally:
         _cleanup()
 

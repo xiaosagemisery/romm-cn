@@ -13,8 +13,10 @@ from typing import Any
 import pytest
 import sqlalchemy as sa
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 from sqlalchemy import DefaultClause, FetchedValue, Table, UniqueConstraint
 from sqlalchemy.sql.schema import NULL_UNSPECIFIED
 from tests.factories import make_platform, make_rom
@@ -239,12 +241,17 @@ def _replay(connection: sa.Connection, filename: str) -> None:
         ("0130_notifications.py", "notifications"),
         ("0131_notification_channels.py", "notification_channels"),
         ("0132_audit_events.py", "audit_events"),
+        ("0133_indexed_gallery_sorts.py", "roms"),
+        ("0134_gallery_sort_indexes.py", "roms"),
+        ("0137_rename_system_groups.py", "permission_groups"),
         ("0139_rom_user_pinned_media.py", "rom_user"),
         ("0143_sibling_platform_names.py", "platforms"),
         ("0144_user_oidc_sub.py", "users"),
         ("0145_drop_derivable_columns.py", "rom_file_doc_meta"),
         ("0146_roms_search_aliases.py", "roms"),
         ("0147_rom_file_title_ids.py", "rom_files"),
+        ("0149_roms_fs_name_no_ext_index.py", "roms"),
+        ("0150_roms_fs_name_lower_index.py", "roms"),
     ],
 )
 def test_a_revision_replayed_over_the_migrated_schema_is_a_no_op(
@@ -255,6 +262,26 @@ def test_a_revision_replayed_over_the_migrated_schema_is_a_no_op(
         _replay(connection, filename)
 
         assert _schema_of(connection, table) == before
+
+
+def test_the_upstream_revisions_follow_the_cross_user_smart_scopes_revision():
+    """The old fork chain ran 0152 right after 0129, so 0130 has to follow it."""
+    config = Config(str(Path(__file__).parent.parent / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(Path(__file__).parent.parent / "alembic")
+    )
+    script = ScriptDirectory.from_config(config)
+
+    assert script.get_heads() == ["0150_roms_fs_name_lower_index"]
+    chain = [
+        revision.revision
+        for revision in script.iterate_revisions("heads", "0129_remove_emulator_data")
+    ][::-1]
+    assert chain[:3] == [
+        "0129_remove_emulator_data",
+        "0152_cross_user_smart_scopes",
+        "0130_notifications",
+    ]
 
 
 def test_the_cross_user_smart_scopes_revision_empties_only_those_caches(

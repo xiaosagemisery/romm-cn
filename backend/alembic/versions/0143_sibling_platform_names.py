@@ -1,7 +1,7 @@
 """rename platforms scanned with their ScreenScraper sibling's name
 
 Revision ID: 0143_sibling_platform_names
-A39_rom_user_pinned_media
+Revises: 0139_rom_user_pinned_media
 Create Date: 2026-09-28 00:00:00.000000
 
 """

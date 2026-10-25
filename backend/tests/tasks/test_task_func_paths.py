@@ -45,7 +45,6 @@ def test_task_func_resolves_in_a_fresh_interpreter(func):
 JOB_ONLY_MODULES = (
     "tasks.scheduled",
     "tasks.manual",
-    "tasks.sync_push_pull_task",
     "handler.database",
     "handler.auth.base_handler",
     "fastapi",

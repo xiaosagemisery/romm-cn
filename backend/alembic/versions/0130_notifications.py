@@ -4,7 +4,7 @@ Persistent per-user notifications, kept until the user dismisses them, so what
 a background job or another user did reaches them the next time they open RomM.
 
 Revision ID: 0130_notifications
-A29_remove_emulator_data
+Revises: 0152_cross_user_smart_scopes
 Create Date: 2026-09-23 00:00:00.000000
 
 """
@@ -16,7 +16,7 @@ from utils.database import CustomJSON
 
 # revision identifiers, used by Alembic.
 revision = "0130_notifications"
-down_revision = "0129_remove_emulator_data"
+down_revision = "0152_cross_user_smart_scopes"
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """Add the per-user pinned overview media
 
 Revision ID: 0139_rom_user_pinned_media
-A37_rename_system_groups
+Revises: 0137_rename_system_groups
 Create Date: 2026-09-24 00:00:00.000000
 
 """

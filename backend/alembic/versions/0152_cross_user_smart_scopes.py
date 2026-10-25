@@ -1,7 +1,7 @@
 """clear smart collections scoped to another user's private collection
 
 Revision ID: 0152_cross_user_smart_scopes
-A50_roms_fs_name_lower_index
+Revises: 0129_remove_emulator_data
 Create Date: 2026-10-09 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from utils.database import CustomJSON
 
 # revision identifiers, used by Alembic.
 revision = "0152_cross_user_smart_scopes"
-down_revision = "0150_roms_fs_name_lower_index"
+down_revision = "0129_remove_emulator_data"
 branch_labels = None
 depends_on = None
 

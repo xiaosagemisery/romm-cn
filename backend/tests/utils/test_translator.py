@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from utils.translator import (
-    _TRANSLATION_CACHE,
-    translate_game_metadata,
-    translate_text,
-)
+from utils.translator import _TRANSLATION_CACHE, translate_game_metadata, translate_text
 
 
 @pytest.fixture(autouse=True)
@@ -33,8 +29,7 @@ async def test_translate_text_success():
         "en",
     ]
 
-    mock_resp = AsyncMock()
-    mock_resp.raise_for_status = AsyncMock()
+    mock_resp = MagicMock()
     mock_resp.json = lambda: fake_response_data
 
     mock_client = AsyncMock()
@@ -66,9 +61,7 @@ async def test_translate_text_fallback_on_error():
 @pytest.mark.asyncio
 async def test_translate_game_metadata():
     with patch("utils.translator.translate_text") as mock_translate_text:
-        mock_translate_text.side_effect = lambda t, **kwargs: (
-            f"ZH_{t}" if t else t
-        )
+        mock_translate_text.side_effect = lambda t, **kwargs: (f"ZH_{t}" if t else t)
 
         name, summary = await translate_game_metadata("Pokemon", "A great game.")
         assert name == "ZH_Pokemon"

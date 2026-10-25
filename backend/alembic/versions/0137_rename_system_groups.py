@@ -4,7 +4,7 @@
 descriptions are left alone.
 
 Revision ID: 0137_rename_system_groups
-A34_gallery_sort_indexes
+Revises: 0134_gallery_sort_indexes
 Create Date: 2026-09-25 00:00:00.000000
 
 """
