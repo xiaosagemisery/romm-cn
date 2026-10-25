@@ -32,7 +32,9 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- A Docker deploy test with the new compose example (fresh database).
+- Push the scan fix commit and confirm Pytest stays green.
+- Deploy test with real provider keys (IGDB or ScreenScraper with developer credentials) to see translated names and summaries end to end; the local test had no keys.
+- Stop and remove the local test stack when it's no longer needed (see Key files and commands).
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
   - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
@@ -46,15 +48,17 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 - Formatters outside Trunk: `uvx --python 3.14 black@26.5.1`, `isort@8.0.1 --settings-path ../.trunk/configs/.isort.cfg`, `ruff@0.15.22 check --config ../.trunk/configs/ruff.toml` (from `backend/`).
 - Push over SSH: `git push git@github.com:xiaosagemisery/romm-cn.git sync/upstream-all`. `gh` has an invalid token.
 
+- Local deploy test stack: project `romm-cn-test` on http://localhost:8090, containers `romm-cn-test` and `romm-cn-test-db`, override and mock library in the session scratchpad (`deploy-test/`). Stop it with `docker compose -p romm-cn-test -f examples/docker-compose.romm-cn.yml -f <override> down -v`.
+- The user's own RomM (`romm`, `romm-db`, upstream image, port 81) runs on the same Docker; never touch it.
+
 ## Blockers and risks
 
 - No local MariaDB/Redis (Docker Desktop not running), and the backend dependencies don't build on Windows, so backend pytest only runs in CI, Docker or WSL.
 - `0129_remove_emulator_data` revises `0128`, so a database coming from upstream RomM (at `0129_save_state_favorites_labels` or later) can't migrate onto the fork.
-- The compose example's image has not been built yet; the first Docker build is the deploy test.
 
 ## First step next time
 
-Run the Docker deploy test with `examples/docker-compose.romm-cn.yml` on a fresh database (start Docker Desktop first), then check migrations reach `0150`, a small scan translates names, and the Home stats widget works in extended mode.
+Push the scan fix and check CI, then decide whether to rerun the deploy test with provider keys.
 
 ## Pitfalls
 
@@ -72,3 +76,10 @@ Run the Docker deploy test with `examples/docker-compose.romm-cn.yml` on a fresh
 - CI on `40c883f1a`: Run Pytest (MariaDB and PostgreSQL) and Run E2E Tests passed. Frontend Checks and Typecheck didn't trigger, since that push changed no `frontend/` files; they passed on `14ca67108`.
 - CI logs: the REST API needs admin auth, but signed in to github.com, `/<owner>/<repo>/commit/<sha>/checks/<job id>/logs` redirects to the raw log text.
 - `docker compose -f examples/docker-compose.romm-cn.yml config` resolves (context = repo root, target `slim-image`, project `romm-cn`), and yamllint passes with the repo config. The image has not been built yet.
+- Local Docker deploy test (2026-10-25), `romm-cn:local` built from `examples/docker-compose.romm-cn.yml` in about 2 minutes, fresh MariaDB:
+  - Migrations ran to `0150_roms_fs_name_lower_index`; `notifications`, `audit_events` and `users.oidc_sub` exist, `saves` doesn't.
+  - gunicorn, RQ workers, RQ cron, nginx and valkey running; no errors at startup.
+  - Setup wizard (Chinese UI) detected the three mock platforms and created the admin.
+  - The first scan failed every ROM with `KeyError: 'name'` (libretro-only matches carry no name; upstream bug). After the fix, a complete rescan identified all three with libretro covers.
+  - The translator reached Google from the container (name and summary in 0.8 s). It wasn't exercised by the scan because no provider returned a name without keys.
+  - Home stats widget in extended mode shows games, platforms, favorites and disk size with no errors; server stats shows three cards; the game page has no play button or save tab; light and dark themes checked.

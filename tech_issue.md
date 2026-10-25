@@ -71,6 +71,17 @@
 - Fix: put the parentheses back by hand in files copied from upstream.
 - Future guidance: after running black outside Trunk, check the diff for `except A, B:` and keep upstream's form so syncs stay clean.
 
+## Docker on Windows
+
+- Symptom: `docker run -v <dir>:/lib alpine find /lib` failed with `exec /usr/bin/find: no such file or directory`.
+- Root cause: mounting over `/lib` hides Alpine's own musl loader, so no binary can start.
+- Fix: mount test folders at a non-system path such as `/data`, and prefix Git Bash commands with `MSYS_NO_PATHCONV=1` so container paths aren't rewritten to Windows paths.
+- Future guidance: never bind-mount over a system directory in a probe container; use `/data` or `/mnt/...`.
+
+- Symptom: the user's own RomM (`romm`, `romm-db`, upstream image, port 81) starts with Docker Desktop, and `examples/docker-compose.romm-cn.yml` uses the same container names.
+- Fix: run local tests with `-p romm-cn-test` and an override that renames the containers, maps another port (8090) and uses fresh volumes; never stop or modify the existing `romm` containers.
+- Future guidance: check `docker ps -a` before any compose `up` on this machine.
+
 ## Agent shell
 
 - Symptom: after a Bash call that ran `cd backend/...`, later relative commands ran in the wrong folder.

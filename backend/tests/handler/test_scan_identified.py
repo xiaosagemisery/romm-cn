@@ -46,6 +46,25 @@ async def test_libretro_only_match_counts_as_identified(sgdb_lookup):
     sgdb_lookup.assert_awaited_once()
 
 
+async def test_a_nameless_libretro_match_keeps_the_rom_name(sgdb_lookup):
+    platform = add_n64_platform()
+    rom = add_rom(platform, FS_NAME, "Mario Kart 64")
+
+    with patch(
+        "handler.scan_handler.meta_libretro_handler.get_rom",
+        new=AsyncMock(return_value=LibretroRom(libretro_id="Mario Kart 64 (USA)")),
+    ):
+        result = await run_scan(
+            platform,
+            rom,
+            scan_type=ScanType.COMPLETE,
+            metadata_sources=[MetadataSource.LIBRETRO, MetadataSource.SGDB],
+        )
+
+    assert result.is_identified
+    assert result.name == "Mario Kart 64"
+
+
 async def test_unmatched_rom_skips_the_sgdb_lookup(sgdb_lookup):
     platform = add_n64_platform()
     rom = add_rom(platform, FS_NAME, "Mario Kart 64")

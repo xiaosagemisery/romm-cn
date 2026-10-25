@@ -39,6 +39,16 @@ Key targets for the fork's own code:
 | i18n order | `python3 src/locales/check_i18n_sorted.py` | Every locale file is sorted (`--fix` sorts them). |
 | End to end | `npm run test:e2e` (see `frontend/e2e/README.md`) | All Playwright specs pass against a running app with seeded e2e users. Reports land in `frontend/e2e/.output/`. |
 
+## Docker deploy test
+
+Run on a fresh database, isolated from any other RomM on the machine:
+
+1. Write an override that renames the containers, maps another port and sets test secrets and the library path (see `HANDOFF.md`).
+2. `docker compose -p romm-cn-test -f examples/docker-compose.romm-cn.yml -f <override> up -d --build`
+3. Expected: `GET /api/heartbeat` returns 200, the log says "Database migrations succeeded", and `alembic_version` is `0150_roms_fs_name_lower_index`.
+4. Finish the setup wizard, scan, and check the Home stats widget (extended mode), server stats, a game page and both themes.
+5. `docker compose -p romm-cn-test ... down -v` when done.
+
 ## Lint (both stacks)
 
 `trunk fmt && trunk check` from the repo root. Expected: no issues on the changed files.
