@@ -8,6 +8,8 @@
 
 ## Completed
 
+- Issues #1 and #2 (closed by `5a46a4939`): game titles are no longer machine translated (verified official title when `official_names_zh.json` has one, otherwise as provided), summaries are translated with the title protected, and the manual match dialog's posted provider values go through the same step as a scan. `search_titles_en.json` maps known Chinese filename titles to English for the provider name search (斑鸠, 路易的鬼屋, 星之卡比 三重彩).
+
 Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 1. `6dfceda16` Backend:
@@ -32,13 +34,12 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- Issue #1 (https://github.com/xiaosagemisery/romm-cn/issues/1): game names are machine translated instead of using official Chinese titles, and manual matches in the web UI aren't translated at all. Issues were enabled on the fork for this.
-- Issue #2 (https://github.com/xiaosagemisery/romm-cn/issues/2): after a manual "Match ROM" in the web UI the name and summary stay in English, because the dialog submits them as form values and `update_rom` only translates provider-filled ones.
-- Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending a decision on #1.
+- `backend/utils/official_names_zh.json` has one verified entry (Super Smash Bros. -> 任天堂明星大乱斗). The other official titles listed in issue #1 still need a reliable source before they go in; add them there once confirmed.
+- Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending issue #1; it can resume now that titles are kept as provided.
+- The summary title placeholder (`TITLE_PLACEHOLDER`) was only tested with a mocked translator; check it once against the live Google endpoint from a network that isn't rate limited.
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
   - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
-- Manual GitHub step: the default branch is `master`, so scheduled workflows run upstream's files. Disable scheduled workflows in the fork's Actions settings, or make `sync/upstream-all` the default branch.
 
 ## Key files and commands
 

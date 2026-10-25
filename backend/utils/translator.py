@@ -13,6 +13,7 @@ from logger.logger import log
 _TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
 GOOGLE_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
 OFFICIAL_NAMES_PATH = Path(__file__).with_name("official_names_zh.json")
+SEARCH_TITLES_PATH = Path(__file__).with_name("search_titles_en.json")
 # Latin-only token that machine translation leaves alone, standing in for the
 # game title while the summary is translated.
 TITLE_PLACEHOLDER = "ZQX0ZQX"
@@ -29,14 +30,23 @@ def normalize_title(title: str) -> str:
     return "".join(char for char in decomposed if char.isalnum())
 
 
+def _load_title_map(path: Path) -> dict[str, str]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        log.warning(f"Could not load {path.name}: {exc}")
+        return {}
+    return {normalize_title(title): value for title, value in raw.items() if value}
+
+
 @lru_cache(maxsize=1)
 def _official_names() -> dict[str, str]:
-    try:
-        raw = json.loads(OFFICIAL_NAMES_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        log.warning(f"Could not load {OFFICIAL_NAMES_PATH.name}: {exc}")
-        return {}
-    return {normalize_title(title): zh for title, zh in raw.items() if zh}
+    return _load_title_map(OFFICIAL_NAMES_PATH)
+
+
+@lru_cache(maxsize=1)
+def _search_titles() -> dict[str, str]:
+    return _load_title_map(SEARCH_TITLES_PATH)
 
 
 def official_name(name: str, target_lang: str = "zh-CN") -> str | None:
@@ -144,10 +154,17 @@ async def translate_game_metadata(
 
 
 async def translate_search_term(search_term: str) -> str:
-    """Translate a filename-derived search term with Chinese characters to English."""
+    """Turn a filename-derived search term with Chinese characters into English.
+
+    A title listed in `search_titles_en.json` maps to its known English title;
+    any other is machine translated.
+    """
     if not HAN_CHARACTER_PATTERN.search(search_term):
         return search_term
 
     title = " ".join(CHINESE_RELEASE_LABEL_PATTERN.sub(" ", search_term).split())
+    if known := _search_titles().get(normalize_title(title)):
+        return known
+
     translated = await translate_text(title, target_lang="en", source_lang="zh-CN")
     return translated or title

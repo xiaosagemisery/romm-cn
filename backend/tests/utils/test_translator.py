@@ -162,4 +162,13 @@ async def test_translate_search_term_keeps_the_title_when_translation_fails():
         "utils.translator.translate_text",
         new=AsyncMock(side_effect=lambda text, **_: text),
     ):
-        assert await translate_search_term("斑鸠 汉化版") == "斑鸠"
+        assert await translate_search_term("忍者龙剑传 汉化版") == "忍者龙剑传"
+
+
+@pytest.mark.asyncio
+async def test_translate_search_term_prefers_a_known_english_title():
+    with patch("utils.translator.translate_text", new=AsyncMock()) as translate:
+        assert await translate_search_term("斑鸠 汉化版") == "Ikaruga"
+        assert await translate_search_term("星之卡比  三重彩") == "Kirby: Triple Deluxe"
+
+    translate.assert_not_awaited()
