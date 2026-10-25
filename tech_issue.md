@@ -49,6 +49,16 @@
 - Fix: run the backend and its tests in Docker, WSL or CI. Static checks (ruff, black, isort) run fine through `uvx`.
 - Future guidance: don't try to build the backend environment natively on Windows.
 
+- Symptom: `npm ci` and lockfile updates refused to run because of the engine check.
+- Root cause: this machine has Node 25 with npm 11.6, while the project asks for Node 24 and npm 11.10 or newer, and `frontend/.npmrc` sets `engine-strict`.
+- Fix: run the pinned npm without installing it: `npx npm@11.12.1 ci --engine-strict=false` (same for `install`).
+- Future guidance: prefer installing Node 24 from `frontend/.nvmrc`; until then, use the `npx npm@...` form and check the lockfile diff stays limited to the intended packages.
+
+- Symptom: `python3 src/locales/check_i18n_locales.py` did nothing, and `python` failed on emoji with a GBK encoding error.
+- Root cause: `python3` here is the Windows Store placeholder, and the console code page is GBK.
+- Fix: run `python` with `PYTHONIOENCODING=utf-8`.
+- Future guidance: on this machine, never use `python3`; set `PYTHONIOENCODING=utf-8` for scripts that print non-ASCII.
+
 ## Formatting
 
 - Symptom: running `isort` through `uvx` with `--settings-path .` rewrote imports into the default style, splitting first-party and third-party groups and wrapping lines with hanging indents.

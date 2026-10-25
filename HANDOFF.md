@@ -1,49 +1,70 @@
 # Handoff
 
+## State
+
+- `master` mirrors upstream RomM at `7eae2b8ff` and carries no fork changes.
+- `sync/upstream-all` is the daily branch. It holds the upstream sync plus the fork's removals and the cleanup commits below, which are local only until pushed.
+- `.git-credentials` sits untracked at the root and is now ignored. Never stage or print it.
+
 ## Completed
-- Restored the fork's `master` to the pre-update baseline `6c3b32582594eb6f94bc858a05db78f33e84b882`; upstream `rommapp/romm/master` remains separate and newer.
-- Renamed the feature branch from `codex/local-updates-20261024` to `codex/remove-streaming-netplay-add-translator`.
-- Added `README.md` category summaries, created `ChangeFromUpstream.md` with file-level details against baseline `6c3b325...`, and added the future documentation rule to `AGENTS.md`.
-- Replaced the bad local-only README commit `e0f517106` before creating documentation commit `be12d57df4605160abe972bad1a4759a26b1faff`.
-- Pushed the new branch over SSH, verified GitHub points it to `be12d57d...`, then deleted the old remote branch with an exact `--force-with-lease` check. The local branch tracks `origin/codex/remove-streaming-netplay-add-translator`.
-- Added troubleshooting notes for the PowerShell, GitHub connector, and GitHub CLI issues encountered during the branch work; those notes were included in the first SSH push in this turn.
-- After the first push, `git ls-remote` confirmed the remote feature branch pointed to `fc929b8d37ec29656edfbb2c0f2c79edfe1fad9a`. Updated this handoff with that result, pushed follow-up commit `0897d293589da0e05e4f5878f5520d2ed67da281`, then verified the remote tip and local `HEAD` matched at `0897d2935`.
-- Recorded the `.git/index.lock` sandbox write denial and its workaround in `tech_issue.md`; this handoff and troubleshooting update are included in the current branch push.
+
+Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
+
+1. `6dfceda16` Backend:
+   - Migration chain re-ordered to `0129 → 0152 → 0130 … 0150` (head `0150_roms_fs_name_lower_index`), so databases stamped `0152` by the older fork chain get 0130 to 0150.
+   - Restored the non-age parts of upstream #5081: gallery cache invalidation on permission changes and default-group followers.
+   - `tools/generate_test_data.py` rebuilt from upstream.
+   - Removed stale test config, `utils/openapi.py` and `asyncssh`.
+2. `beaa5b01b` CI:
+   - Workflows run on pushes to `sync/upstream-all`.
+   - Playwright install for the Storybook tests; e2e builds before previewing and uploads from the right folder.
+   - Upstream-only jobs guarded, `FUNDING.yml` removed, `.git-credentials` ignored.
+3. `a88e1861a` Docs:
+   - `AGENTS.md` is the single instruction file and `CLAUDE.md` only imports it.
+   - Architecture docs and skills updated.
+   - Added `project.md`, `test_method.md`, `test_troubleshooting.md`; `tech_issue.md` extended.
+4. `ef988664d` Frontend:
+   - Fixed the Home stats widget crash in extended mode; removed always-zero stats cards and two no-op settings.
+   - Deleted player-only files, the console assets and four unused dependencies.
+   - Fixed stale tests and the save/sync wording in en_US and zh_CN.
+5. The docs commit after these updates `README.md`, `ChangeFromUpstream.md`, this file, and the troubleshooting notes.
 
 ## Remaining
-- Review the code changes in `36322f6...` before proposing a pull request, especially the removal of streaming/netplay functionality and the Google Translate integration.
-- Run targeted checks for any code changes accepted after review. No tests were run during this documentation and branch-renaming task.
-- Preserve the unrelated local edit in `CLAUDE.md`; keep untracked `.git-credentials` out of Git.
+
+- Push `sync/upstream-all` (needs the user's go-ahead), then check the first CI run: `pytest.yml`, `frontend.yml`, `typecheck.yml`, `e2e.yml`.
+- The backend tests changed in `6dfceda16` have not run anywhere yet. CI is the first run.
+- Not done by choice:
+  - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
+  - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
+- Manual GitHub step: the default branch is `master`, so scheduled workflows run upstream's files. Disable scheduled workflows in the fork's Actions settings, or make `sync/upstream-all` the default branch.
 
 ## Key files and commands
-- Summary: `README.md`.
-- Detailed change list: `ChangeFromUpstream.md`.
-- Future documentation rule: `AGENTS.md`.
-- Commit: `be12d57df4605160abe972bad1a4759a26b1faff` (`docs: document changes from fork baseline`).
-- Branch rename: `git branch -m codex/remove-streaming-netplay-add-translator`.
-- Push: `git push git@github.com:xiaosagemisery/romm-cn.git HEAD:refs/heads/codex/remove-streaming-netplay-add-translator`.
-- Push commits in the latest update: `fc929b8d37ec29656edfbb2c0f2c79edfe1fad9a` (`docs: update handoff and git troubleshooting`) and `0897d293589da0e05e4f5878f5520d2ed67da281` (`docs: record successful SSH push`). The remote tip was verified over SSH and the tracking ref refreshed with `git fetch`.
-- Delete old remote branch: `git push --force-with-lease=refs/heads/codex/local-updates-20261024:31ac905afad0b472ee4dac03efcb98b57c9b3e4b git@github.com:xiaosagemisery/romm-cn.git :refs/heads/codex/local-updates-20261024`.
-- SSH authentication check succeeded with `ssh -o BatchMode=yes -T git@github.com`; `gh auth status` reports its stored token invalid.
+
+- Change docs: `README.md`, `ChangeFromUpstream.md`. Rules: `AGENTS.md`. Overview: `project.md`. Tests: `test_method.md`.
+- Migration order check without a database: parse `revision`/`down_revision` in `backend/alembic/versions/` (see `test_troubleshooting.md`).
+- uv on this machine: `UV_PYTHON_INSTALL_DIR=<non-Roaming dir> uvx --from "uv==0.13.4" uv lock`.
+- Formatters outside Trunk: `uvx --python 3.14 black@26.5.1`, `isort@8.0.1 --settings-path ../.trunk/configs/.isort.cfg`, `ruff@0.15.22 check --config ../.trunk/configs/ruff.toml` (from `backend/`).
+- Push over SSH: `git push git@github.com:xiaosagemisery/romm-cn.git sync/upstream-all`. `gh` has an invalid token.
 
 ## Blockers and risks
-- The unrelated `CLAUDE.md` edit remains local. `.git-credentials` remains untracked and excluded from Git. The current handoff and troubleshooting updates are the intended push contents.
-- The feature branch's code changes have not been reviewed or tested in this turn.
-- No pull request was created.
+
+- No local MariaDB/Redis (Docker Desktop not running), and the backend dependencies don't build on Windows, so backend pytest only runs in CI, Docker or WSL.
+- `0129_remove_emulator_data` revises `0128`, so a database coming from upstream RomM (at `0129_save_state_favorites_labels` or later) can't migrate onto the fork.
+- The e2e workflow changes are untested until CI runs them.
 
 ## First step next time
-- Review `git diff 6c3b32582594eb6f94bc858a05db78f33e84b882..codex/remove-streaming-netplay-add-translator`, then run only the targeted tests relevant to code changes that are retained.
 
-## Pitfalls encountered
-- The GitHub CLI's stored token is invalid, but SSH authentication works. Use SSH for Git pushes and branch deletion; this avoids the HTTPS Schannel credential path.
-- Sandboxed `git add` can fail when Git cannot create `.git/index.lock`; use the approved Git access path for metadata writes and stage only intended files.
-- A commit permalink does not prove a commit belongs to a particular branch; verify branch heads and ancestry.
-- GitHub's branch API reports the fork's `master` at `6c3b325...`, the renamed feature branch at `be12d57...`, and the old feature branch as deleted.
+Read the CI results of the first push of `sync/upstream-all` and fix any failure, starting with `pytest.yml` (migration chain and permission tests).
 
-## Verification and artifacts
-- `git diff --cached --check` completed with no whitespace errors before commit.
-- GitHub API confirmed `codex/remove-streaming-netplay-add-translator` at `be12d57df4605160abe972bad1a4759a26b1faff`.
-- GitHub API returned 404 for the deleted `codex/local-updates-20261024` branch.
-- GitHub API confirmed `master` remains at `6c3b32582594eb6f94bc858a05db78f33e84b882`.
-- After `git fetch` over SSH, local `HEAD` and `origin/codex/remove-streaming-netplay-add-translator` both matched `0897d293589da0e05e4f5878f5520d2ed67da281`.
-- No tests were run; the commit changes documentation only.
+## Pitfalls
+
+- `tech_issue.md` has the details: the stray uv 0.13.0, the app's `AppData\Roaming` virtualization, native builds on Windows, isort's config path, black's PEP 758 `except` style, Node/npm engine checks, `python3` being a placeholder, and the Bash tool keeping its working directory.
+- The repo-root `.venv` was deleted during this round without checking its contents first; recreate it with `uv sync` when needed.
+
+## Verification
+
+- Migration chain parses as linear with the single head `0150_roms_fs_name_lower_index`.
+- `ruff`, `black` and `isort` (pinned versions, repo configs) pass on the changed backend files; `uv lock --check` passes.
+- Frontend: `npm ci`, `npm run typecheck`, `npm run build`, ESLint, Prettier and both i18n checks pass. `npm run test` passed 2735 of 2743; the 8 failures come from this machine's Chinese locale (`RDateField`) and a parallel-run timeout (`useBrowserLocale`, which passes alone).
+- The extended stats widget was checked in a temporary Storybook story with a mocked `/stats`, in both themes; not checked against a running backend.
+- All 11 workflows parse as YAML; actionlint wasn't available.

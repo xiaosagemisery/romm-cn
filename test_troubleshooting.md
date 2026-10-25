@@ -21,3 +21,12 @@
 
 - Symptom: `npm test` fails in `frontend.yml` because Chromium isn't installed.
 - Fix: `npx playwright install --only-shell chromium` before `npm test` (the workflow now does this).
+
+## Vitest failures that only happen on this machine
+
+- `RDateField` (5 tests): the system locale is Chinese, so dates render as `2024年3月15日` instead of `Mar 15, 2024`. CI runs on English Linux, so it should not hit this. Locally, run with an English locale (for example `LANG=en_US.UTF-8`) or ignore these.
+- `useBrowserLocale` (3 tests): `waitFor` times out when the full suite runs in parallel; the file passes 5/5 on its own (`npx vitest run src/composables/useBrowserLocale`).
+
+## Storybook tests need a local Chromium
+
+- Run `npx playwright install --only-shell chromium` once before `npm run test`.
