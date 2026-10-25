@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   update-hltb-api-url:
+    if: github.repository == 'rommapp/romm'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

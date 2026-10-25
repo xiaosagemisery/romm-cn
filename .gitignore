@@ -91,3 +91,6 @@ frontend/.last-run.json
 
 # mypy
 .mypy_cache
+
+# Local git credential store
+.git-credentials

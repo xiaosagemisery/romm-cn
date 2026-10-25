@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   validate-tag-semver:
+    if: github.repository == 'rommapp/romm'
     runs-on: ubuntu-latest
     outputs:
       valid: ${{ steps.check_tag.outputs.valid }}
