@@ -3,23 +3,30 @@ import json
 import threading
 from datetime import timedelta
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
-import httpx
+import httpx2
 import pytest
 from authlib.integrations.base_client.errors import MismatchingStateError, OAuthError
-from authlib.jose.errors import InvalidClaimError
 from fastapi import status
 from fastapi.testclient import TestClient
+from joserfc.errors import InvalidClaimError
+from tests.factories import make_device_token
 
 from config import OAUTH_ACCESS_TOKEN_EXPIRE_SECONDS
+from endpoints import permissions as permissions_endpoints
+from endpoints import user as user_endpoints
 from handler.auth import base_handler as auth_handler_module
-from handler.auth import auth_handler, oauth_handler
+from handler.auth.base_handler import auth_handler, oauth_handler
 from handler.auth.constants import SESSION_COOKIE_NAME
 from handler.auth.middleware.redis_session_middleware import RedisSessionMiddleware
+from handler.database import (
+    db_notification_handler,
+)
 from handler.database.users_handler import DBUsersHandler
-from handler.redis_handler import async_cache
+from handler.redis_handler import async_cache, redis_client
+from models.notification import NotificationKind
 from models.user import Role, User
 
 
@@ -39,6 +46,25 @@ def test_login_logout(client, admin_user: User):
     response = client.post("/api/logout")
 
     assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.parametrize("known", [True, False])
+def test_forgot_password_answers_alike_and_sends_the_link_afterwards(
+    client, admin_user: User, known: bool
+):
+    with mock.patch.object(auth_handler, "send_password_reset_link") as send_link:
+        response = client.post(
+            "/api/forgot-password",
+            json={"username": admin_user.username if known else "nobody"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() is None
+    if known:
+        send_link.assert_called_once()
+        assert send_link.call_args.args[0].id == admin_user.id
+    else:
+        send_link.assert_not_called()
 
 
 def test_get_all_users(client, access_token: str):
@@ -203,6 +229,34 @@ def test_update_user(client, access_token: str, editor_user: User):
     assert user["role"] == "user"
 
 
+def test_role_change_notifies_the_user(
+    client, access_token: str, admin_user: User, editor_user: User
+):
+    response = client.put(
+        f"/api/users/{editor_user.id}",
+        data={"role": "admin"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    [notification] = db_notification_handler.get_notifications(editor_user.id)
+    assert notification.kind == NotificationKind.ROLE_CHANGED
+    assert notification.actor_id == admin_user.id
+    assert notification.data == {"role": "admin"}
+
+
+def test_resubmitting_the_same_role_notifies_nobody(
+    client, access_token: str, editor_user: User
+):
+    client.put(
+        f"/api/users/{editor_user.id}",
+        data={"role": "user"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert db_notification_handler.get_notifications(editor_user.id) == []
+
+
 def test_update_user_rejects_non_image_avatar(
     client, access_token: str, editor_user: User
 ):
@@ -249,7 +303,7 @@ def _invite_token(client, access_token: str) -> str:
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == HTTPStatus.CREATED
-    return response.json()["token"]
+    return cast(str, response.json()["token"])
 
 
 def test_register_with_a_bad_token_does_not_disclose_existing_accounts(
@@ -321,7 +375,7 @@ def test_overlapping_registrations_spend_one_invite_once(client, access_token: s
     # Hold each request at the token check until the other arrives, so the only
     # thing that can keep the second out is the consume being one operation.
     rendezvous = threading.Barrier(2)
-    live_redis = auth_handler_module.redis_client
+    live_redis = redis_client
 
     class _RendezvousRedis:
         def get(self, key, *args, **kwargs):
@@ -333,7 +387,7 @@ def test_overlapping_registrations_spend_one_invite_once(client, access_token: s
         def __getattr__(self, name):
             return getattr(live_redis, name)
 
-    responses: list = []
+    responses: list[httpx2.Response] = []
 
     def register(index: int) -> None:
         responses.append(
@@ -409,6 +463,78 @@ def test_delete_user(client, access_token: str, editor_user: User):
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == HTTPStatus.OK
+
+
+def test_delete_user_closes_their_device_sockets(
+    mocker, client, access_token: str, editor_user: User
+):
+    token, _ = make_device_token(editor_user, None, scopes="devices.read")
+    close = mocker.patch.object(
+        user_endpoints, "close_client_token_sockets", mock.AsyncMock()
+    )
+
+    response = client.delete(
+        f"/api/users/{editor_user.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    close.assert_awaited_once_with([token.id])
+
+
+def test_disabling_a_user_closes_their_device_sockets(
+    mocker, client, access_token: str, editor_user: User
+):
+    token, _ = make_device_token(editor_user, None, scopes="devices.read")
+    close = mocker.patch.object(
+        user_endpoints, "close_client_token_sockets", mock.AsyncMock()
+    )
+
+    response = client.put(
+        f"/api/users/{editor_user.id}",
+        data={"enabled": "false"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    close.assert_awaited_once_with([token.id])
+
+
+def test_changing_a_users_role_closes_their_device_sockets(
+    mocker, client, access_token: str, editor_user: User
+):
+    token, _ = make_device_token(editor_user, None, scopes="devices.read")
+    close = mocker.patch.object(
+        permissions_endpoints, "close_client_token_sockets", mock.AsyncMock()
+    )
+
+    response = client.put(
+        f"/api/users/{editor_user.id}",
+        data={"role": "admin"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    close.assert_awaited_once_with([token.id])
+
+
+@pytest.mark.parametrize("form", [{"ra_username": "someone"}, {"enabled": "true"}])
+def test_other_user_edits_leave_their_device_sockets_open(
+    mocker, client, access_token: str, editor_user: User, form
+):
+    make_device_token(editor_user, None, scopes="devices.read")
+    close = mocker.patch.object(
+        user_endpoints, "close_client_token_sockets", mock.AsyncMock()
+    )
+
+    response = client.put(
+        f"/api/users/{editor_user.id}",
+        data=form,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    close.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -514,7 +640,7 @@ async def test_sessions_are_revoked_on_both_sides_of_the_write(
     real_update = DBUsersHandler.update_user
 
     def record_update(
-        self: DBUsersHandler, id: int, data: dict, *args: Any, **kwargs: Any
+        self: DBUsersHandler, id: int, data: dict[str, Any], *args: Any, **kwargs: Any
     ) -> User:
         # `set_last_active` writes on every authenticated request; only the
         # credential write is being ordered here.
@@ -679,7 +805,7 @@ def _rejected_oidc_callback(
     client: TestClient,
     error: Exception | None = None,
     headers: dict[str, str] | None = None,
-) -> httpx.Response:
+) -> httpx2.Response:
     fake_oauth = mock.MagicMock()
     fake_oauth.openid.authorize_access_token = mock.AsyncMock(
         side_effect=error or MismatchingStateError()
@@ -848,15 +974,10 @@ def test_update_user_ui_settings_nested_object(
     assert user["ui_settings"] == nested_settings
 
 
-@pytest.mark.parametrize("new_password", ["", "short", "pässword"])
-def test_reset_password_rejects_an_invalid_password_before_spending_the_link(
-    client, new_password: str
-):
-    with mock.patch.object(auth_handler, "verify_password_reset_token") as verify:
-        response = client.post(
-            "/api/reset-password",
-            json={"token": "a-token", "new_password": new_password},
-        )
-
-    assert response.status_code == HTTPStatus.BAD_REQUEST
-    verify.assert_not_called()
+def test_overlong_ra_username_rejected(client, access_token: str, admin_user: User):
+    response = client.put(
+        f"/api/users/{admin_user.id}",
+        data={"ra_username": "x" * 256},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

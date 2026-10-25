@@ -10,14 +10,16 @@ from datetime import timedelta
 
 import pytest
 from fastapi import status
+from tests.factories import make_rom
 
 from config import OAUTH_ACCESS_TOKEN_EXPIRE_SECONDS
 from endpoints import roms as rom_endpoints
 from endpoints.roms import walkthrough as walkthrough_endpoints
-from handler.auth import oauth_handler
-from handler.database import db_rom_handler, db_user_handler
+from handler.auth.base_handler import oauth_handler
+from handler.database import db_collection_handler, db_rom_handler, db_user_handler
 from handler.database.base_handler import sync_session
 from handler.filesystem import fs_resource_handler
+from models.collection import SmartCollection
 from models.permission import (
     HiddenEntity,
     PermAction,
@@ -25,7 +27,7 @@ from models.permission import (
     PermissionGroup,
     PermissionGroupGrant,
 )
-from models.rom import Rom, RomFile, RomFileCategory
+from models.rom import RomFile, RomFileCategory
 from utils.gamelist_exporter import GamelistExporter
 from utils.pegasus_exporter import PegasusExporter
 
@@ -50,7 +52,7 @@ def _hide(entity, entity_id, user_id):
 
 def _make_group(name, grants):
     with sync_session.begin() as s:
-        group = PermissionGroup(name=name, is_system=False)
+        group = PermissionGroup(name=name)
         s.add(group)
         s.flush()
         gid = group.id
@@ -69,7 +71,7 @@ def _cleanup_non_system_groups():
     # non-system groups created here need explicit cleanup.
     yield
     with sync_session.begin() as s:
-        s.query(PermissionGroup).filter(PermissionGroup.is_system.is_(False)).delete(
+        s.query(PermissionGroup).filter(PermissionGroup.system_key.is_(None)).delete(
             synchronize_session="evaluate"
         )
 
@@ -104,6 +106,29 @@ def test_hidden_rom_excluded_and_detail_404(client, viewer_user, rom):
 
     detail = client.get(f"/api/roms/{rom.id}", headers=_auth(viewer_user))
     assert detail.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_hidden_rom_is_dropped_from_a_smart_collection_and_its_count(
+    client, viewer_user, admin_user, rom, second_rom
+):
+    smart = db_collection_handler.add_smart_collection(
+        SmartCollection(
+            name="Everything",
+            description="",
+            user_id=admin_user.id,
+            is_public=True,
+            filter_criteria={"platform_ids": [rom.platform_id]},
+        )
+    )
+    db_collection_handler.refresh_smart_collection(smart.id)
+    _hide(PermEntity.ROMS, rom.id, viewer_user.id)
+
+    resp = client.get(f"/api/collections/smart/{smart.id}", headers=_auth(viewer_user))
+
+    assert resp.status_code == status.HTTP_200_OK
+    body = resp.json()
+    assert body["rom_ids"] == [second_rom.id]
+    assert body["rom_count"] == 1
 
 
 def test_hidden_platform_cascades_to_its_roms(client, viewer_user, rom, platform):
@@ -155,6 +180,30 @@ def test_physical_game_create_on_hidden_platform_is_404_masked(
     )
     assert resp.status_code == status.HTTP_404_NOT_FOUND
     assert db_rom_handler.get_roms_scalar(platform_ids=[platform.id]) == []
+
+
+def test_chunked_upload_to_hidden_platform_is_masked(client, editor_user, platform):
+    # Editor has library-wide ROM write access, but hidden platforms must answer
+    # exactly like missing ones to prevent enumeration.
+    _hide(PermEntity.PLATFORMS, platform.id, editor_user.id)
+
+    headers = {
+        **_auth(editor_user),
+        "x-upload-filename": "game.zip",
+        "x-upload-total-size": "11",
+        "x-upload-total-chunks": "2",
+    }
+    hidden = client.post(
+        "/api/roms/upload/start",
+        headers={**headers, "x-upload-platform": str(platform.id)},
+    )
+    missing = client.post(
+        "/api/roms/upload/start",
+        headers={**headers, "x-upload-platform": "999999"},
+    )
+
+    assert hidden.status_code == status.HTTP_400_BAD_REQUEST
+    assert hidden.json() == missing.json()
 
 
 @pytest.mark.parametrize(
@@ -320,18 +369,7 @@ def test_note_on_hidden_rom_not_reachable_via_visible_rom_path(
 ):
     # The path rom only authorizes itself: a note belonging to a hidden rom must
     # not be reachable by pairing its id with a visible rom in the path.
-    hidden = db_rom_handler.add_rom(
-        Rom(
-            platform_id=platform.id,
-            name="hidden_rom",
-            slug="hidden_rom_slug",
-            fs_name="hidden_rom.zip",
-            fs_name_no_tags="hidden_rom",
-            fs_name_no_ext="hidden_rom",
-            fs_extension="zip",
-            fs_path=f"{platform.slug}/roms",
-        )
-    )
+    hidden = make_rom(platform, "hidden_rom")
     note = db_rom_handler.create_rom_note(
         rom_id=hidden.id, user_id=viewer_user.id, title="secret"
     )
@@ -369,6 +407,7 @@ def test_delete_requires_delete_grant_even_with_write_scope(
     )
     db_user_handler.update_user(viewer_user.id, {"permission_group_id": gid})
     user = db_user_handler.get_user(viewer_user.id)
+    assert user is not None
 
     # Coarse PLATFORMS_WRITE is present (projected from the write grant), so the
     # request passes the scope gate and is rejected by the fine delete check.

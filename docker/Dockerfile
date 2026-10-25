@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Stages:
 #   - python-runtime: Patch the Python image's libraries before they ship
 #   - frontend-build: Build frontend
@@ -5,6 +6,7 @@
 #   - backend-dev-build: Similar to `backend-build`, but also compiles and installs development dependencies
 #   - rahasher-build: Build RAHasher
 #   - sigil-build: Build sigil Python bindings (title ID extraction)
+#   - rom-converto-fetch: Fetch the rom-converto CLI (ROM conversion and metadata)
 #   - nginx-build: Build nginx modules
 #   - production-stage: Setup frontend and backend
 #   - slim-image: Slim image with only the necessary files
@@ -14,19 +16,19 @@
 
 
 # ARGUMENT DECLARATIONS
-ARG ALPINE_VERSION=3.23
-ARG ALPINE_SHA256=25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
+ARG ALPINE_VERSION=3.24
+ARG ALPINE_SHA256=294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 # Pins the base image tag, so it cannot read ../.python-version; keep the two in sync.
 ARG PYTHON_VERSION=3.14
-ARG PYTHON_ALPINE_SHA256=8caa2adfeb414dfe68d8b257f7aea9e205a400521c2b13b2d2e5e731fb8e70e5
+ARG PYTHON_ALPINE_SHA256=9e9fde4d32eedce0b661d9ab91e826b62dddf28e928c230ec55f1866cac66b01
 # The image's pip comes from CPython's bundled ensurepip, which lags pip's security releases.
 ARG PIP_VERSION=26.2.2
 ARG NODE_VERSION=24.22
-ARG NODE_ALPINE_SHA256=0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
-ARG NGINX_VERSION=1.29.5
-ARG NGINX_SHA256=1d13701a5f9f3fb01aaa88cef2344d65b6b5bf6b7d9fa4cf0dca557a8d7702ba
-ARG UV_VERSION=0.11.2
-ARG UV_SHA256=f661eb5c4ea5aae705674c4bc5052a4a0b5148db95452395dbececa1e9e7a1ec
+ARG NODE_ALPINE_SHA256=6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d
+ARG NGINX_VERSION=1.30.5
+ARG NGINX_SHA256=a5f2157a0302eb0c5e300415effb63a9e70ed1eb9c107283819bf6d149ab607c
+ARG UV_VERSION=0.13.4
+ARG UV_SHA256=0cb69bb18ffcd57db04f045010b0234132a111da70dde5a393d26ad288d38e13
 
 
 FROM python:${PYTHON_VERSION}-alpine${ALPINE_VERSION}@sha256:${PYTHON_ALPINE_SHA256} AS python-alias
@@ -36,7 +38,9 @@ RUN pip install --no-cache-dir --upgrade pip==${PIP_VERSION}
 
 # PATCHED PYTHON RUNTIME
 # production-stage copies /usr/lib from here over its own, so these libraries
-# need the same patches, or the stale ones land in the final image.
+# need the same patches, or the stale ones land in the final image. Kept apart
+# from python-alias so that busting this layer's cache (see `no-cache-filters`
+# in build.yml) does not also rebuild the venv and the sigil bindings.
 FROM python-alias AS python-runtime
 RUN apk upgrade --no-cache
 
@@ -44,7 +48,6 @@ RUN apk upgrade --no-cache
 # FRONTEND BUILD
 # Built on the native build platform: the output (/front/dist) is static JS/CSS,
 # fully architecture-independent, so there is no need to emulate the target arch.
-# This avoids running `npm ci`/Node under QEMU arm64 emulation, which hangs.
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine${ALPINE_VERSION}@sha256:${NODE_ALPINE_SHA256} AS frontend-build
 WORKDIR /front
 
@@ -62,19 +65,17 @@ COPY ./backend/utils/rom_patcher/package*.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 
 
-# https://github.com/astral-sh/uv/pkgs/container/uv/452595714
+# https://github.com/astral-sh/uv/pkgs/container/uv
 FROM ghcr.io/astral-sh/uv:${UV_VERSION}-python${PYTHON_VERSION}-alpine@sha256:${UV_SHA256} AS uv-stage
 
 
 # BACKEND PYTHON BUILD
 FROM python-alias AS backend-build
 
-# git is needed to install streaming-form-data fork
 # libpq-dev is needed to build psycopg-c
 # mariadb-connector-c-dev is needed to build mariadb-connector
 RUN apk add --no-cache \
     gcc \
-    git \
     libpq-dev \
     mariadb-connector-c-dev \
     musl-dev
@@ -105,10 +106,14 @@ RUN apk add --no-cache \
     zlib-dev \
     bash
 
-ARG RALIBRETRO_VERSION=1.8.3
+# Tag 1.8.3. Pinned by commit because a tag can be moved.
+# Keep this pin in sync with the dev image's RALIBRETRO_COMMIT in ../Dockerfile.
+ARG RALIBRETRO_COMMIT=8ab61f745ab753a70b5482f2a0ccb6a4ced5193f
 
-RUN git clone --recursive --branch "${RALIBRETRO_VERSION}" --depth 1 https://github.com/RetroAchievements/RALibretro.git && \
+RUN git clone --filter=blob:none https://github.com/RetroAchievements/RALibretro.git && \
     cd ./RALibretro && \
+    git checkout "${RALIBRETRO_COMMIT}" && \
+    git submodule update --init --recursive && \
     sed -i '22a #include <ctime>' ./src/Util.h && \
     sed -i '6a #include <unistd.h>' \
         ./src/libchdr/deps/zlib-1.3.1/gzlib.c \
@@ -129,9 +134,9 @@ RUN apk add --no-cache \
     musl-dev
 
 # Keep this pin in sync with the dev image's SIGIL_VERSION in ../Dockerfile.
-ARG SIGIL_VERSION=4b0f138fef12caf0b2ceb85e034cd5a3ba18a653
+ARG SIGIL_VERSION=8a3b0089676e07f74da2d9ad08979dedf5cae7c0
 
-RUN git clone --filter=blob:none https://github.com/rommforge/argosy-sigil.git && \
+RUN git clone --filter=blob:none https://github.com/rommapp/argosy-sigil.git && \
     cd ./argosy-sigil && \
     git checkout "${SIGIL_VERSION}" && \
     git submodule update --init --recursive && \
@@ -142,6 +147,22 @@ RUN git clone --filter=blob:none https://github.com/rommforge/argosy-sigil.git &
     python build_sigil.py && \
     mkdir /sigil-pkg && \
     cp ./sigil/*.py ./sigil/_sigil.*.so /sigil-pkg/
+
+
+# ROM-CONVERTO CLI
+# Keep the version and both sums in sync with the dev image's copy in ../Dockerfile.
+FROM alpine:${ALPINE_VERSION}@sha256:${ALPINE_SHA256} AS rom-converto-fetch
+ARG TARGETARCH
+ARG ROM_CONVERTO_VERSION=v0.23.2
+RUN case "${TARGETARCH}" in \
+        amd64) rc="linux-x64-musl"; sum="734ecccfa77d425c01dc3ba621261389c1c23d23f0e5d6b8e3346fda1879d687" ;; \
+        arm64) rc="linux-arm64-musl"; sum="e90cca392b08b859b79bab13fcd47300ffc613d5dca7da1b4d1e38e3a4bbc297" ;; \
+        *) echo "unsupported TARGETARCH: ${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    wget -qO /rom-converto \
+        "https://github.com/DevYukine/rom-converto/releases/download/${ROM_CONVERTO_VERSION}/rom-converto-cli-${rc}" && \
+    echo "${sum}  /rom-converto" | sha256sum -c - && \
+    chmod 0755 /rom-converto
 
 
 # BUILD NGINX MODULE WITH MOD_ZIP
@@ -205,6 +226,7 @@ COPY --from=python-runtime /usr/local/lib/libpython* /usr/local/lib/
 COPY --from=python-runtime /usr/local/lib/python${PYTHON_VERSION} /usr/local/lib/python${PYTHON_VERSION}
 
 COPY --from=rahasher-build /RALibretro/bin64/RAHasher /usr/bin/RAHasher
+COPY --from=rom-converto-fetch /rom-converto /usr/bin/rom-converto
 COPY --from=nginx-build ./nginx/objs/ngx_http_zip_module.so /usr/lib/nginx/modules/
 COPY --from=frontend-build /front/dist ${WEBSERVER_FOLDER}
 COPY --from=backend-node-build /backend-node/rom_patcher/node_modules/rom-patcher/rom-patcher-js /backend/utils/rom_patcher/rom-patcher-js

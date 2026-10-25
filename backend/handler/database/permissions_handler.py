@@ -3,16 +3,18 @@ from collections.abc import Iterable, Sequence
 from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.orm import Session
 
-from decorators.database import begin_session
+from decorators.database import INJECTED_SESSION, begin_session
+from handler.auth.rom_visibility import RomVisibilityFilter, VisibilityColumns
 from models.permission import (
     HiddenEntity,
     PermAction,
     PermEntity,
     PermissionGroup,
     PermissionGroupGrant,
+    SystemGroupKey,
     UserPermissionOverride,
 )
-from models.user import User
+from models.user import Role, User
 
 from .base_handler import DBBaseHandler
 
@@ -34,7 +36,7 @@ class DBPermissionsHandler(DBBaseHandler):
     @begin_session
     def get_default_group(
         self,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> PermissionGroup | None:
         return session.scalar(
             select(PermissionGroup).filter_by(is_default=True).limit(1)
@@ -44,7 +46,7 @@ class DBPermissionsHandler(DBBaseHandler):
     def get_group_grants(
         self,
         group_id: int,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> Sequence[PermissionGroupGrant]:
         return session.scalars(
             select(PermissionGroupGrant).filter_by(group_id=group_id)
@@ -54,11 +56,74 @@ class DBPermissionsHandler(DBBaseHandler):
     def get_user_overrides(
         self,
         user_id: int,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> Sequence[UserPermissionOverride]:
         return session.scalars(
             select(UserPermissionOverride).filter_by(user_id=user_id)
         ).all()
+
+    @begin_session
+    def get_rom_audience(
+        self,
+        rom: VisibilityColumns,
+        session: Session = INJECTED_SESSION,
+    ) -> list[int]:
+        """Ids of the enabled users who can see `rom`, in three queries."""
+        users = session.execute(
+            select(
+                User.id,
+                User.role,
+                User.permission_group_id,
+            )
+            .where(User.enabled.is_(True))
+            .order_by(User.id)
+        ).all()
+        default_group = self.get_default_group(session=session)
+        default_group_id = default_group.id if default_group else None
+        hides = session.execute(
+            select(
+                HiddenEntity.entity, HiddenEntity.user_id, HiddenEntity.group_id
+            ).where(
+                or_(
+                    and_(
+                        HiddenEntity.entity == PermEntity.ROMS,
+                        HiddenEntity.entity_id == rom.id,
+                    ),
+                    and_(
+                        HiddenEntity.entity == PermEntity.PLATFORMS,
+                        HiddenEntity.entity_id == rom.platform_id,
+                    ),
+                )
+            )
+        ).all()
+
+        audience = []
+        for user in users:
+            if user.role == Role.ADMIN:
+                audience.append(user.id)
+                continue
+            group_id = user.permission_group_id
+            if group_id is None:
+                group_id = default_group_id
+            hidden = {
+                hide.entity
+                for hide in hides
+                if hide.user_id == user.id
+                or (group_id is not None and hide.group_id == group_id)
+            }
+            visibility = RomVisibilityFilter(
+                hidden_platform_ids=(
+                    frozenset({rom.platform_id})
+                    if PermEntity.PLATFORMS in hidden
+                    else frozenset()
+                ),
+                hidden_rom_ids=(
+                    frozenset({rom.id}) if PermEntity.ROMS in hidden else frozenset()
+                ),
+            )
+            if visibility.allows(rom):
+                audience.append(user.id)
+        return audience
 
     @begin_session
     def get_hidden_entity_ids(
@@ -66,7 +131,7 @@ class DBPermissionsHandler(DBBaseHandler):
         entity: PermEntity,
         user_id: int | None,
         group_id: int | None,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> set[int]:
         """Ids of `entity` hidden from the given user OR their group.
 
@@ -93,7 +158,7 @@ class DBPermissionsHandler(DBBaseHandler):
     @begin_session
     def get_groups(
         self,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> Sequence[PermissionGroup]:
         return (
             session.scalars(select(PermissionGroup).order_by(PermissionGroup.name))
@@ -105,7 +170,7 @@ class DBPermissionsHandler(DBBaseHandler):
     def get_group(
         self,
         group_id: int,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> PermissionGroup | None:
         return session.get(PermissionGroup, group_id)
 
@@ -113,9 +178,17 @@ class DBPermissionsHandler(DBBaseHandler):
     def get_group_by_name(
         self,
         name: str,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> PermissionGroup | None:
         return session.scalar(select(PermissionGroup).filter_by(name=name).limit(1))
+
+    @begin_session
+    def get_system_group(
+        self,
+        key: SystemGroupKey,
+        session: Session = INJECTED_SESSION,
+    ) -> PermissionGroup | None:
+        return session.scalar(select(PermissionGroup).filter_by(system_key=key))
 
     @begin_session
     def create_group(
@@ -125,14 +198,13 @@ class DBPermissionsHandler(DBBaseHandler):
         is_default: bool = False,
         color: str | None = None,
         grants: Iterable[GrantTuple] = (),
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> PermissionGroup:
         group = PermissionGroup(
             name=name,
             description=description,
             is_default=is_default,
             color=color,
-            is_system=False,
         )
         session.add(group)
         session.flush()
@@ -152,7 +224,7 @@ class DBPermissionsHandler(DBBaseHandler):
         is_default: bool | None = None,
         color: str | None = None,
         grants: Iterable[GrantTuple] | None = None,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> PermissionGroup | None:
         group = session.get(PermissionGroup, group_id)
         if group is None:
@@ -177,7 +249,7 @@ class DBPermissionsHandler(DBBaseHandler):
     def delete_group(
         self,
         group_id: int,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> None:
         session.execute(delete(PermissionGroup).where(PermissionGroup.id == group_id))
 
@@ -208,7 +280,7 @@ class DBPermissionsHandler(DBBaseHandler):
     def get_group_member_ids(
         self,
         group_id: int,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> list[int]:
         return list(
             session.scalars(
@@ -223,7 +295,7 @@ class DBPermissionsHandler(DBBaseHandler):
         self,
         user_id: int,
         group_id: int | None,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> None:
         session.execute(
             update(User)
@@ -237,7 +309,7 @@ class DBPermissionsHandler(DBBaseHandler):
         self,
         user_id: int,
         overrides: Iterable[OverrideTuple],
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> None:
         session.execute(
             delete(UserPermissionOverride).where(
@@ -263,7 +335,7 @@ class DBPermissionsHandler(DBBaseHandler):
         *,
         user_id: int | None = None,
         group_id: int | None = None,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> Sequence[HiddenEntity]:
         query = select(HiddenEntity)
         if user_id is not None:
@@ -280,7 +352,7 @@ class DBPermissionsHandler(DBBaseHandler):
         *,
         user_id: int | None = None,
         group_id: int | None = None,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> None:
         # Idempotent: a repeated hide is a no-op rather than a unique violation.
         existing = session.scalar(
@@ -311,7 +383,7 @@ class DBPermissionsHandler(DBBaseHandler):
         *,
         user_id: int | None = None,
         group_id: int | None = None,
-        session: Session = None,  # type: ignore
+        session: Session = INJECTED_SESSION,
     ) -> None:
         session.execute(
             delete(HiddenEntity).where(

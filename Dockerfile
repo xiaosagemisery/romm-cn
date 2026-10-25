@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # trunk-ignore-all(trivy)
 # trunk-ignore-all(checkov)
 # trunk-ignore-all(hadolint/DL4006)
@@ -8,6 +9,7 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
+# trunk-ignore(hadolint/DL3008)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     make \
@@ -46,11 +48,31 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | b
 ENV PATH="$NVM_DIR/versions/node/v24.22.1/bin:$PATH"
 
 # Build and install RAHasher (optional for RA hashes)
-RUN git clone --recursive --branch 1.8.3 --depth 1 https://github.com/RetroAchievements/RALibretro.git /tmp/RALibretro
+# Tag 1.8.3. Keep the pin in sync with docker/Dockerfile.
+ARG RALIBRETRO_COMMIT=8ab61f745ab753a70b5482f2a0ccb6a4ced5193f
+RUN git clone --filter=blob:none https://github.com/RetroAchievements/RALibretro.git /tmp/RALibretro \
+    && git -C /tmp/RALibretro checkout "${RALIBRETRO_COMMIT}" \
+    && git -C /tmp/RALibretro submodule update --init --recursive
 WORKDIR /tmp/RALibretro
 RUN make HAVE_CHD=1 -f ./Makefile.RAHasher \
     && cp ./bin64/RAHasher /usr/bin/RAHasher
 RUN rm -rf /tmp/RALibretro
+
+# Install rom-converto (optional); its static musl build runs on this glibc image.
+# Keep the version and both sums in sync with docker/Dockerfile.
+ARG TARGETARCH
+RUN ROM_CONVERTO_VERSION=v0.23.2 \
+    && arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && case "${arch}" in \
+        amd64) rc="linux-x64-musl"; sum="734ecccfa77d425c01dc3ba621261389c1c23d23f0e5d6b8e3346fda1879d687" ;; \
+        arm64) rc="linux-arm64-musl"; sum="e90cca392b08b859b79bab13fcd47300ffc613d5dca7da1b4d1e38e3a4bbc297" ;; \
+        *) echo "unsupported architecture: ${arch}" && exit 1 ;; \
+    esac \
+    && curl -fsSL -o "/tmp/rom-converto-cli-${rc}" \
+        "https://github.com/DevYukine/rom-converto/releases/download/${ROM_CONVERTO_VERSION}/rom-converto-cli-${rc}" \
+    && echo "${sum}  /tmp/rom-converto-cli-${rc}" | sha256sum -c --status \
+    && install -m 0755 "/tmp/rom-converto-cli-${rc}" /usr/bin/rom-converto \
+    && rm -f "/tmp/rom-converto-cli-${rc}"
 
 # Install frontend dependencies
 COPY frontend/package.json /app/frontend/
@@ -66,7 +88,7 @@ RUN npm install
 WORKDIR /app
 
 # Install uv for the non-root user
-COPY --from=ghcr.io/astral-sh/uv:0.11.2 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /usr/local/bin/
 
 # Copy project files (including pyproject.toml and uv.lock)
 COPY pyproject.toml uv.lock* .python-version /app/
@@ -80,10 +102,10 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # Build and install sigil (optional, for title ID extraction)
 # Placed after `uv sync` because the extension is compiled with the venv's
 # Python so the ABI matches. Keep the pin in sync with docker/Dockerfile.
-ARG SIGIL_VERSION=4b0f138fef12caf0b2ceb85e034cd5a3ba18a653
+ARG SIGIL_VERSION=8a3b0089676e07f74da2d9ad08979dedf5cae7c0
 # One layer, so the clone and the cmake tree never reach the image.
 # trunk-ignore(hadolint/DL3003)
-RUN git clone --filter=blob:none https://github.com/rommforge/argosy-sigil.git /tmp/argosy-sigil \
+RUN git clone --filter=blob:none https://github.com/rommapp/argosy-sigil.git /tmp/argosy-sigil \
     && cd /tmp/argosy-sigil \
     && git checkout "${SIGIL_VERSION}" \
     && git submodule update --init --recursive \

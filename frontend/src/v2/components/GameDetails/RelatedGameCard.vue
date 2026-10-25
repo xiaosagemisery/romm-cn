@@ -76,6 +76,7 @@ const EMPTY_USER: RomUserSchema = {
   updated_at: "",
   last_played: null,
   is_main_sibling: false,
+  pinned_media: null,
   backlogged: false,
   now_playing: false,
   hidden: false,

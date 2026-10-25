@@ -1,13 +1,11 @@
-from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from tests.factories import make_rom
 
 from handler.database import db_rom_handler
-from handler.database.base_handler import sync_engine
 from models.platform import Platform
 from models.rom import Rom, RomFile, RomFileCategory
 from models.user import User
@@ -22,19 +20,10 @@ FILE_STAT_FIELDS = (
 )
 
 
-def _add_rom(admin_user: User, platform: Platform, name: str, fs_name: str) -> Rom:
-    rom = db_rom_handler.add_rom(
-        Rom(
-            platform_id=platform.id,
-            name=name,
-            slug=f"{name}_slug",
-            fs_name=fs_name,
-            fs_name_no_tags=name,
-            fs_name_no_ext=name,
-            fs_extension=fs_name.rpartition(".")[2] if "." in fs_name else "",
-            fs_path=f"{platform.slug}/roms",
-        )
-    )
+def _add_rom(
+    admin_user: User, platform: Platform, name: str, fs_extension: str = "zip"
+) -> Rom:
+    rom = make_rom(platform, name, fs_extension=fs_extension)
     db_rom_handler.add_rom_user(rom_id=rom.id, user_id=admin_user.id)
     return rom
 
@@ -61,13 +50,13 @@ def _add_file(
 @pytest.fixture
 def fileless_rom(admin_user: User, platform: Platform) -> Rom:
     """A ROM with no file rows at all, as a scan leaves one missing from disk."""
-    return _add_rom(admin_user, platform, "fileless_rom", "fileless_rom.zip")
+    return _add_rom(admin_user, platform, "fileless_rom")
 
 
 @pytest.fixture
 def flat_rom(admin_user: User, platform: Platform) -> Rom:
     """A single file sitting directly in the platform's roms directory."""
-    rom = _add_rom(admin_user, platform, "flat_rom", "flat_rom.zip")
+    rom = _add_rom(admin_user, platform, "flat_rom")
     _add_file(rom, "flat_rom.zip", file_path=rom.fs_path)
     return rom
 
@@ -75,7 +64,7 @@ def flat_rom(admin_user: User, platform: Platform) -> Rom:
 @pytest.fixture
 def folder_rom(admin_user: User, platform: Platform) -> Rom:
     """A folder ROM with two files side by side at its top level."""
-    rom = _add_rom(admin_user, platform, "folder_rom", "folder_rom")
+    rom = _add_rom(admin_user, platform, "folder_rom", fs_extension="")
     for file_name in ("game.bin", "readme.txt"):
         _add_file(rom, file_name, file_path=f"{rom.fs_path}/folder_rom")
     return rom
@@ -84,7 +73,7 @@ def folder_rom(admin_user: User, platform: Platform) -> Rom:
 @pytest.fixture
 def nested_rom(admin_user: User, platform: Platform) -> Rom:
     """A folder ROM whose only content file sits in a subdirectory."""
-    rom = _add_rom(admin_user, platform, "nested_rom", "nested_rom")
+    rom = _add_rom(admin_user, platform, "nested_rom", fs_extension="")
     _add_file(rom, "disc.bin", file_path=f"{rom.fs_path}/nested_rom/data")
     return rom
 
@@ -92,7 +81,7 @@ def nested_rom(admin_user: User, platform: Platform) -> Rom:
 @pytest.fixture
 def soundtrack_rom(admin_user: User, platform: Platform) -> Rom:
     """A folder ROM carrying a game file and a soundtrack track."""
-    rom = _add_rom(admin_user, platform, "ost_rom", "ost_rom")
+    rom = _add_rom(admin_user, platform, "ost_rom", fs_extension="")
     file_path = f"{rom.fs_path}/ost_rom"
     _add_file(rom, "game.bin", file_path=file_path)
     _add_file(
@@ -112,12 +101,18 @@ def _fetch_one(
     assert response.status_code == status.HTTP_200_OK
     items = response.json()["items"]
     assert len(items) == 1
-    return items[0]
+    return cast(dict[str, Any], items[0])
 
 
 @pytest.mark.parametrize(
     "rom_fixture",
-    ["flat_rom", "folder_rom", "nested_rom", "soundtrack_rom", "fileless_rom"],
+    [
+        "flat_rom",
+        "folder_rom",
+        "nested_rom",
+        "soundtrack_rom",
+        "fileless_rom",
+    ],
 )
 def test_file_stats_match_between_derived_and_sql_paths(
     client: TestClient,
@@ -140,27 +135,6 @@ def test_file_stats_match_between_derived_and_sql_paths(
     }
 
 
-@pytest.fixture
-def executed_statements() -> Iterator[list[str]]:
-    statements: list[str] = []
-
-    def before_execute(
-        conn: object,
-        cursor: object,
-        statement: str,
-        parameters: object,
-        context: object,
-        executemany: bool,
-    ) -> None:
-        statements.append(statement)
-
-    event.listen(sync_engine, "before_cursor_execute", before_execute)
-    try:
-        yield statements
-    finally:
-        event.remove(sync_engine, "before_cursor_execute", before_execute)
-
-
 def test_with_files_query_count_does_not_scale_with_file_count(
     client: TestClient,
     access_token: str,
@@ -169,7 +143,7 @@ def test_with_files_query_count_does_not_scale_with_file_count(
     executed_statements: list[str],
 ) -> None:
     """Track metadata is eager-loaded, so files cost a fixed number of queries."""
-    rom = _add_rom(admin_user, platform, "many_files_rom", "many_files_rom")
+    rom = _add_rom(admin_user, platform, "many_files_rom", fs_extension="")
     for index in range(25):
         _add_file(
             rom,
@@ -184,3 +158,30 @@ def test_with_files_query_count_does_not_scale_with_file_count(
 
     track_meta_queries = [s for s in executed_statements if "track_meta" in s]
     assert len(track_meta_queries) <= 1
+
+
+def test_identifiers_does_not_load_the_roms_it_lists(
+    client: TestClient,
+    access_token: str,
+    platform: Platform,
+    admin_user: User,
+    executed_statements: list[str],
+) -> None:
+    """The endpoint answers with ids, so the joins a `Rom` brings are pure cost."""
+    rom = _add_rom(admin_user, platform, "identifiers_rom")
+
+    executed_statements.clear()
+    response = client.get(
+        "/api/roms/identifiers",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == [rom.id]
+
+    loaded_related = [
+        statement
+        for statement in executed_statements
+        if "roms_metadata" in statement or "platforms" in statement
+    ]
+    assert loaded_related == []

@@ -1,10 +1,13 @@
 import asyncio
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from tests.factories import make_rom
 
+from endpoints.roms import walkthrough as walkthrough_endpoint
 from handler import rom_conversion
 from handler.database import db_rom_handler
 from handler.filesystem import fs_rom_handler
@@ -23,51 +26,33 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
-def real_library(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point fs_rom_handler at a real temp library so FS moves actually happen."""
-    lib = tmp_path / "library"
-    lib.mkdir()
-    monkeypatch.setattr(fs_rom_handler, "base_path", lib.resolve())
-    return lib
-
-
 def _single_file_rom(
     platform: Platform,
     admin_user: User,
     lib: Path,
+    name: str,
     *,
-    fs_name: str,
-    fs_name_no_ext: str,
     fs_extension: str,
 ) -> Rom:
     """A simple single-file ROM with its lone file present on disk."""
-    rom = Rom(
-        platform_id=platform.id,
-        name=fs_name_no_ext,
-        slug=f"{fs_name}_slug",
-        fs_name=fs_name,
-        fs_name_no_tags=fs_name_no_ext,
-        fs_name_no_ext=fs_name_no_ext,
-        fs_extension=fs_extension,
-        fs_path=f"{platform.slug}/roms",
-    )
-    rom = db_rom_handler.add_rom(rom)
+    rom = make_rom(platform, name, fs_extension=fs_extension)
     db_rom_handler.add_rom_user(rom_id=rom.id, user_id=admin_user.id)
     db_rom_handler.add_rom_file(
         RomFile(
             rom_id=rom.id,
-            file_name=fs_name,
+            file_name=rom.fs_name,
             file_path=rom.fs_path,
             file_size_bytes=10,
             last_modified=1700000000.0,
             category=RomFileCategory.GAME,
         )
     )
-    disk = lib / rom.fs_path / fs_name
+    disk = lib / rom.fs_path / rom.fs_name
     disk.parent.mkdir(parents=True, exist_ok=True)
     disk.write_bytes(b"romdata")
-    return db_rom_handler.get_rom(rom.id)
+    refreshed = db_rom_handler.get_rom(rom.id)
+    assert refreshed is not None
+    return refreshed
 
 
 # ---------- POST /api/roms/{id}/convert-to-folder ----------
@@ -84,8 +69,7 @@ def test_convert_single_file_promotes_in_place(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom.zip",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="zip",
     )
     assert rom.has_simple_single_file
@@ -97,6 +81,7 @@ def test_convert_single_file_promotes_in_place(
     assert response.status_code == status.HTTP_200_OK
 
     after = db_rom_handler.get_rom(rom_id)
+    assert after is not None
     assert after.id == rom_id  # same id, no dead reference
     assert after.fs_name == "test_rom"
     game_file = after.files[0]
@@ -120,8 +105,7 @@ def test_convert_already_folder_is_clean_noop(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom.zip",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="zip",
     )
     # First call converts; second call is a clean no-op on the now-folder ROM.
@@ -135,6 +119,7 @@ def test_convert_already_folder_is_clean_noop(
     )
     assert second.status_code == status.HTTP_200_OK
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom"  # unchanged by the second call
 
 
@@ -149,8 +134,7 @@ def test_convert_folder_collision_returns_409(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom.zip",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="zip",
     )
     # A folder already occupies the target name.
@@ -162,6 +146,7 @@ def test_convert_folder_collision_returns_409(
     assert response.status_code == status.HTTP_409_CONFLICT
 
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom.zip"  # untouched
 
 
@@ -176,8 +161,7 @@ def test_convert_extensionless_uses_staging(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="",
     )
 
@@ -189,6 +173,7 @@ def test_convert_extensionless_uses_staging(
     moved = real_library / f"{platform.slug}/roms/test_rom/test_rom"
     assert moved.is_file() and moved.read_bytes() == b"romdata"
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.files[0].file_path == f"{platform.slug}/roms/test_rom"
 
 
@@ -203,8 +188,7 @@ def test_convert_extensionless_dir_collision_returns_409(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="",
     )
     # Stale row over a folder the user already created on disk (no rescan).
@@ -219,6 +203,7 @@ def test_convert_extensionless_dir_collision_returns_409(
     assert response.status_code == status.HTTP_409_CONFLICT
 
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom"  # untouched
     assert (lone / "already_here.txt").read_text() == "keep me"  # user's dir intact
 
@@ -235,8 +220,7 @@ def test_convert_rolls_back_fs_on_db_failure(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="",
     )
 
@@ -255,6 +239,7 @@ def test_convert_rolls_back_fs_on_db_failure(
     assert (base / "test_rom").read_bytes() == b"romdata"
     assert not (base / ".romm_tmp_test_rom").exists()
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom"
     assert after.has_simple_single_file
 
@@ -273,8 +258,7 @@ def test_soundtrack_upload_auto_converts_single_file_rom(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom.zip",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="zip",
     )
     response = client.post(
@@ -285,6 +269,7 @@ def test_soundtrack_upload_auto_converts_single_file_rom(
     assert response.status_code == status.HTTP_201_CREATED
 
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom"  # converted
     soundtracks = [f for f in after.files if f.category == RomFileCategory.SOUNDTRACK]
     assert len(soundtracks) == 1
@@ -304,8 +289,7 @@ def test_manual_upload_auto_converts_single_file_rom(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom.zip",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="zip",
     )
     response = client.post(
@@ -316,6 +300,7 @@ def test_manual_upload_auto_converts_single_file_rom(
     assert response.status_code == status.HTTP_201_CREATED
 
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom"
     assert any(f.category == RomFileCategory.MANUAL for f in after.files)
 
@@ -331,8 +316,7 @@ def test_screenshot_upload_auto_converts_single_file_rom(
         platform,
         admin_user,
         real_library,
-        fs_name="test_rom.zip",
-        fs_name_no_ext="test_rom",
+        "test_rom",
         fs_extension="zip",
     )
     response = client.post(
@@ -343,8 +327,123 @@ def test_screenshot_upload_auto_converts_single_file_rom(
     assert response.status_code == status.HTTP_201_CREATED
 
     after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
     assert after.fs_name == "test_rom"
     assert any(f.category == RomFileCategory.SCREENSHOT for f in after.files)
+
+
+DISC_1 = "Game (Disc 1).chd"
+
+
+def _lone_disc(platform: Platform, admin_user: User, lib: Path) -> Rom:
+    """Disc 1 of a flat set, its own single-file ROM beside disc 2."""
+    rom = _single_file_rom(
+        platform, admin_user, lib, "Game (Disc 1)", fs_extension="chd"
+    )
+    (lib / rom.fs_path / "Game (Disc 2).chd").write_bytes(b"disc2")
+    return rom
+
+
+MEDIA_UPLOADS = [
+    pytest.param(
+        "manuals/files", "manual.pdf", PDF_BYTES, "application/pdf", id="manual"
+    ),
+    pytest.param("soundtracks", "track1.mp3", MP3_BYTES, "audio/mpeg", id="soundtrack"),
+]
+
+
+@pytest.mark.parametrize("route,filename,data,mime", MEDIA_UPLOADS)
+def test_upload_to_a_disc_a_playlist_lists_returns_400(
+    client: TestClient,
+    access_token: str,
+    platform: Platform,
+    admin_user: User,
+    real_library: Path,
+    route: str,
+    filename: str,
+    data: bytes,
+    mime: str,
+):
+    rom = _lone_disc(platform, admin_user, real_library)
+    roms_dir = real_library / rom.fs_path
+    # Windows tools write backslashed paths, often in another case.
+    (roms_dir / "Game.m3u").write_text(
+        "#EXTM3U\r\n.\\GAME (DISC 1).CHD\r\nGame (Disc 2).chd\r\n"
+    )
+
+    response = client.post(
+        f"/api/roms/{rom.id}/{route}",
+        headers={**_auth(access_token), "x-upload-filename": filename},
+        files={filename: (filename, data, mime)},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Game.m3u" in response.json()["detail"]
+    assert (roms_dir / DISC_1).read_bytes() == b"romdata"
+    assert not (roms_dir / "Game (Disc 1)").exists()
+    after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
+    assert after.fs_name == DISC_1
+    assert [f.file_name for f in after.files] == [DISC_1]
+
+
+@pytest.mark.parametrize("route,filename,data,mime", MEDIA_UPLOADS)
+def test_upload_to_a_lone_disc_no_playlist_lists_promotes_it(
+    client: TestClient,
+    access_token: str,
+    platform: Platform,
+    admin_user: User,
+    real_library: Path,
+    route: str,
+    filename: str,
+    data: bytes,
+    mime: str,
+):
+    rom = _lone_disc(platform, admin_user, real_library)
+    roms_dir = real_library / rom.fs_path
+    (roms_dir / "Other.m3u").write_text("Other (Disc 1).chd\nOther (Disc 2).chd\n")
+
+    response = client.post(
+        f"/api/roms/{rom.id}/{route}",
+        headers={**_auth(access_token), "x-upload-filename": filename},
+        files={filename: (filename, data, mime)},
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert (roms_dir / "Game (Disc 1)" / DISC_1).read_bytes() == b"romdata"
+    assert not (roms_dir / DISC_1).exists()
+    after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
+    assert after.fs_name == "Game (Disc 1)"
+
+
+def test_gamefaqs_import_to_a_disc_a_playlist_lists_returns_400(
+    client: TestClient,
+    access_token: str,
+    platform: Platform,
+    admin_user: User,
+    real_library: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    rom = _lone_disc(platform, admin_user, real_library)
+    roms_dir = real_library / rom.fs_path
+    (roms_dir / "Game.m3u").write_text(f"{DISC_1}\nGame (Disc 2).chd\n")
+    fetch = AsyncMock()
+    monkeypatch.setattr(walkthrough_endpoint, "fetch_gamefaqs_guide", fetch)
+
+    response = client.post(
+        f"/api/roms/{rom.id}/walkthroughs/gamefaqs",
+        headers=_auth(access_token),
+        json={"url": "https://gamefaqs.gamespot.com/ps/196821-game/faqs/1"},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Game.m3u" in response.json()["detail"]
+    fetch.assert_not_called()
+    assert (roms_dir / DISC_1).exists()
+    after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
+    assert after.fs_name == DISC_1
 
 
 async def test_second_upload_racing_a_promotion_keeps_the_rom_in_its_folder(
@@ -357,11 +456,11 @@ async def test_second_upload_racing_a_promotion_keeps_the_rom_in_its_folder(
         platform,
         admin_user,
         real_library,
-        fs_name="sf2ce.zip",
-        fs_name_no_ext="sf2ce",
+        "sf2ce",
         fs_extension="zip",
     )
     second = db_rom_handler.get_rom(rom.id)
+    assert second is not None
 
     # Holding both at the mkdir puts them past the collision check together.
     make_directory = fs_rom_handler.make_directory
@@ -370,7 +469,7 @@ async def test_second_upload_racing_a_promotion_keeps_the_rom_in_its_folder(
     async def gated_make_directory(path: str) -> None:
         try:
             await asyncio.wait_for(barrier.wait(), 0.5)
-        except (TimeoutError, asyncio.BrokenBarrierError):
+        except TimeoutError, asyncio.BrokenBarrierError:
             pass
         await make_directory(path)
 
@@ -399,11 +498,11 @@ async def test_promotion_racing_across_workers_does_not_destroy_the_folder(
         platform,
         admin_user,
         real_library,
-        fs_name="sf2ce.zip",
-        fs_name_no_ext="sf2ce",
+        "sf2ce",
         fs_extension="zip",
     )
     second = db_rom_handler.get_rom(rom.id)
+    assert second is not None
 
     class _NoLock:
         async def __aenter__(self) -> None:
@@ -421,7 +520,7 @@ async def test_promotion_racing_across_workers_does_not_destroy_the_folder(
     async def gated_make_directory(path: str) -> None:
         try:
             await asyncio.wait_for(barrier.wait(), 0.5)
-        except (TimeoutError, asyncio.BrokenBarrierError):
+        except TimeoutError, asyncio.BrokenBarrierError:
             pass
         await make_directory(path)
 
@@ -438,18 +537,37 @@ async def test_promotion_racing_across_workers_does_not_destroy_the_folder(
     assert inside.read_bytes() == b"romdata"
 
 
+def test_convert_a_disc_a_playlist_lists_returns_409(
+    client: TestClient,
+    access_token: str,
+    platform: Platform,
+    admin_user: User,
+    real_library: Path,
+):
+    rom = _lone_disc(platform, admin_user, real_library)
+    roms_dir = real_library / rom.fs_path
+    (roms_dir / "Game.m3u").write_text(f"{DISC_1}\nGame (Disc 2).chd\n")
+
+    response = client.post(
+        f"/api/roms/{rom.id}/convert-to-folder", headers=_auth(access_token)
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "Game.m3u" in response.json()["detail"]
+    assert (roms_dir / DISC_1).read_bytes() == b"romdata"
+    assert not (roms_dir / "Game (Disc 1)").exists()
+    after = db_rom_handler.get_rom(rom.id)
+    assert after is not None
+    assert after.fs_name == DISC_1
+
+
 async def test_promotion_waits_for_a_lock_held_by_another_worker(
     platform: Platform,
     admin_user: User,
     real_library: Path,
 ):
     rom = _single_file_rom(
-        platform,
-        admin_user,
-        real_library,
-        fs_name="sf2ce.zip",
-        fs_name_no_ext="sf2ce",
-        fs_extension="zip",
+        platform, admin_user, real_library, "sf2ce", fs_extension="zip"
     )
     lock_key = rom_conversion.promotion_lock_key(rom)
     await async_cache.set(lock_key, "other-worker")
@@ -474,20 +592,10 @@ async def test_promotion_ignores_a_lock_held_for_another_folder(
     real_library: Path,
 ):
     busy = _single_file_rom(
-        platform,
-        admin_user,
-        real_library,
-        fs_name="sf2ce.zip",
-        fs_name_no_ext="sf2ce",
-        fs_extension="zip",
+        platform, admin_user, real_library, "sf2ce", fs_extension="zip"
     )
     rom = _single_file_rom(
-        platform,
-        admin_user,
-        real_library,
-        fs_name="mslug.zip",
-        fs_name_no_ext="mslug",
-        fs_extension="zip",
+        platform, admin_user, real_library, "mslug", fs_extension="zip"
     )
     await async_cache.set(rom_conversion.promotion_lock_key(busy), "other-worker")
 

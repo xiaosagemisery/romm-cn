@@ -1,5 +1,7 @@
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import status
 
 from config.config_manager import (
@@ -7,6 +9,7 @@ from config.config_manager import (
     DEFAULT_EXCLUDED_FILES,
     DEFAULT_EXCLUDED_MULTI_FILE_DIRS,
     DEFAULT_EXCLUDED_PLATFORM_DIRS,
+    ConvertoConfig,
     ExclusionType,
 )
 from config.config_manager import config_manager as cm
@@ -86,6 +89,46 @@ def test_add_platform_version_payload_shape(client, access_token: str):
     add_platform_version.assert_called_once_with("n64", "1.0")
 
 
+def test_mapping_a_folder_with_a_case_variant_sibling_is_rejected(
+    client, access_token: str
+):
+    """One config key covers both, so the write would remap the sibling too."""
+    with (
+        patch(
+            "endpoints.configs.fs_platform_handler.find_ambiguous_folders",
+            AsyncMock(return_value=["PSX", "psx"]),
+        ),
+        patch.object(cm, "add_platform_binding") as add_platform_binding,
+    ):
+        response = client.post(
+            "/api/config/system/platforms",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"fs_slug": "PSX", "slug": "ps2"},
+        )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "differ only by case" in response.json()["detail"]
+    add_platform_binding.assert_not_called()
+
+
+def test_mapping_a_folder_whose_name_is_unique_is_allowed(client, access_token: str):
+    with (
+        patch(
+            "endpoints.configs.fs_platform_handler.find_ambiguous_folders",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(cm, "add_platform_binding") as add_platform_binding,
+    ):
+        response = client.post(
+            "/api/config/system/platforms",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"fs_slug": "Nintendo 64", "slug": "n64"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    add_platform_binding.assert_called_once_with("Nintendo 64", "n64")
+
+
 def test_add_exclusion_payload_shape(client, access_token: str):
     with patch.object(cm, "add_exclusion") as add_exclusion:
         response = client.post(
@@ -112,7 +155,7 @@ def test_add_exclusion_rejects_unknown_type(client, access_token: str):
             json={"exclusion_type": "platforms", "exclusion_value": "README.txt"},
         )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     add_exclusion.assert_not_called()
 
 
@@ -123,7 +166,7 @@ def test_delete_exclusion_rejects_unknown_type(client, access_token: str):
             headers={"Authorization": f"Bearer {access_token}"},
         )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     remove_exclusion.assert_not_called()
 
 
@@ -186,7 +229,7 @@ def test_update_scan_settings_rejects_unknown_source(client, access_token: str):
             json=_scan_payload(metadata_priority=["igdb", "not-a-source"]),
         )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     update_scan_settings.assert_not_called()
 
 
@@ -201,7 +244,7 @@ def test_update_scan_settings_rejects_invalid_gamelist_thumbnail(
             json=_scan_payload(gamelist_thumbnail="screenshot"),
         )
 
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     update_scan_settings.assert_not_called()
 
 
@@ -220,3 +263,69 @@ def test_update_scan_settings_normalizes_codes(client, access_token: str):
     _, kwargs = update_scan_settings.call_args
     assert kwargs["region_priority"] == ["us", "eu"]
     assert kwargs["language_priority"] == ["en"]
+
+
+def _converto_payload(**overrides):
+    payload = {
+        "download_conversion_enabled": True,
+        "cache_max_size_gb": 20,
+        "platform_formats": {"psp": "cso"},
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_update_converto_settings_normalizes_formats_and_keeps_the_ttl(
+    client, access_token: str
+):
+    current = SimpleNamespace(
+        CONVERTO=ConvertoConfig(cache_ttl_hours=72, scan_metadata=False)
+    )
+    with (
+        patch.object(cm, "get_config", return_value=current),
+        patch.object(cm, "update_converto_settings") as update_converto_settings,
+    ):
+        response = client.put(
+            "/api/config/converto_settings",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json=_converto_payload(platform_formats={" PSP ": "CSO"}),
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    update_converto_settings.assert_called_once_with(
+        ConvertoConfig(
+            download_conversion_enabled=True,
+            scan_metadata=False,
+            cache_ttl_hours=72,
+            cache_max_size_gb=20,
+            platform_formats={"psp": "cso"},
+        )
+    )
+
+
+def test_update_converto_settings_requires_auth(client):
+    response = client.put("/api/config/converto_settings", json=_converto_payload())
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"platform_formats": {"psp": "rvz"}},
+        {"platform_formats": {"psvita": "iso"}},
+        {"platform_formats": {"xbox": "xiso"}},
+        {"cache_max_size_gb": -1},
+    ],
+)
+def test_update_converto_settings_rejects_invalid_values(
+    client, access_token: str, overrides
+):
+    with patch.object(cm, "update_converto_settings") as update_converto_settings:
+        response = client.put(
+            "/api/config/converto_settings",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json=_converto_payload(**overrides),
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    update_converto_settings.assert_not_called()

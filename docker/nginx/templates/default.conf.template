@@ -38,7 +38,11 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $forwardscheme;
 
+    # Serve the .gz siblings the frontend build writes. Scoped to the build output:
+    # the internal /library/ and /cache/ locations must never match a ROM's own
+    # .gz sibling, and library resources have no precompressed form.
     location / {
+        gzip_static on;
         try_files $uri $uri/ /index.html;
         proxy_redirect off;
         add_header Cache-Control "no-cache";
@@ -50,6 +54,7 @@ server {
     # Freeze content-hashed frontend bundles (fingerprinted files under /assets)
     location ~* "^/assets/[^/]+-[A-Za-z0-9_-]{8,}\.(js|mjs|css|map|woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif|ico|json|wasm)$" {
         add_header Cache-Control "public, max-age=31536000, immutable";
+        gzip_static on;
         try_files $uri $uri/ =404;
     }
 
@@ -62,6 +67,7 @@ server {
     # Everything else under /assets keeps a stable URL across image upgrades
     location /assets {
         add_header Cache-Control "public, max-age=3600, must-revalidate";
+        gzip_static on;
         try_files $uri $uri/ =404;
     }
 
@@ -93,7 +99,7 @@ server {
     # Internally redirect cached zip file requests (Range-resumable downloads)
     location /cache/ {
         internal;
-        alias "${ROMM_BASE_PATH}/cache/";
+        alias "${ROMM_CACHE_BASE_PATH}/";
     }
 
     # Internal decoding endpoint, used to decode base64 encoded data

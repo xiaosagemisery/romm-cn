@@ -1,17 +1,22 @@
 import http
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
 from fastapi import HTTPException, status
 
-from adapters.services.steam import STEAM_LIBRARY_CAPSULE_URL, SteamService
+from adapters.services.steam import (
+    STEAM_HEADER_IMAGE_URL,
+    STEAM_LIBRARY_CAPSULE_URL,
+    SteamService,
+)
 
 
 def _response(json_body: object) -> MagicMock:
     response = MagicMock()
     response.raise_for_status = MagicMock()
-    response.json = AsyncMock(return_value=json_body)
+    response.read = AsyncMock(return_value=json.dumps(json_body).encode())
     return response
 
 
@@ -23,7 +28,7 @@ def _error(status_code: int) -> aiohttp.ClientResponseError:
 
 @pytest.fixture(autouse=True)
 def no_backoff_sleep():
-    with patch("adapters.services.steam.asyncio.sleep", new_callable=AsyncMock):
+    with patch("adapters.services.provider_http.asyncio.sleep", new_callable=AsyncMock):
         yield
 
 
@@ -47,19 +52,61 @@ async def test_search_apps_returns_items(session):
 
 
 async def test_search_apps_handles_empty_payload(session):
-    session.get.return_value = _response({})
+    session.get.return_value = _response({"total": 0, "items": []})
 
     assert await SteamService().search_apps("nothing at all") == []
 
 
 async def test_get_app_details_unwraps_envelope(session):
     session.get.return_value = _response(
-        {"400": {"success": True, "data": {"type": "game", "name": "Portal"}}}
+        {
+            "400": {
+                "success": True,
+                "data": {"type": "game", "name": "Portal", "steam_appid": 400},
+            }
+        }
     )
 
     details = await SteamService().get_app_details(400)
 
-    assert details == {"type": "game", "name": "Portal"}
+    expected: dict[str, object] = {"type": "game", "name": "Portal", "steam_appid": 400}
+    assert details == expected
+
+
+async def test_get_app_details_unwraps_envelope_keyed_by_another_id(session):
+    """Steam keys some apps' details by a DLC ID instead of the requested one."""
+    session.get.return_value = _response(
+        {
+            "662290": {
+                "success": True,
+                "data": {"type": "game", "name": "140", "steam_appid": 242820},
+            }
+        }
+    )
+
+    details = await SteamService().get_app_details(242820)
+
+    assert details == {"type": "game", "name": "140", "steam_appid": 242820}
+
+
+async def test_get_app_details_rejects_envelope_for_another_app(session):
+    session.get.return_value = _response(
+        {
+            "662290": {
+                "success": True,
+                "data": {"type": "dlc", "name": "DLC", "steam_appid": 662290},
+            }
+        }
+    )
+
+    assert await SteamService().get_app_details(242820) is None
+
+
+@pytest.mark.usefixtures("lenient")
+async def test_get_app_details_rejects_a_sole_value_that_is_not_an_envelope(session):
+    session.get.return_value = _response({"error": "unavailable"})
+
+    assert await SteamService().get_app_details(242820) is None
 
 
 async def test_get_app_details_returns_none_on_unsuccessful_envelope(session):
@@ -112,7 +159,14 @@ async def test_request_raises_on_connection_error(session):
 
 
 async def test_get_app_details_passes_filters(session):
-    session.get.return_value = _response({"220": {"success": True, "data": {}}})
+    session.get.return_value = _response(
+        {
+            "220": {
+                "success": True,
+                "data": {"type": "game", "name": "Half-Life 2", "steam_appid": 220},
+            }
+        }
+    )
 
     await SteamService().get_app_details(220, filters="basic")
 
@@ -140,3 +194,17 @@ async def test_library_capsule_url_is_none_when_the_probe_fails(session):
     session.head.side_effect = aiohttp.ClientConnectionError()
 
     assert await SteamService().get_library_capsule_url(400) is None
+
+
+async def test_header_image_url_when_the_cdn_serves_one(session):
+    session.head.return_value = MagicMock(status=http.HTTPStatus.OK)
+
+    url = await SteamService().get_header_image_url(400)
+
+    assert url == STEAM_HEADER_IMAGE_URL.format(app_id=400)
+
+
+async def test_header_image_url_is_none_when_missing(session):
+    session.head.return_value = MagicMock(status=http.HTTPStatus.NOT_FOUND)
+
+    assert await SteamService().get_header_image_url(400) is None

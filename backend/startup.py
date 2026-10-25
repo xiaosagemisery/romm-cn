@@ -1,14 +1,20 @@
 """Startup script to run tasks before the main application is started."""
 
 import asyncio
+from typing import cast
 
-import sentry_sdk
 from opentelemetry import trace
 from rq.exceptions import DuplicateJobError
 from rq.job import Job
 from rq.utils import as_text
 
-from config import ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP, SENTRY_DSN
+from config import (
+    ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP,
+    LAUNCHBOX_API_ENABLED,
+    SMTP_HOST,
+    SMTP_SECURITY,
+    SMTP_SECURITY_MODES,
+)
 from config.config_manager import config_manager as cm
 from handler.metadata.base_handler import (
     MAME_XML_KEY,
@@ -19,6 +25,7 @@ from handler.metadata.base_handler import (
     PSP_SERIAL_INDEX_KEY,
     SCUMMVM_INDEX_KEY,
 )
+from handler.metadata.launchbox_handler.types import LAUNCHBOX_METADATA_STORE
 from handler.redis_handler import (
     async_cache,
     default_queue,
@@ -29,13 +36,16 @@ from handler.redis_handler import (
 from handler.scan_jobs import drop_stale_scheduled_scans
 from logger.logger import log
 from tasks.registry import enqueue_task
-from utils import get_version
-from utils.cache import conditionally_set_cache
+from tasks.scheduled.update_switch_titledb import SWITCH_TITLEDB_STORE
+from utils.cache import conditionally_set_cache, drop_stale_cache_store
 from utils.context import initialize_context
+from utils.sentry import init_sentry
 
 tracer = trace.get_tracer(__name__)
 
 CONVERT_IMAGES_TO_WEBP_JOB_ID = "convert_images_to_webp_bootstrap"
+UPDATE_LAUNCHBOX_METADATA_JOB_ID = "update_launchbox_metadata_bootstrap"
+UPDATE_SWITCH_TITLEDB_JOB_ID = "update_switch_titledb_bootstrap"
 
 
 def _enqueue_backfill(task_name: str, job_id: str) -> None:
@@ -65,6 +75,35 @@ def _enqueue_convert_images_to_webp() -> None:
     _enqueue_backfill("convert_images_to_webp", CONVERT_IMAGES_TO_WEBP_JOB_ID)
 
 
+# A provider that is off reclaims its store's memory without queueing a
+# download nothing would read.
+VERSIONED_METADATA_STORES = (
+    (
+        LAUNCHBOX_METADATA_STORE,
+        "update_launchbox_metadata",
+        UPDATE_LAUNCHBOX_METADATA_JOB_ID,
+        LAUNCHBOX_API_ENABLED,
+    ),
+    (
+        SWITCH_TITLEDB_STORE,
+        "update_switch_titledb",
+        UPDATE_SWITCH_TITLEDB_JOB_ID,
+        True,
+    ),
+)
+
+
+async def _rebuild_outdated_metadata_stores() -> None:
+    """Drop the metadata stores an older release wrote and queue their rebuild."""
+    for store, task_name, job_id, rebuild in VERSIONED_METADATA_STORES:
+        if not await drop_stale_cache_store(async_cache, store):
+            continue
+
+        log.info(f"Dropped the {task_name} store left by an older release")
+        if rebuild:
+            _enqueue_backfill(task_name, job_id)
+
+
 # Keys the rq-scheduler process left behind, now owned by the cron config.
 LEGACY_SCHEDULED_JOBS_KEY = "rq:scheduler:scheduled_jobs"
 LEGACY_SCHEDULER_KEYS = (
@@ -79,7 +118,9 @@ def _drop_legacy_scheduler_state() -> None:
     try:
         legacy_job_ids = {
             as_text(job_id)
-            for job_id in redis_client.zrange(LEGACY_SCHEDULED_JOBS_KEY, 0, -1)
+            for job_id in cast(
+                list[bytes], redis_client.zrange(LEGACY_SCHEDULED_JOBS_KEY, 0, -1)
+            )
         }
 
         if legacy_job_ids:
@@ -112,7 +153,14 @@ async def main() -> None:
     async with initialize_context():
         log.info("Running startup tasks")
 
+        cm.migrate_retired_filesystem_keys()
         cm.check_library_layout()
+
+        if SMTP_HOST and SMTP_SECURITY not in SMTP_SECURITY_MODES:
+            log.warning(
+                f"Email is off: SMTP_SECURITY is {SMTP_SECURITY!r}, not one of "
+                + ", ".join(SMTP_SECURITY_MODES)
+            )
 
         try:
             drop_stale_scheduled_scans()
@@ -123,6 +171,11 @@ async def main() -> None:
 
         if ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP:
             _enqueue_convert_images_to_webp()
+
+        try:
+            await _rebuild_outdated_metadata_stores()
+        except Exception:
+            log.exception("Failed to check the metadata stores for an older shape")
 
         log.info("Initializing cache with fixtures data")
         await conditionally_set_cache(
@@ -156,9 +209,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        release=f"romm@{get_version()}",
-    )
+    init_sentry()
 
     asyncio.run(main())

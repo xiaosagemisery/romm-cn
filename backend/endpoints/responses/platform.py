@@ -1,5 +1,10 @@
 from pydantic import ConfigDict, computed_field
 
+from handler.metadata.platform_names import (
+    platform_abbreviation,
+    platform_alternative_names,
+)
+
 from .base import BaseModel, UTCDatetime
 
 
@@ -39,7 +44,17 @@ class PlatformSchema(BaseModel):
     is_identified: bool
     missing_from_fs: bool
 
-    @computed_field  # type: ignore
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def display_name(self) -> str:
         return self.custom_name or self.name
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def abbreviation(self) -> str:
+        return platform_abbreviation(self.slug)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def alternative_names(self) -> list[str]:
+        return list(platform_alternative_names(self.slug))

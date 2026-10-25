@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from logger.logger import log
 from utils import archives
 from utils.zip_cache import ensure_zipfile_writable
 
@@ -116,8 +117,8 @@ def test_read_7z_archive_files_timeout_raises_without_spawning_per_member(monkey
     monkeypatch.setattr(archives, "SEVEN_ZIP_TIMEOUT", -1)
 
     with (
-        patch.object(archives.subprocess, "run", return_value=listing),
-        patch.object(archives.subprocess, "Popen") as popen_patch,
+        patch.object(subprocess, "run", return_value=listing),
+        patch.object(subprocess, "Popen") as popen_patch,
         pytest.raises(archives.ArchiveReadError),
     ):
         list(archives.read_7z_archive_files(Path("/fake.7z"), [], []))
@@ -133,8 +134,8 @@ def test_read_7z_archive_files_raises_when_a_member_fails_midway():
     popen = _mock_popen_streaming([[b"aaa"], [b"bbb"]], [0, 2])
 
     with (
-        patch.object(archives.subprocess, "run", return_value=listing),
-        patch.object(archives.subprocess, "Popen", popen),
+        patch.object(subprocess, "run", return_value=listing),
+        patch.object(subprocess, "Popen", popen),
         pytest.raises(archives.ArchiveReadError),
     ):
         for _name, _size, chunks in archives.read_7z_archive_files(
@@ -151,8 +152,8 @@ def test_largest_member_hashing_terminates_switches_before_the_member():
     popen = _mock_popen_streaming([[b"data"]], [0])
 
     with (
-        patch.object(archives.subprocess, "run", return_value=listing),
-        patch.object(archives.subprocess, "Popen", popen),
+        patch.object(subprocess, "run", return_value=listing),
+        patch.object(subprocess, "Popen", popen),
     ):
         assert archives.hash_largest_7z_member(Path("/fake/game.7z"), MagicMock())
 
@@ -188,9 +189,7 @@ class TestStalledExtractorIsKilled:
     @pytest.mark.usefixtures("stalling_7zz")
     def test_largest_member_hashing_fails(self):
         start = time.monotonic()
-        assert not archives.hash_largest_7z_member(
-            Path("/fake/game.7z"), MagicMock()
-        )
+        assert not archives.hash_largest_7z_member(Path("/fake/game.7z"), MagicMock())
         assert time.monotonic() - start < 10
 
     @pytest.mark.usefixtures("stalling_7zz")
@@ -217,8 +216,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"abc", b"def"]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
@@ -240,8 +239,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"abc"]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
@@ -258,8 +257,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"abc"]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.gba.gz"), tmp_path
@@ -277,8 +276,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"abc"]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
@@ -296,8 +295,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"tarbytes"], [b"rombytes"]], [0, 0])
 
         with (
-            patch.object(archives.subprocess, "run", side_effect=listings),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", side_effect=listings),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.tgz"), tmp_path
@@ -319,8 +318,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"tarbytes"], [b"7zbytes"]], [0, 0])
 
         with (
-            patch.object(archives.subprocess, "run", side_effect=listings),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", side_effect=listings),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.tgz"), tmp_path
@@ -331,9 +330,9 @@ class TestExtractLargestArchiveMember:
 
     def test_returns_none_when_listing_fails(self, tmp_path):
         with patch.object(
-            archives.subprocess,
+            subprocess,
             "run",
-            side_effect=archives.subprocess.CalledProcessError(2, "7zz"),
+            side_effect=subprocess.CalledProcessError(2, "7zz"),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
@@ -344,7 +343,7 @@ class TestExtractLargestArchiveMember:
     def test_returns_none_when_archive_has_no_members(self, tmp_path):
         listing = MagicMock(stdout="")
 
-        with patch.object(archives.subprocess, "run", return_value=listing):
+        with patch.object(subprocess, "run", return_value=listing):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
             )
@@ -361,9 +360,9 @@ class TestExtractLargestArchiveMember:
         )
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
-            patch.object(archives.log, "error") as log_error,
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
+            patch.object(log, "error") as log_error,
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
@@ -379,8 +378,8 @@ class TestExtractLargestArchiveMember:
         popen = _mock_popen_streaming([[b"abc", b"def"]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.7z"), tmp_path
@@ -405,7 +404,7 @@ class TestRarArchives:
             )
         )
 
-        with patch.object(archives.subprocess, "run", return_value=listing) as run:
+        with patch.object(subprocess, "run", return_value=listing) as run:
             members = archives._list_rar_file_members(Path("/fake/game.rar"))
 
         # The archive-root "./" prefix is not part of the stored member name.
@@ -424,7 +423,7 @@ class TestRarArchives:
             )
         )
 
-        with patch.object(archives.subprocess, "run", return_value=listing):
+        with patch.object(subprocess, "run", return_value=listing):
             members = archives._list_rar_file_members(Path("/fake/game.rar"))
 
         assert members == [("subdir/game.gba", 500)]
@@ -438,7 +437,7 @@ class TestRarArchives:
             )
         )
 
-        with patch.object(archives.subprocess, "run", return_value=listing):
+        with patch.object(subprocess, "run", return_value=listing):
             members = archives._list_rar_file_members(Path("/fake/game.rar"))
 
         assert members == [("café #1\\x.gba", 500)]
@@ -447,11 +446,11 @@ class TestRarArchives:
         """Encrypted headers and corrupt archives make bsdtar exit non-zero."""
         with (
             patch.object(
-                archives.subprocess,
+                subprocess,
                 "run",
-                side_effect=archives.subprocess.CalledProcessError(1, "bsdtar"),
+                side_effect=subprocess.CalledProcessError(1, "bsdtar"),
             ),
-            patch.object(archives.log, "error") as log_error,
+            patch.object(log, "error") as log_error,
         ):
             members = archives._list_rar_file_members(Path("/fake/game.rar"))
 
@@ -506,8 +505,8 @@ class TestRarArchives:
         popen = _mock_popen_streaming([[b"aaa"], [b"bbb"]], [0, 0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             results = [
                 (name, size, b"".join(chunks))
@@ -537,8 +536,8 @@ class TestRarArchives:
         popen = _mock_popen_streaming([[b"abc", b"def"]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = archives.extract_largest_archive_member(
                 Path("/fake/game.rar"), tmp_path
@@ -646,6 +645,28 @@ class TestZipAndTarReadFailures:
             list(archives._iter_chunks(_FailingReader(), Path("/fake.tar.gz"), "a.bin"))
 
 
+class TestReadTarFile:
+    def _write_tar(self, path: Path, members: dict[str, bytes]) -> None:
+        with tarfile.open(path, "w") as tf:
+            for name, data in members.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+
+    def test_streams_the_largest_member(self, tmp_path):
+        path = tmp_path / "game.tar"
+        self._write_tar(path, {"small.bin": b"S" * 16, "large.bin": b"L" * 64})
+
+        assert b"".join(archives.read_tar_file(path)) == b"L" * 64
+
+    def test_member_without_a_stream_yields_nothing(self, tmp_path):
+        path = tmp_path / "game.tar"
+        self._write_tar(path, {"game.bin": b"G" * 16})
+
+        with patch.object(tarfile.TarFile, "extractfile", return_value=None):
+            assert list(archives.read_tar_file(path)) == []
+
+
 class TestZipUndecodableCompression:
     """Zips using a method zipfile can't decode must be read through 7zz, not
     hashed as a container (GitHub issue #4159)."""
@@ -685,8 +706,8 @@ class TestZipUndecodableCompression:
         popen = _mock_popen_streaming([[b"G" * 32, b"G" * 32]], [0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = [
                 (name, size, b"".join(chunks))
@@ -712,8 +733,8 @@ class TestZipUndecodableCompression:
         popen = _mock_popen_streaming([[b"B" * 64], [b"C" * 16]], [0, 0])
 
         with (
-            patch.object(archives.subprocess, "run", return_value=listing),
-            patch.object(archives.subprocess, "Popen", popen),
+            patch.object(subprocess, "run", return_value=listing),
+            patch.object(subprocess, "Popen", popen),
         ):
             result = [
                 (name, size, b"".join(chunks))
@@ -732,8 +753,8 @@ class TestZipUndecodableCompression:
         )
 
         with (
-            patch.object(archives.subprocess, "run", side_effect=AssertionError),
-            patch.object(archives.subprocess, "Popen", side_effect=AssertionError),
+            patch.object(subprocess, "run", side_effect=AssertionError),
+            patch.object(subprocess, "Popen", side_effect=AssertionError),
         ):
             result = [
                 (name, size, b"".join(chunks))
@@ -749,8 +770,8 @@ class TestZipUndecodableCompression:
         self._write_zip(path, {"game.bin": b"B" * 64}, frozenset())
 
         with (
-            patch.object(archives.subprocess, "run", side_effect=AssertionError),
-            patch.object(archives.subprocess, "Popen", side_effect=AssertionError),
+            patch.object(subprocess, "run", side_effect=AssertionError),
+            patch.object(subprocess, "Popen", side_effect=AssertionError),
         ):
             result = [
                 (name, size, b"".join(chunks))

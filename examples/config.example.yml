@@ -62,10 +62,10 @@
 # system:
 #   # Asociate different platform names to your current file system platform names
 #   # [your custom platform folder name]: [RomM platform name]
-#   # In this example if you have a 'gc' folder, RomM will treat it like the 'ngc' folder
+#   # Case-insensitive. Batocera, RetroBat and ES-DE folders are already recognised.
 #   platforms:
-#     gc: ngc
 #     ps1: psx
+#     super_nintendo: snes
 
 #   # Asociate one platform to it's main version (IGDB only)
 #   versions:
@@ -75,6 +75,7 @@
 #   # Skip file hash calculations on low power devices (eg. Raspberry PI)
 #   skip_hash_calculation: false
 #   # Skip reading platform-native title IDs out of ROM binaries during scans
+#   # (rom-converto's per-file title IDs follow `converto.scan_metadata` instead)
 #   skip_title_id_extraction: false
 #   # Rename Switch ROMs to embed ` [TITLEID][vVERSION]` in their filename
 #   embed_switch_title_ids: false
@@ -107,6 +108,7 @@
 #       - steam # Steam (PC platforms only)
 #       - hltb # HowLongToBeat (lowest priority)
 #     artwork: # Cover art and screenshots
+#       - sgdb # SteamGridDB (highest priority)
 #       - igdb # IGDB
 #       - moby # MobyGames
 #       - ss # Screenscraper
@@ -151,7 +153,6 @@
 #     # Shown in the artwork gallery
 #     - title_screen  # Title screen
 #     - fanart  # User uploaded artwork
-#     # Bezel artwork
 #     - bezel
 #     # Manual in PDF format
 #     - manual # Manual (enabled by default)
@@ -173,3 +174,26 @@
 #       image: screenshot  # Use as the <image> tag in the exported gamelist.xml
 #   pegasus:
 #     export: false # Whether to export metadata.pegasus.txt for Pegasus (merged into an existing file)
+
+# converto:
+#   # Convert a single-file download into a format the client lists with
+#   # ?format=, e.g. ?format=zso,iso (needs ROM_CONVERTO_ENABLED)
+#   download_conversion_enabled: false
+#   # Read per-file title IDs with rom-converto during scans
+#   scan_metadata: true
+#   # Hours a converted download stays cached after it was last downloaded
+#   cache_ttl_hours: 24
+#   # Cache size before the least recently downloaded copies are evicted (0: unbounded)
+#   cache_max_size_gb: 20
+#   # Platform slug -> the format the "Convert library" task stores its matched
+#   # roms in, replacing the original files. Formats per platform:
+#   #   3ds: cci, cia, z3ds
+#   #   psp, ps2: chd, cso, iso, zso
+#   #   psx, saturn, segacd, dc: chd
+#   #   ngc: iso, rvz
+#   #   wii: iso, rvz, wbfs
+#   #   switch, switch-2: nsp, nsz, xci, xcz
+#   #   xbox360: zar
+#   platform_formats:
+#     psx: chd
+#     ngc: rvz

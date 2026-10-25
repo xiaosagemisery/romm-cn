@@ -92,3 +92,29 @@ Change commit: `36322f67ed5434df356f8332ccb25b4e72bf17de`.
 | `backend/config/__init__.py` | Removed the `DISABLE_EMULATOR_JS`, `DISABLE_RUFFLE_RS`, `DISABLE_JSDOS`, and `DISABLE_PICO8` settings together with the emulator, streaming, and netplay settings; the in-browser players they controlled no longer exist. |
 | `backend/main.py` | Removed streaming and netplay endpoint/socket imports, router registration and socket mounts; also removed `/netplay` from the CSRF middleware exclusions. |
 | `backend/utils/database.py` | Rewrote exception handlers in `safe_str_to_bool`, `safe_float`, and `safe_int` as valid exception tuples. |
+
+## Upstream backend sync (`7eae2b8ff`)
+
+The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `uv.lock` were brought up to the upstream `master` at `7eae2b8ff` (2026-10-23). The frontend, the docs and the CI files stay at the fork's own state, so the frontend is still the one from before upstream promoted v2 to `frontend/src/`.
+
+### Removed again after the sync
+
+| Area | Specific change |
+| --- | --- |
+| Streaming, netplay, save sync | `endpoints/streaming.py`, `endpoints/netplay.py`, `endpoints/sync/`, `handler/streaming/`, `handler/sync/` (RetroArch Cloud Sync included), `handler/netplay_handler.py`, the sync watcher and the push-pull task stay deleted. The `STREAMING_*`, `SYNC_*` and `DISABLE_*` emulator settings, the streaming RQ queue and worker, and the `streaming`/`devices` notification topics are gone. |
+| Device push install | `endpoints/device/install.py`, `handler/device_install/`, the `DEVICE_INSTALL_*` settings and the install notification kinds are removed. Devices keep registration and client tokens, without sync mode, sync config or capabilities. |
+| Browser players | The EasyRPG endpoint, handler, RTP tooling, `Rom.is_easyrpg_game`, the `playable` filter and the emulator asset stages of both Dockerfiles are removed. The libgme WebAssembly stage is dropped too, because the fork's frontend does not use it. |
+| Age limits | Upstream's age-limit feature (#5081) is reverted: `utils/age_ratings.py`, `Rom.min_age` and its `roms_facets` mirror, `age_limit` and `hide_unrated_roms` on users and permission groups, the age clause of `RomVisibilityFilter`, the matching API fields and tests. Hidden platforms and ROMs still work. The age-ratings metadata itself is untouched. |
+| Saves, states, screenshots, firmware | `has_saves` and `has_states` filters, the `saves`/`states`/`screenshots` relationships on `Rom`, the stats counters, the firmware pass of the scan, the `FIRMWARE` audit target and permission entities (`streaming`, `emulation`, `firmware`) are removed. |
+
+### Migrations
+
+`0129_remove_emulator_data` keeps its revision id and still revises `0128_hltb_main_story_column`. Upstream's `0130` to `0147` and `0149`, `0150` follow it, re-chained (`0149` revises `0147`), and `0152_cross_user_smart_scopes` closes the chain. Skipped because they only touch removed tables or add removed permissions: `0129_save_state_favorites_labels`, `0135`, `0136`, `0138`, `0140`, `0141`, `0142`, `0151` and `0153`. `0148_rom_age_limits` is skipped because the fork drops age limits.
+
+### Docs and skills
+
+`docs/BACKEND_ARCHITECTURE.md` was merged with upstream's version at `7eae2b8ff` and the sections for removed features (saves, states, screenshots, firmware, play sessions, netplay, device sync and install, EasyRPG, age limits) were dropped again. The `backend-development`, `review-polish` and `security-audit` skills follow upstream, with the references to tooling the fork does not have (the mypy workflow, the ruff `TID251` factory ban, the ESLint plugin) removed.
+
+### Kept from the fork
+
+The Google Translate step in `scan_handler.py` and `endpoints/roms/__init__.py`, and the trimmed `FSAssetsHandler` (avatars only), carry over unchanged.

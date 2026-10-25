@@ -1,15 +1,25 @@
-from unittest.mock import MagicMock, PropertyMock
+import asyncio
+import threading
+from typing import Any
+from unittest.mock import MagicMock, PropertyMock, patch
 
+import pytest
 from rq import Worker
 from rq.exceptions import DeserializationError, InvalidJobOperation, NoSuchJobError
 from rq.job import Job, JobStatus
 
 from handler.redis_handler import (
+    RomMRedis,
+    async_cache,
     cancel_job,
     get_job_func_name,
     get_job_kwargs,
     get_job_status,
     get_worker_current_job,
+    has_live_worker,
+    low_prio_queue,
+    redis_client,
+    redis_lock,
 )
 
 
@@ -112,3 +122,101 @@ class TestGetWorkerCurrentJob:
         worker = self._worker(side_effect=NoSuchJobError)
 
         assert get_worker_current_job(worker) is None
+
+
+class TestHasLiveWorker:
+    @staticmethod
+    def _worker(state: str, death_date: str | None = None) -> MagicMock:
+        worker = MagicMock(spec=Worker)
+        worker.get_state.return_value = state
+        worker.death_date = death_date
+        return worker
+
+    @pytest.mark.parametrize(
+        ("workers", "expected"),
+        [
+            ([], False),
+            ([("suspended", None)], False),
+            ([("idle", "2026-09-16T10:00:00")], False),
+            ([("suspended", None), ("idle", None)], True),
+            ([("busy", None)], True),
+        ],
+        ids=["none-registered", "suspended", "announced-dead", "one-live", "busy"],
+    )
+    def test_counts_only_workers_that_would_take_a_job(
+        self, workers: list[tuple[str, str | None]], expected: bool
+    ):
+        registered = [self._worker(state, death) for state, death in workers]
+
+        with patch(
+            "handler.redis_handler.Worker.all", return_value=registered
+        ) as mock_all:
+            assert has_live_worker(low_prio_queue) is expected
+
+        mock_all.assert_called_once_with(queue=low_prio_queue)
+
+    def test_reads_a_listing_the_caller_already_has(self):
+        elsewhere = self._worker("idle")
+        elsewhere.queue_names.return_value = ["other"]
+        listening = self._worker("busy")
+        listening.queue_names.return_value = [low_prio_queue.name]
+
+        with patch("handler.redis_handler.Worker.all") as mock_all:
+            assert has_live_worker(low_prio_queue, [elsewhere]) is False
+            assert has_live_worker(low_prio_queue, [elsewhere, listening]) is True
+
+        mock_all.assert_not_called()
+
+
+class TestAsyncCacheUnderTests:
+    def test_concurrent_threads_and_loops_never_share_a_pool(self):
+        """The TestClient's loop and a test's asyncio.run overlap across threads."""
+
+        async def running_loop_pool() -> Any:
+            return async_cache.connection_pool
+
+        pools: dict[str, Any] = {}
+
+        def other_thread() -> None:
+            pools["other thread, no loop"] = async_cache.connection_pool
+            pools["other thread, in a loop"] = asyncio.run(running_loop_pool())
+
+        thread = threading.Thread(target=other_thread)
+        thread.start()
+        thread.join()
+        pools["this thread, no loop"] = async_cache.connection_pool
+        pools["this thread, in a loop"] = asyncio.run(running_loop_pool())
+
+        assert len({id(pool) for pool in pools.values()}) == len(pools)
+
+    def test_every_client_reads_the_one_keyspace(self):
+        async def read() -> Any:
+            return await async_cache.get("per-loop")
+
+        asyncio.run(async_cache.set("per-loop", "1"))
+        value = asyncio.run(read())
+
+        assert value in ("1", b"1")
+
+
+class TestRedisLock:
+    @pytest.mark.parametrize(
+        ("lease_seconds", "expected_ttl"), [(None, 5), (30, 30)], ids=["wait", "lease"]
+    )
+    async def test_the_key_lives_for_the_lease(self, lease_seconds, expected_ttl):
+        async with redis_lock(
+            "test-lock", timeout_seconds=5, lease_seconds=lease_seconds
+        ):
+            assert await async_cache.ttl("test-lock") == expected_ttl
+
+        assert not await async_cache.exists("test-lock")
+
+
+def test_the_queue_client_skips_the_maintenance_notifications_probe():
+    assert not redis_client.connection_pool.maint_notifications_enabled()
+
+
+def test_the_rq_cli_client_skips_the_maintenance_notifications_probe():
+    client = RomMRedis.from_url("redis://localhost:6379/0")
+
+    assert not client.connection_pool.maint_notifications_enabled()

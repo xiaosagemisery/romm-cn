@@ -17,7 +17,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from handler.auth.permissions import ResolvedPermissions
-from models.permission import PermAction, PermEntity
+from models.permission import PermAction, PermEntity, SystemGroupKey
 
 
 class ActionKey(enum.StrEnum):
@@ -61,9 +61,9 @@ class ActionKey(enum.StrEnum):
 _ENTITY_ACTION_KEYS: dict[tuple[PermEntity, PermAction], tuple[ActionKey, ...]] = {
     (PermEntity.ROMS, PermAction.READ): (
         ActionKey.ROM_VIEW,
-        ActionKey.ROM_PLAY,
         ActionKey.ROM_DOWNLOAD,
         ActionKey.ROM_FAVORITE,
+        ActionKey.ROM_PLAY,
     ),
     (PermEntity.ROMS, PermAction.WRITE): (
         ActionKey.ROM_UPLOAD,
@@ -164,7 +164,7 @@ class PermissionGroupSchema(BaseModel):
     name: str
     description: str
     is_default: bool
-    is_system: bool
+    system_key: SystemGroupKey | None
     color: str | None
     grants: list[GrantSchemaIO]
     member_count: int

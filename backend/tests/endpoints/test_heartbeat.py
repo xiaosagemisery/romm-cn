@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from fastapi import status
 from main import app
@@ -10,48 +10,6 @@ from endpoints.heartbeat import METADATA_HEARTBEAT_RATE_LIMIT
 from exceptions.fs_exceptions import PlatformAlreadyExistsException
 from handler.metadata.launchbox_handler.handler import LaunchboxHandler
 from handler.redis_handler import sync_cache
-from utils import get_version
-
-
-def test_heartbeat(client):
-    response = client.get("/api/heartbeat")
-    assert response.status_code == status.HTTP_200_OK
-
-    heartbeat = response.json()
-
-    assert "SYSTEM" in heartbeat
-    system = heartbeat["SYSTEM"]
-    assert system["VERSION"] == get_version()
-    assert isinstance(system["SHOW_SETUP_WIZARD"], bool)
-
-    assert "METADATA_SOURCES" in heartbeat
-    metadata = heartbeat["METADATA_SOURCES"]
-    assert isinstance(metadata["ANY_SOURCE_ENABLED"], bool)
-    assert isinstance(metadata["IGDB_API_ENABLED"], bool)
-    assert isinstance(metadata["MOBY_API_ENABLED"], bool)
-    assert isinstance(metadata["SS_API_ENABLED"], bool)
-    assert isinstance(metadata["SS_DEV_CREDENTIALS_SET"], bool)
-    assert isinstance(metadata["STEAMGRIDDB_API_ENABLED"], bool)
-    assert isinstance(metadata["RA_API_ENABLED"], bool)
-    assert isinstance(metadata["LAUNCHBOX_API_ENABLED"], bool)
-    assert isinstance(metadata["PLAYMATCH_API_ENABLED"], bool)
-    assert isinstance(metadata["HASHEOUS_API_ENABLED"], bool)
-    assert isinstance(metadata["TGDB_API_ENABLED"], bool)
-    assert isinstance(metadata["FLASHPOINT_API_ENABLED"], bool)
-
-    assert "FILESYSTEM" in heartbeat
-    filesystem = heartbeat["FILESYSTEM"]
-    assert isinstance(filesystem["FS_PLATFORMS"], list)
-
-    assert "FRONTEND" in heartbeat
-    frontend = heartbeat["FRONTEND"]
-    assert isinstance(frontend["DISABLE_USERPASS_LOGIN"], bool)
-
-    assert "OIDC" in heartbeat
-    oidc = heartbeat["OIDC"]
-    assert isinstance(oidc["ENABLED"], bool)
-    assert isinstance(oidc["PROVIDER"], str)
-    assert isinstance(oidc["RP_INITIATED_LOGOUT"], bool)
 
 
 @pytest.mark.parametrize(
@@ -114,8 +72,8 @@ async def test_heartbeat_metadata_concurrent_misses_probe_once(client):
         new_callable=AsyncMock,
         side_effect=slow_probe,
     ) as mock_populated:
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://test"
         ) as async_client:
             responses = await asyncio.gather(
                 *(

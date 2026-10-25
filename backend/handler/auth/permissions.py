@@ -11,14 +11,23 @@ Precedence: admin bypass > per-user override > group grant > legacy default.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cached_property
+
+from sqlalchemy.orm import Session
 
 from config import KIOSK_MODE
-from decorators.database import begin_session
+from decorators.database import INJECTED_SESSION, begin_session
 from handler.auth.constants import FULL_SCOPES, READ_SCOPES, Scope
 from handler.auth.permissions_map import (
     grants_to_scopes,
     order_scopes,
+)
+from handler.auth.rom_visibility import (
+    UNRESTRICTED,
+    RomVisibilityFilter,
+    VisibilityColumns,
 )
 from models.permission import PermAction, PermEntity
 from models.user import Role, User
@@ -56,16 +65,21 @@ class ResolvedPermissions:
     def can_see_platform(self, platform_id: int) -> bool:
         return self.is_admin or platform_id not in self.hidden_platform_ids
 
-    def can_see_rom(self, rom_id: int, platform_id: int) -> bool:
+    @cached_property
+    def rom_visibility(self) -> RomVisibilityFilter:
         if self.is_admin:
-            return True
-        return (
-            platform_id not in self.hidden_platform_ids
-            and rom_id not in self.hidden_rom_ids
+            return UNRESTRICTED
+        return RomVisibilityFilter(
+            hidden_platform_ids=self.hidden_platform_ids,
+            hidden_rom_ids=self.hidden_rom_ids,
         )
 
+    @cached_property
+    def can_see_rom(self) -> Callable[[VisibilityColumns], bool]:
+        return self.rom_visibility.allows
 
-def _effective_group_id(user: User, *, session) -> int | None:
+
+def _effective_group_id(user: User, *, session: Session) -> int | None:
     """The group a non-admin user follows: their own, else the server default.
 
     Used by both the grant map and the hidden-entity lookup so a user with no
@@ -81,7 +95,7 @@ def _effective_group_id(user: User, *, session) -> int | None:
 
 
 def _resolve_grant_map(
-    user: User, *, session
+    user: User, *, session: Session
 ) -> dict[tuple[PermEntity, PermAction], bool]:
     """Effective ``(entity, action) -> own_only`` map for a non-admin user."""
 
@@ -108,11 +122,7 @@ def _resolve_grant_map(
     return base
 
 
-def resolve_permissions(
-    user: User,
-    *,
-    session=None,  # type: ignore
-) -> ResolvedPermissions:
+def resolve_permissions(user: User) -> ResolvedPermissions:
     # Admins bypass everything -- no DB access needed.
     if user.role == Role.ADMIN:
         return ResolvedPermissions(
@@ -122,14 +132,14 @@ def resolve_permissions(
             hidden_platform_ids=frozenset(),
             hidden_rom_ids=frozenset(),
         )
-    return _resolve_non_admin(user, session=session)
+    return _resolve_non_admin(user)
 
 
 @begin_session
 def _resolve_non_admin(
     user: User,
     *,
-    session=None,  # type: ignore
+    session: Session = INJECTED_SESSION,
 ) -> ResolvedPermissions:
     from handler.database import db_permission_handler
 
@@ -162,11 +172,7 @@ def _resolve_non_admin(
     )
 
 
-def compute_oauth_scopes(
-    user: User,
-    *,
-    session=None,  # type: ignore
-) -> list[Scope]:
+def compute_oauth_scopes(user: User) -> list[Scope]:
     """Project a user's effective grants onto the coarse legacy ``Scope`` set.
 
     Admins get the full set; the anonymous ``KIOSK_MODE`` visitor is capped to
@@ -177,14 +183,14 @@ def compute_oauth_scopes(
     # FULL_SCOPES order (same as the non-admin path) to avoid token churn.
     if user.role == Role.ADMIN:
         return order_scopes(FULL_SCOPES)
-    return _compute_non_admin_scopes(user, session=session)
+    return _compute_non_admin_scopes(user)
 
 
 @begin_session
 def _compute_non_admin_scopes(
     user: User,
     *,
-    session=None,  # type: ignore
+    session: Session = INJECTED_SESSION,
 ) -> list[Scope]:
     grant_map = _resolve_grant_map(user, session=session)
     scopes = set(

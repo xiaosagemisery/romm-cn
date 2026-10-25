@@ -32,6 +32,7 @@ from models.rom import (
     RomUserStatus,
     SaveTargetLayout,
 )
+from utils.conversion_cache import offered_download_formats
 
 from .base import BaseModel, UTCDatetime
 
@@ -74,67 +75,67 @@ class UserNoteSchema(BaseModel):
 
 RomIGDBMetadata = TypedDict(  # type: ignore[misc]
     "RomIGDBMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(IGDBMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(IGDBMetadata).items()},
     total=False,
 )
 RomMobyMetadata = TypedDict(  # type: ignore[misc]
     "RomMobyMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(MobyMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(MobyMetadata).items()},
     total=False,
 )
 RomSSMetadata = TypedDict(  # type: ignore[misc]
     "RomSSMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(SSMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(SSMetadata).items()},
     total=False,
 )
 RomRAMetadata = TypedDict(  # type: ignore[misc]
     "RomRAMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(RAMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(RAMetadata).items()},
     total=False,
 )
 RomLaunchboxMetadata = TypedDict(  # type: ignore[misc]
     "RomLaunchboxMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(LaunchboxMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(LaunchboxMetadata).items()},
     total=False,
 )
 RomHasheousMetadata = TypedDict(  # type: ignore[misc]
     "RomHasheousMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(HasheousMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(HasheousMetadata).items()},
     total=False,
 )
 RomFlashpointMetadata = TypedDict(  # type: ignore[misc]
     "RomFlashpointMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(FlashpointMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(FlashpointMetadata).items()},
     total=False,
 )
 RomHLTBMetadata = TypedDict(  # type: ignore[misc]
     "RomHLTBMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(HLTBMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(HLTBMetadata).items()},
     total=False,
 )
 RomDemozooMetadata = TypedDict(  # type: ignore[misc]
     "RomDemozooMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(DemozooMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(DemozooMetadata).items()},
     total=False,
 )
 RomPouetMetadata = TypedDict(  # type: ignore[misc]
     "RomPouetMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(PouetMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(PouetMetadata).items()},
     total=False,
 )
 RomCsdbMetadata = TypedDict(  # type: ignore[misc]
     "RomCsdbMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(CsdbMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(CsdbMetadata).items()},
     total=False,
 )
 RomSteamMetadata = TypedDict(  # type: ignore[misc]
     "RomSteamMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(SteamMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(SteamMetadata).items()},
     total=False,
 )
 RomGamelistMetadata = TypedDict(  # type: ignore[misc]
     "RomGamelistMetadata",
-    {k: NotRequired[v] for k, v in get_type_hints(GamelistMetadata).items()},  # type: ignore[misc]
+    {k: NotRequired[v] for k, v in get_type_hints(GamelistMetadata).items()},
     total=False,
 )
 ManualMetadata = TypedDict(
@@ -149,6 +150,7 @@ ManualMetadata = TypedDict(
         "age_ratings": list[str] | None,
         "first_release_date": int | None,
         "youtube_video_id": str | None,
+        "alternative_names": list[str] | None,
     },
     total=False,
 )
@@ -171,6 +173,7 @@ def rom_user_schema_factory() -> RomUserSchema:
         difficulty=0,
         completion=0,
         status=None,
+        pinned_media=None,
     )
 
 
@@ -191,6 +194,7 @@ class RomUserSchema(BaseModel):
     difficulty: int
     completion: int
     status: RomUserStatus | None
+    pinned_media: list[str] | None
 
     @classmethod
     def for_user(cls, user_id: int, db_rom: Rom) -> RomUserSchema:
@@ -451,9 +455,9 @@ class RomSchema(BaseModel):
     def populate_properties(
         cls, db_rom: Rom, request: Request, has_notes: bool | None = None
     ) -> Rom:
-        db_rom.rom_user = RomUserSchema.for_user(request.user.id, db_rom)  # type: ignore[assignment]
+        db_rom.rom_user = RomUserSchema.for_user(request.user.id, db_rom)  # type: ignore[attr-defined]
         # Callers that batched the flag pass it in and never load `Rom.notes`.
-        db_rom.has_notes = (  # type: ignore[assignment]
+        db_rom.has_notes = (  # type: ignore[attr-defined]
             any(
                 note.is_public or note.user_id == request.user.id
                 for note in db_rom.notes
@@ -479,7 +483,7 @@ class SiblingRomSchema(BaseModel):
     fs_name_no_ext: str
     is_main_sibling: bool
 
-    @computed_field  # type: ignore
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def sort_comparator(self) -> str:
         return (
@@ -516,7 +520,7 @@ def _visible_siblings(db_rom: Rom, request: Request) -> list[Rom]:
     from handler.auth.dependencies import get_permissions
 
     perms = get_permissions(request)
-    return [s for s in siblings if perms.can_see_rom(s.id, s.platform_id)]
+    return [s for s in siblings if perms.can_see_rom(s)]
 
 
 class SimpleRomSchema(RomSchema):
@@ -533,7 +537,7 @@ class SimpleRomSchema(RomSchema):
         has_notes: bool | None = None,
     ) -> SimpleRomSchema:
         db_rom = cls.populate_properties(db_rom, request, has_notes=has_notes)
-        db_rom.screenshot_path = screenshot_path  # type: ignore[assignment]
+        db_rom.screenshot_path = screenshot_path  # type: ignore[attr-defined]
 
         # The list endpoint passes pre-fetched `files`/`siblings` (batched via
         # get_files_for_roms / get_siblings_for_roms, no per-row hydration).
@@ -557,8 +561,8 @@ class SimpleRomSchema(RomSchema):
                 for s in _visible_siblings(db_rom, request)
             ]
 
-        db_rom.included_files = list(files)  # type: ignore[assignment]
-        db_rom.included_sibling_roms = [  # type: ignore[assignment]
+        db_rom.included_files = list(files)  # type: ignore[attr-defined]
+        db_rom.included_sibling_roms = [  # type: ignore[attr-defined]
             SiblingRomSchema.from_rom(s, is_main_sibling=is_main)
             for s, is_main in siblings
         ]
@@ -566,11 +570,11 @@ class SimpleRomSchema(RomSchema):
 
     @classmethod
     def from_orm_with_factory(cls, db_rom: Rom) -> SimpleRomSchema:
-        db_rom.rom_user = rom_user_schema_factory()  # type: ignore[assignment]
-        db_rom.included_files = []  # type: ignore[assignment]
-        db_rom.included_sibling_roms = []  # type: ignore[assignment]
-        db_rom.has_notes = False  # type: ignore[assignment]
-        db_rom.screenshot_path = None  # type: ignore[assignment]
+        db_rom.rom_user = rom_user_schema_factory()  # type: ignore[attr-defined]
+        db_rom.included_files = []  # type: ignore[attr-defined]
+        db_rom.included_sibling_roms = []  # type: ignore[attr-defined]
+        db_rom.has_notes = False  # type: ignore[attr-defined]
+        db_rom.screenshot_path = None  # type: ignore[attr-defined]
         return cls.model_validate(db_rom)
 
 
@@ -611,6 +615,8 @@ class UserCollectionSchema(BaseModel):
 class DetailedRomSchema(RomSchema):
     user_collections: list[UserCollectionSchema]
     all_user_notes: list[UserNoteSchema]
+    # What the caller can ask a `?format=` download of the rom's single file for.
+    download_formats: list[str]
 
     @classmethod
     def from_orm_with_request(cls, db_rom: Rom, request: Request) -> DetailedRomSchema:
@@ -630,15 +636,18 @@ class DetailedRomSchema(RomSchema):
             ),
             key=lambda x: x.sort_comparator,
         )
-        db_rom.included_sibling_roms = sorted_siblings  # type: ignore[assignment]
-        db_rom.included_files = sorted(db_rom.files, key=lambda x: x.file_name)  # type: ignore[assignment]
+        db_rom.included_sibling_roms = sorted_siblings  # type: ignore[attr-defined]
+        db_rom.included_files = sorted(db_rom.files, key=lambda x: x.file_name)  # type: ignore[attr-defined]
+        db_rom.download_formats = offered_download_formats(  # type: ignore[attr-defined]
+            db_rom.platform_slug, db_rom.files, request
+        )
 
         from handler.database import db_collection_handler
 
         # Standard collections come off the already-loaded join relationship;
         # smart collections have no reverse join, so match them by their cached
         # rom-id membership at the SQL layer (see #3934).
-        db_rom.user_collections = [  # type: ignore[assignment]
+        db_rom.user_collections = [  # type: ignore[attr-defined]
             *UserCollectionSchema.for_user(user_id, db_rom.collections),
             *UserCollectionSchema.from_smart_collections(
                 db_collection_handler.get_smart_collections_for_rom(
@@ -656,22 +665,6 @@ class DetailedRomSchema(RomSchema):
 
         # Sort notes by updated_at (most recent first)
         all_notes.sort(key=lambda x: x.updated_at, reverse=True)
-        db_rom.all_user_notes = all_notes  # type: ignore[assignment]
+        db_rom.all_user_notes = all_notes  # type: ignore[attr-defined]
 
         return cls.model_validate(db_rom)
-
-
-class RomFiltersDict(TypedDict):
-    genres: list[str]
-    franchises: list[str]
-    collections: list[str]
-    companies: list[str]
-    publishers: list[str]
-    developers: list[str]
-    game_modes: list[str]
-    age_ratings: list[str]
-    player_counts: list[str]
-    regions: list[str]
-    languages: list[str]
-    tags: list[str]
-    platforms: list[int]

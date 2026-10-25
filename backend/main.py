@@ -4,12 +4,9 @@ import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 
-import alembic.config
-import sentry_sdk
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_pagination import add_pagination
 from starlette.middleware.authentication import AuthenticationMiddleware
 from startup import main
 
@@ -25,22 +22,24 @@ from config import (
     ROMM_AUTH_SECRET_KEY,
     ROMM_CORS_ALLOWED_ORIGINS,
     ROMM_SESSION_SECURE_COOKIE,
-    SENTRY_DSN,
     cors_allow_credentials,
 )
 from endpoints.activity import router as activity_router
+from endpoints.audit_events import router as audit_events_router
 from endpoints.auth import router as auth_router
 from endpoints.client_tokens import router as client_tokens_router
 from endpoints.collections import router as collections_router
 from endpoints.configs import router as configs_router
 from endpoints.device import router as device_router
-from endpoints.device_auth import router as device_auth_router
+from endpoints.device.auth import router as device_auth_router
 from endpoints.export import router as export_router
 from endpoints.feeds import router as feeds_router
 from endpoints.heartbeat import router as heartbeat_router
 from endpoints.logs import router as logs_router
 from endpoints.music import router as music_router
 from endpoints.music_playlists import router as music_playlists_router
+from endpoints.notification_channels import router as notification_channels_router
+from endpoints.notifications import router as notifications_router
 from endpoints.permissions import router as permissions_router
 from endpoints.platform import router as platform_router
 from endpoints.recommendations import router as recommendations_router
@@ -49,6 +48,7 @@ from endpoints.search import router as search_router
 from endpoints.stats import router as stats_router
 from endpoints.tasks import router as tasks_router
 from endpoints.user import router as user_router
+from handler.activity_handler import activity_handler
 from handler.auth.constants import SESSION_COOKIE_NAME
 from handler.auth.hybrid_auth import HybridAuthBackend
 from handler.auth.middleware.csrf_middleware import CSRFMiddleware
@@ -62,6 +62,7 @@ from utils.context import (
     initialize_context,
     set_context_middleware,
 )
+from utils.sentry import init_sentry
 
 logging.config.dictConfig(LOGGING_CONFIG)
 
@@ -82,6 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         try:
             yield
         finally:
+            await activity_handler.flush_refresh()
             if log_forwarder_task is not None:
                 log_forwarder_task.cancel()
                 # Await the cancellation so the forwarder's cleanup (pubsub
@@ -90,10 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     await log_forwarder_task
 
 
-sentry_sdk.init(
-    dsn=SENTRY_DSN,
-    release="romm@" + get_version(),
-)
+init_sentry()
 
 app = FastAPI(
     title="RomM API",
@@ -148,8 +147,11 @@ app.middleware("http")(set_context_middleware)
 app.include_router(heartbeat_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
+app.include_router(audit_events_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(client_tokens_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
+app.include_router(notification_channels_router, prefix="/api")
 app.include_router(device_router, prefix="/api")
 app.include_router(device_auth_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
@@ -169,12 +171,12 @@ app.include_router(permissions_router, prefix="/api")
 
 app.mount("/ws", socket_handler.socket_app)
 
-add_pagination(app)
-
 
 # NOTE: This code is only executed when running the application directly,
 # not by deployments using gunicorn.
 if __name__ == "__main__":
+    import alembic.config
+
     # Run migrations
     alembic.config.main(argv=["upgrade", "head"])
 
