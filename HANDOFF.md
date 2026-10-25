@@ -3,7 +3,7 @@
 ## State
 
 - `master` mirrors upstream RomM at `7eae2b8ff` and carries no fork changes.
-- `sync/upstream-all` is the daily branch. It holds the upstream sync plus the fork's removals and the cleanup commits below. It is pushed over SSH up to `40c883f1a` (remote tip verified with `git ls-remote`).
+- `sync/upstream-all` is the daily branch. It holds the upstream sync plus the fork's removals and the cleanup commits below. It is pushed over SSH up to `7e48d365b` plus this handoff update (remote tip verified with `git ls-remote`).
 - `.git-credentials` sits untracked at the root and is now ignored. Never stage or print it.
 
 ## Completed
@@ -32,9 +32,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- Push the scan fix commit and confirm Pytest stays green.
 - Deploy test with real provider keys (IGDB or ScreenScraper with developer credentials) to see translated names and summaries end to end; the local test had no keys.
-- Stop and remove the local test stack when it's no longer needed (see Key files and commands).
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
   - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
@@ -48,7 +46,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 - Formatters outside Trunk: `uvx --python 3.14 black@26.5.1`, `isort@8.0.1 --settings-path ../.trunk/configs/.isort.cfg`, `ruff@0.15.22 check --config ../.trunk/configs/ruff.toml` (from `backend/`).
 - Push over SSH: `git push git@github.com:xiaosagemisery/romm-cn.git sync/upstream-all`. `gh` has an invalid token.
 
-- Local deploy test stack: project `romm-cn-test` on http://localhost:8090, containers `romm-cn-test` and `romm-cn-test-db`, override and mock library in the session scratchpad (`deploy-test/`). Stop it with `docker compose -p romm-cn-test -f examples/docker-compose.romm-cn.yml -f <override> down -v`.
+- Local deploy test stack (`romm-cn-test`) was removed with `down -v`; the `romm-cn:local` image is kept. Rebuild it the same way (see `test_method.md`).
 - The user's own RomM (`romm`, `romm-db`, upstream image, port 81) runs on the same Docker; never touch it.
 
 ## Blockers and risks
@@ -58,7 +56,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## First step next time
 
-Push the scan fix and check CI, then decide whether to rerun the deploy test with provider keys.
+Rerun the deploy test with real provider keys (IGDB, or ScreenScraper with developer credentials) to check that scanned names and summaries come out in Chinese.
 
 ## Pitfalls
 
@@ -83,3 +81,4 @@ Push the scan fix and check CI, then decide whether to rerun the deploy test wit
   - The first scan failed every ROM with `KeyError: 'name'` (libretro-only matches carry no name; upstream bug). After the fix, a complete rescan identified all three with libretro covers.
   - The translator reached Google from the container (name and summary in 0.8 s). It wasn't exercised by the scan because no provider returned a name without keys.
   - Home stats widget in extended mode shows games, platforms, favorites and disk size with no errors; server stats shows three cards; the game page has no play button or save tab; light and dark themes checked.
+- CI on `7e48d365b` (scan fix): Run Pytest (MariaDB and PostgreSQL) and Run E2E Tests passed.
