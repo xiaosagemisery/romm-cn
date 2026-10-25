@@ -3,7 +3,7 @@
 ## State
 
 - `master` mirrors upstream RomM at `7eae2b8ff` and carries no fork changes.
-- `sync/upstream-all` is the daily branch. It holds the upstream sync plus the fork's removals and the cleanup commits below, which are local only until pushed.
+- `sync/upstream-all` is the daily branch. It holds the upstream sync plus the fork's removals and the cleanup commits below. It was pushed over SSH at `14ca67108` (remote tip verified with `git ls-remote`); the compose example commit after it is local until pushed.
 - `.git-credentials` sits untracked at the root and is now ignored. Never stage or print it.
 
 ## Completed
@@ -27,12 +27,14 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
    - Fixed the Home stats widget crash in extended mode; removed always-zero stats cards and two no-op settings.
    - Deleted player-only files, the console assets and four unused dependencies.
    - Fixed stale tests and the save/sync wording in en_US and zh_CN.
-5. The docs commit after these updates `README.md`, `ChangeFromUpstream.md`, this file, and the troubleshooting notes.
+5. `14ca67108` Docs: `README.md`, `ChangeFromUpstream.md`, this file, and the troubleshooting notes.
+6. Compose example: `examples/docker-compose.romm-cn.yml` builds `docker/Dockerfile` (`slim-image`) as `romm-cn:local` instead of pulling `rommapp/romm`; README's install section documents it with the fresh-database, ScreenScraper and translator caveats.
 
 ## Remaining
 
-- Push `sync/upstream-all` (needs the user's go-ahead), then check the first CI run: `pytest.yml`, `frontend.yml`, `typecheck.yml`, `e2e.yml`.
-- The backend tests changed in `6dfceda16` have not run anywhere yet. CI is the first run.
+- **Pytest fails in CI** on both MariaDB and PostgreSQL (run `40196488927`, step "Run python tests", about 4m40s). The logs need a signed-in GitHub account (the API returns 403 without admin auth, and `gh`'s token is invalid), so the failing tests are not known yet. This was the fork's first CI run, so failures may predate the cleanup.
+- Push the compose example commit after the Pytest failure is understood.
+- A Docker deploy test with the new compose example (fresh database).
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
   - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
@@ -54,7 +56,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## First step next time
 
-Read the CI results of the first push of `sync/upstream-all` and fix any failure, starting with `pytest.yml` (migration chain and permission tests).
+Open https://github.com/xiaosagemisery/romm-cn/actions/runs/40196488927 signed in, read the "Run python tests" log of both jobs, and fix the failing tests.
 
 ## Pitfalls
 
@@ -68,3 +70,5 @@ Read the CI results of the first push of `sync/upstream-all` and fix any failure
 - Frontend: `npm ci`, `npm run typecheck`, `npm run build`, ESLint, Prettier and both i18n checks pass. `npm run test` passed 2735 of 2743; the 8 failures come from this machine's Chinese locale (`RDateField`) and a parallel-run timeout (`useBrowserLocale`, which passes alone).
 - The extended stats widget was checked in a temporary Storybook story with a mocked `/stats`, in both themes; not checked against a running backend.
 - All 11 workflows parse as YAML; actionlint wasn't available.
+- First CI run on `14ca67108`: Frontend Checks, Run Typescript Typecheck and Run E2E Tests passed; Run Pytest failed on both databases.
+- `docker compose -f examples/docker-compose.romm-cn.yml config` resolves (context = repo root, target `slim-image`, project `romm-cn`), and yamllint passes with the repo config. The image has not been built yet.

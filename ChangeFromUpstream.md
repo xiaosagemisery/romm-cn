@@ -145,6 +145,7 @@ The Google Translate step in `scan_handler.py` and `endpoints/roms/__init__.py`,
 | `backend/pytest.ini`, `backend/tests/config/fixtures/config/config.yml`, `backend/tests/tasks/test_task_func_paths.py`, `backend/tests/endpoints/roms/test_notes_loads.py` | Removed the netplay and sync-session cron settings, the `emulatorjs`/`netplay` config block, the sync push-pull module and the dropped asset tables. |
 | `backend/utils/translator.py`, `backend/tests/utils/test_translator.py` | Formatting only; the test's response mock is a plain `MagicMock`. Behavior is unchanged. |
 | `docker/Dockerfile.dockerignore`, `env.template`, `examples/docker-compose.example.yml` | Removed the emulator asset folders, the save version wording, and the sync volume. |
+| `examples/docker-compose.romm-cn.yml` | Added: builds the `slim-image` target of `docker/Dockerfile` from the checkout as `romm-cn:local` instead of pulling `rommapp/romm`, which lacks the fork's changes. It passes optional ScreenScraper developer credentials as build args and notes the fresh-database requirement and the translator's network access. |
 
 ### Frontend
 

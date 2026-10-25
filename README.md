@@ -34,7 +34,21 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 
 ## 安装
 
-基础部署方式请参阅上游的[快速入门指南][docs-quick-start-guide]，扫描问题可参考[故障排查步骤][docs-troubleshooting]。使用本分支的修改需要基于当前分支源码构建；上游预构建镜像不包含本分支的定制改动。源码部署说明见 [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)。
+基础部署方式请参阅上游的[快速入门指南][docs-quick-start-guide]，扫描问题可参考[故障排查步骤][docs-troubleshooting]。上游的预构建镜像 `rommapp/romm` 不包含本分支的改动，需要用本分支源码自行构建。
+
+[`examples/docker-compose.romm-cn.yml`](examples/docker-compose.romm-cn.yml) 会从 `docker/Dockerfile` 构建镜像（标签 `romm-cn:local`）并启动 MariaDB。填好其中的数据库密码、`ROMM_AUTH_SECRET_KEY` 和游戏库路径后，在仓库根目录运行：
+
+```bash
+docker compose -f examples/docker-compose.romm-cn.yml up -d --build
+```
+
+部署前请注意：
+
+- **使用全新数据库。** 被上游 RomM 镜像迁移过的数据库无法再迁移到本分支，启动时会报 `Can't locate revision`。
+- **ScreenScraper 需要开发者凭据。** 自行构建的镜像不含官方 CI 注入的 ScreenScraper 开发者凭据，所有请求都会被拒绝。如有自己的凭据，构建前在环境变量中设置 `SCREENSCRAPER_DEV_ID`、`SCREENSCRAPER_DEV_PASSWORD`；否则请改用 IGDB 等其他元数据源。
+- **翻译需要访问 Google。** 服务器无法访问 `translate.googleapis.com` 时，每个 ROM 扫描都会等待超时并保留原文；可以在 compose 中设置 `HTTPS_PROXY`（会作用于所有对外请求）。
+
+开发环境的搭建见 [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)。
 
 ## 本分支的功能状态
 
@@ -58,6 +72,7 @@ romm-cn 基于 RomM（ROM 管理器），通过简洁的响应式界面扫描、
 - **上游后端同步：** 后端、数据库迁移、Docker 与 nginx 配置、`pyproject.toml` 和 `uv.lock` 已同步到上游 `master` 的 `7eae2b8ff`（2026-10-23），并再次移除了流媒体、联机对战、存档同步、设备推送安装、浏览器内播放器相关的后端代码；前端也同步到该版本（上游已移除 v1 界面和 Console 手柄模式，原 v2 界面成为唯一界面），并再次移除了播放器、存档、固件、流媒体、设备同步和年龄限制相关界面；CI 配置保持分叉自身状态。年龄限制功能不引入；迁移链为 `0129` → `0152` → 上游 `0130` 至 `0150`（跳过只涉及已删除功能的 `0135`、`0136`、`0138`、`0140`、`0141`、`0142`、`0148`），这样旧版分支已标记到 `0152` 的数据库也能补齐后续迁移。
 - **同步后的修复：** 恢复上游权限变更时清理图库缓存、通知默认组成员的逻辑；修复首页统计小组件扩展模式的报错，移除只服务已删功能的前端代码、依赖和无效设置。
 - **CI：** 工作流在 `sync/upstream-all` 推送时运行；只适用于上游仓库的镜像发布和 HLTB 更新仅在 `rommapp/romm` 上运行。
+- **部署示例：** 新增 `examples/docker-compose.romm-cn.yml`，从本分支源码构建镜像，而不是拉取上游的 `rommapp/romm`。
 - **文档与 Agent 规则：** `AGENTS.md` 成为唯一的指令文件（`CLAUDE.md` 只导入它），新增 `project.md`、`test_method.md`、`test_troubleshooting.md`，架构文档和 skills 去掉已删功能。
 - **README：** 移除顶部徽章，以及「参与贡献」「官方应用」「社区项目」「支持本项目」「友好项目」「支持方」章节及其链接。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。

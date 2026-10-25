@@ -1,0 +1,79 @@
+# romm-cn: builds the image from this checkout instead of pulling rommapp/romm,
+# which doesn't carry the fork's changes. Run from the repository root:
+#   docker compose -f examples/docker-compose.romm-cn.yml up -d --build
+# Use a fresh database: one that an upstream RomM image has migrated can't be
+# migrated onto the fork.
+
+# Pinned so the volume names don't follow the folder the file sits in.
+name: romm-cn
+
+volumes:
+  mysql_data:
+  romm_resources:
+  romm_redis_data:
+
+services:
+  romm:
+    image: romm-cn:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: slim-image
+      args:
+        # Builds from source have no ScreenScraper developer credentials, so
+        # ScreenScraper refuses every request unless you supply your own.
+        - SCREENSCRAPER_DEV_ID=${SCREENSCRAPER_DEV_ID:-}
+        - SCREENSCRAPER_DEV_PASSWORD=${SCREENSCRAPER_DEV_PASSWORD:-}
+    container_name: romm
+    restart: unless-stopped
+    environment:
+      - DB_HOST=romm-db
+      - DB_NAME=romm # Should match MARIADB_DATABASE in mariadb
+      - DB_USER=romm-user # Should match MARIADB_USER in mariadb
+      - DB_PASSWD= # Should match MARIADB_PASSWORD in mariadb
+      - ROMM_AUTH_SECRET_KEY= # Generate a key with `openssl rand -hex 32`
+      - TZ=Asia/Shanghai
+      - IGDB_CLIENT_ID= # https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#igdb
+      - IGDB_CLIENT_SECRET=
+      - SCREENSCRAPER_USER= # Needs the developer credentials above as well
+      - SCREENSCRAPER_PASSWORD=
+      - RETROACHIEVEMENTS_API_KEY= # https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#retroachievements
+      - STEAMGRIDDB_API_KEY= # https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#steamgriddb
+      - HASHEOUS_API_ENABLED=true # https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#hasheous
+      - SCAN_WORKERS=4 # How many ROMs to scan at once
+      - WEB_SERVER_CONCURRENCY=4 # Workers for API calls, raise for several concurrent users
+      # Name and summary translation calls translate.googleapis.com. If the
+      # server can't reach it, each scanned ROM waits for the timeout and keeps
+      # its original text; a proxy here applies to every outbound request.
+      # - HTTPS_PROXY=http://proxy.example:7890
+    volumes:
+      - romm_resources:/romm/resources # Resources fetched from metadata providers (covers, screenshots, etc.)
+      - romm_redis_data:/redis-data # Cached data for background tasks
+      - /path/to/library:/romm/library # Your game library. Check https://docs.romm.app/latest/Getting-Started/Folder-Structure/ for more details.
+      - /path/to/assets:/romm/assets # Uploaded user avatars
+      - /path/to/config:/romm/config # (Optional) Path where config.yml is stored
+    ports:
+      - 80:8080
+    depends_on:
+      romm-db:
+        condition: service_healthy
+        restart: true
+
+  romm-db:
+    image: mariadb:latest
+    container_name: romm-db
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD= # Use a unique, secure password
+      - MARIADB_DATABASE=romm
+      - MARIADB_USER=romm-user
+      - MARIADB_PASSWORD=
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      start_interval: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
