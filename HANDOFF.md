@@ -32,8 +32,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- **Pytest fails in CI** on both MariaDB and PostgreSQL (run `40196488927`, step "Run python tests", about 4m40s). The logs need a signed-in GitHub account (the API returns 403 without admin auth, and `gh`'s token is invalid), so the failing tests are not known yet. This was the fork's first CI run, so failures may predate the cleanup.
-- Push the compose example commit after the Pytest failure is understood.
+- Confirm the next Pytest run is green. The first run (`40196488927`) had one failure on both databases, in the new chain-order test only (`iterate_revisions` excludes its lower bound, so the expected list was off by one). The test now checks the `down_revision` links directly; everything else passed (MariaDB 6673, PostgreSQL 6672).
 - A Docker deploy test with the new compose example (fresh database).
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
@@ -56,7 +55,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## First step next time
 
-Open https://github.com/xiaosagemisery/romm-cn/actions/runs/40196488927 signed in, read the "Run python tests" log of both jobs, and fix the failing tests.
+Check the Pytest run for the chain-test fix on `sync/upstream-all`; if green, run the Docker deploy test with `examples/docker-compose.romm-cn.yml` on a fresh database.
 
 ## Pitfalls
 
@@ -70,5 +69,6 @@ Open https://github.com/xiaosagemisery/romm-cn/actions/runs/40196488927 signed i
 - Frontend: `npm ci`, `npm run typecheck`, `npm run build`, ESLint, Prettier and both i18n checks pass. `npm run test` passed 2735 of 2743; the 8 failures come from this machine's Chinese locale (`RDateField`) and a parallel-run timeout (`useBrowserLocale`, which passes alone).
 - The extended stats widget was checked in a temporary Storybook story with a mocked `/stats`, in both themes; not checked against a running backend.
 - All 11 workflows parse as YAML; actionlint wasn't available.
-- First CI run on `14ca67108`: Frontend Checks, Run Typescript Typecheck and Run E2E Tests passed; Run Pytest failed on both databases.
+- First CI run on `14ca67108`: Frontend Checks, Run Typescript Typecheck and Run E2E Tests passed; Run Pytest failed on both databases with only `test_the_upstream_revisions_follow_the_cross_user_smart_scopes_revision` failing (fixed in the next commit).
+- CI logs: the REST API needs admin auth, but signed in to github.com, `/<owner>/<repo>/commit/<sha>/checks/<job id>/logs` redirects to the raw log text.
 - `docker compose -f examples/docker-compose.romm-cn.yml config` resolves (context = repo root, target `slim-image`, project `romm-cn`), and yamllint passes with the repo config. The image has not been built yet.

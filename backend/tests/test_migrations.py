@@ -273,15 +273,11 @@ def test_the_upstream_revisions_follow_the_cross_user_smart_scopes_revision():
     script = ScriptDirectory.from_config(config)
 
     assert script.get_heads() == ["0150_roms_fs_name_lower_index"]
-    chain = [
-        revision.revision
-        for revision in script.iterate_revisions("heads", "0129_remove_emulator_data")
-    ][::-1]
-    assert chain[:3] == [
-        "0129_remove_emulator_data",
-        "0152_cross_user_smart_scopes",
-        "0130_notifications",
-    ]
+    smart_scopes = script.get_revision("0152_cross_user_smart_scopes")
+    notifications = script.get_revision("0130_notifications")
+    assert smart_scopes is not None and notifications is not None
+    assert smart_scopes.down_revision == "0129_remove_emulator_data"
+    assert notifications.down_revision == "0152_cross_user_smart_scopes"
 
 
 def test_the_cross_user_smart_scopes_revision_empties_only_those_caches(
