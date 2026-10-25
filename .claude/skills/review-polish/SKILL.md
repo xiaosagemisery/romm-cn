@@ -200,7 +200,7 @@ Run from `backend/`:
 
 ### CI gates this mirrors
 
-`frontend.yml` (vitest, build, vue-tsc + lockfile lint), `i18n.yml` (locale check), `pytest.yml` (pytest on MariaDB + PostgreSQL), `migrations.yml` (alembic on both DBs), `typecheck.yml`, `trunk-check.yml` (Trunk across the repo). Green locally → green in CI.
+`frontend.yml` (vitest, build), `typecheck.yml` (vue-tsc + lockfile lint), `i18n.yml` (locale check), `pytest.yml` (pytest on MariaDB + PostgreSQL), `migrations.yml` (alembic on both DBs), `trunk-check.yml` (Trunk across the repo). Green locally → green in CI.
 
 ### Don't
 

@@ -173,13 +173,13 @@ ln -s ../../../romm_mock/resources assets/romm/resources
 npm run dev
 ```
 
-#### - Storybook (v2 components)
+#### - Storybook (components)
 
 Component docs and visual QA for `frontend/src/` (port 6006):
 
 ```sh
 npm run storybook
-npm run storybook:test   # play() + axe on every v2 story, in headless Chromium
+npm run storybook:test   # play() + axe on every story, in headless Chromium
 ```
 
 `storybook:test` (and `npm run test`, which includes it) needs Playwright's Chromium: run `npx playwright install chromium` once.
@@ -207,7 +207,7 @@ trunk fmt
 trunk check
 ```
 
-Type checking runs separately from Trunk, against the project's own environment. CI type-checks the whole backend on every backend change; to run it locally:
+Type checking runs separately from Trunk, against the project's own environment. The fork's CI doesn't run it, so run it locally:
 
 ```sh
 cd backend

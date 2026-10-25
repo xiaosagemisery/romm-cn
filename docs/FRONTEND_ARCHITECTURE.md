@@ -152,7 +152,6 @@ frontend/
     ├── views/                     # Page-level components (routes)
     │   ├── Auth/                  # Setup, Login, ResetPassword, Register
     │   ├── Gallery/               # Platform, Search, Collection variants
-    │   ├── Player/                # EmulatorJS, RuffleRS
     │   ├── Settings/              # Profile, UI, Library, Metadata, Admin, Stats
     │   ├── Home.vue               # Dashboard
     │   ├── GameDetails.vue        # ROM detail page (8 tabs)
@@ -245,9 +244,6 @@ frontend/
     │   │   ├── identity.ts        # Login, logout, password reset
     │   │   ├── config.ts          # Backend configuration
     │   │   ├── task.ts            # Task monitoring
-    │   │   ├── firmware.ts        # Firmware uploads
-    │   │   ├── save.ts            # Game saves
-    │   │   ├── state.ts           # Save states
     │   │   ├── screenshot.ts      # Screenshots
     │   │   ├── setup.ts           # Setup wizard
     │   │   ├── sgdb.ts            # SteamGridDB covers
@@ -286,7 +282,6 @@ frontend/
     │   ├── main.d.ts              # Global augmentations
     │   ├── rom.d.ts               # ROM selection types
     │   ├── user.d.ts              # User form types
-    │   ├── ruffle.d.ts            # Flash emulator types
     │   ├── rompatcher.d.ts        # ROM patcher types
     │   └── index.ts               # Utility types
     │
@@ -388,8 +383,6 @@ Component Action
 │   ├── /collection/virtual/:id   → Virtual collection
 │   ├── /collection/smart/:id     → Smart collection
 │   ├── /rom/:rom                 → Game details (8 tabs)
-│   ├── /rom/:rom/ejs             → EmulatorJS player
-│   ├── /rom/:rom/ruffle          → Ruffle Flash player
 │   ├── /scan                     → Library scanner [platforms.write]
 │   ├── /patcher                  → ROM patcher
 │   ├── /user/:user               → User profile
@@ -502,7 +495,6 @@ Server capability flags used throughout the UI:
 
 ```typescript
 METADATA_SOURCES: { IGDB, SS, MOBY, RA, STEAMGRIDDB, LAUNCHBOX, ... }
-EMULATION: { DISABLE_EMULATOR_JS, DISABLE_RUFFLE_RS, DISABLE_JSDOS, DISABLE_PICO8, DISABLE_EASYRPG }
 FRONTEND: { DISABLE_USERPASS_LOGIN, DISABLE_LOGS_VIEWER, YOUTUBE_BASE_URL }
 OIDC: { ENABLED, AUTOLOGIN, PROVIDER, RP_INITIATED_LOGOUT }
 TASKS: { scheduled task configurations }
@@ -553,8 +545,6 @@ const api = axios.create({
 | `identity.ts`     | Login, logout, forgot/reset password             |
 | `config.ts`       | Platform bindings, versions, exclusions          |
 | `task.ts`         | List, status, run                                |
-| `firmware.ts`     | Upload, list, delete                             |
-| `save.ts`         | Upload, update, delete                           |
 | `state.ts`        | Upload, update, delete                           |
 | `screenshot.ts`   | Upload, update                                   |
 | `setup.ts`        | Library structure, platform creation             |
@@ -752,50 +742,7 @@ Supports: `.ips`, `.ups`, `.bps`, `.ppf`, `.rup`, `.aps`, `.bdf`, `.pmsr`, `.vcd
 
 ## 10. Emulation Integration
 
-### EmulatorJS
-
-**Location:** `views/Player/EmulatorJS/`
-
-| Feature         | Details                                        |
-| --------------- | ---------------------------------------------- |
-| Core selection  | Platform-specific core mapping (40+ platforms) |
-| BIOS/firmware   | Selectable from uploaded firmware              |
-| Save management | Upload, download, delete saves & states        |
-| Multi-disc      | Disc selection for multi-file games            |
-| Cache           | IndexedDB cache for game data                  |
-| Fullscreen      | With keyboard lock                             |
-| Netplay         | Socket.IO-based multiplayer                    |
-| Controls        | Per-core configurable via config.yml           |
-
-### Ruffle (Flash)
-
-**Location:** `views/Player/RuffleRS/`
-
-- SWF/Flash game emulation via Ruffle 0.2.0-nightly
-- Fullscreen support
-- Background color customization
-
-### Cross-origin isolation (v2 players)
-
-Threaded EmulatorJS cores need `SharedArrayBuffer`, which browsers expose only in a cross-origin isolated document. Nginx attaches `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` to the player URLs alone (`docker/nginx/templates/default.conf.template`), because under that policy the rest of the app cannot embed third-party images (provider covers in Match ROM).
-
-A v2 player view is reached by SPA navigation, so it is not isolated on arrival. Two composables cover that:
-
-- `useIsolatedLaunch(player, romId, isIntent)` reloads the view into an isolated document when a launch needs it. The view defines the `Intent` the reload cannot carry in the URL, calls `relaunch(intent)` when `hasSharedArrayBuffer()` is false, and boots from `intent` on mount. `relaunch()` returns false, and the view reports the context instead, when the reload would not help: outside a secure context (the headers alone never expose `SharedArrayBuffer`), where storage refused to keep the selection, or from a view that already came from such a reload.
-- `usePlayerExit(runtimeBound, settle)` leaves the view by a full navigation when the document is isolated, or when the player's runtime cannot be injected twice (EmulatorJS declares top-level classes), so the app resumes in a fresh document. Otherwise leaving is an SPA navigation. `guard` is the `onBeforeRouteLeave` form, `leave(path)` the programmatic one, and `departing` tells an unload prompt that this exit is the view's own. A full navigation aborts the route change, so the leave guards of the components below never run: `settle` is where their work goes (EmulatorJS awaits the v1 `Player`'s save flush there).
-
-To add an EmulatorJS core that needs threads, add it to `areThreadsRequiredForEJSCore` in `utils/index.ts`; nothing else changes. To add a player that needs isolation, use both composables the way `v2/views/Player/EmulatorJS.vue` does, and track `runtimeBound` from the moment the runtime is injected rather than from the global it eventually defines. js-dos needs isolation unconditionally (the DOSBox-X backend is a threaded build), so `JsDos.vue` relaunches on every launch that did not arrive isolated and carries no intent beyond a marker.
-
-The dev server and `vite preview` have no nginx in front of them, so `scripts/playerIsolationHeaders.ts` answers the same URLs with the same headers. It restates the template's patterns, since the production build runs from `frontend/` alone and cannot read that file, and its test fails when the two drift.
-
-### Platform Detection
-
-`utils/index.ts` provides:
-
-- `getSupportedEJSCores(platform)`: maps platforms to EmulatorJS cores
-- `isEJSEmulationSupported(rom)`: checks WebGL + server config
-- `isRuffleEmulationSupported(rom)`: checks Flash platform
-- `isCDBasedSystem(platform)`: 31 CD-based platforms for animation logic
+This fork has no in-browser players, so it has no EmulatorJS, Ruffle, js-dos, PICO-8 or EasyRPG integration and no cross-origin isolation. See `ChangeFromUpstream.md`.
 
 ---
 
@@ -955,10 +902,8 @@ Request Flow with Cache:
 - `regionToEmoji()`: 50+ region codes → country flags
 - `languageToEmoji()`: 40+ language codes → country flags
 
-**Emulation Support:**
+**Platform Helpers:**
 
-- `getSupportedEJSCores()`: platform → EmulatorJS core mapping
-- `isEJSEmulationSupported()`: WebGL + config check
 - `isCDBasedSystem()`: 31 CD-based platforms
 - `isArcadeSystem()`: 3 arcade platforms
 
@@ -998,7 +943,7 @@ Procedural SVG generation for:
 | **Target**          | ESNext                                   |
 | **Dev port**        | 3000 (8443 with HTTPS)                   |
 | **Backend proxy**   | `/api/*` → `http://127.0.0.1:5000`       |
-| **WebSocket proxy** | `/ws`, `/netplay` → backend with upgrade |
+| **WebSocket proxy** | `/ws` → backend with upgrade |
 | **Allowed hosts**   | `localhost`, `127.0.0.1`, `romm.dev`     |
 
 **Plugins:**
@@ -1058,8 +1003,6 @@ Auto-generated from backend OpenAPI schema:
 | `CollectionSchema`                                | Collection with ROM IDs                            |
 | `VirtualCollectionSchema`                         | Auto-generated collection                          |
 | `SmartCollectionSchema`                           | Filter-based collection                            |
-| `SaveSchema` / `StateSchema` / `ScreenshotSchema` | Asset types                                        |
-| `FirmwareSchema`                                  | BIOS file info                                     |
 | `HeartbeatResponse`                               | Server status and capabilities                     |
 | `ConfigResponse`                                  | Full server configuration                          |
 | `ScanStats`                                       | Scan progress counters                             |
@@ -1073,7 +1016,6 @@ Auto-generated from backend OpenAPI schema:
 | `emitter.d.ts`    | `SnackbarStatus`, `Events` (80+ event signatures)      |
 | `rom.d.ts`        | `RomSelectEvent`                                       |
 | `user.d.ts`       | `UserItem` (extends User with password + avatar)       |
-| `ruffle.d.ts`     | `RufflePlayerElement`, `RuffleSourceAPI`               |
 | `rompatcher.d.ts` | ROM patching library interfaces                        |
 | `main.d.ts`       | Global augmentations                                   |
 | `index.ts`        | `isKeyof<T>`, `ExtractPiniaStoreType<D>`, `ValueOf<T>` |

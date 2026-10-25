@@ -28,7 +28,7 @@ v2 has **no Vuetify theme of its own**, and no Vuetify at all. `tokens.css` emit
 
 ### Where the scope classes live, and why `<html>`
 
-`.r-app`, `.r-dark`, `.r-light` go on `<html>` (`RomM.vue` toggles them whenever `uiVersion` or the active theme changes). The overlay primitives (`RDialog`, `RMenu`, `RTooltip`) `<Teleport to="body">`, landing **outside** the app root. Only `<html>` covers both the regular tree and the teleports; without it, overlays lose their tokens.
+`.r-app`, `.r-dark`, `.r-light` go on `<html>` (`RomM.vue` toggles them whenever the active theme changes). The overlay primitives (`RDialog`, `RMenu`, `RTooltip`) `<Teleport to="body">`, landing **outside** the app root. Only `<html>` covers both the regular tree and the teleports; without it, overlays lose their tokens.
 
 ### Diagnostics: when `var(--r-color-...)` resolves to nothing on an overlay
 
@@ -64,12 +64,12 @@ Outside `src/tokens/index.ts` (the source-of-truth TS module) and the generated 
 - Status tints → `color-mix(in srgb, var(--r-color-status-base-{success,warning,danger,info}) X%, transparent)`.
 - Brand-tinted backgrounds (selected rows, focus rings) → `color-mix(in srgb, var(--r-color-brand-primary) X%, transparent)`.
 - Black/white shadows → `color-mix(in srgb, black X%, transparent)` (CSS named color, not a hex literal).
-- Metadata-provider chips → `--r-color-provider-*`. Player canvas → `--r-color-canvas-bg`, `--r-color-canvas-bg-deep`.
-- Emphasis pill (always-white-on-dark "Play" CTA over cover art) → `--r-color-overlay-emphasis-bg/-fg/-bg-hover`.
+- Metadata-provider chips → `--r-color-provider-*`. Dark canvas backdrops → `--r-color-canvas-bg`, `--r-color-canvas-bg-deep`.
+- Emphasis pill (always-white-on-dark CTA over cover art) → `--r-color-overlay-emphasis-bg/-fg/-bg-hover`.
 
 If a literal would otherwise be needed, the answer is: **add a token** (steps above), then consume via `var(--r-color-...)` or the named export.
 
-`romm/no-color-literal` (ESLint, `frontend/eslint-plugin-romm/`) flags hex and color-function literals in SFC `<style>` blocks under `src/v2`. It does not see `.css` files, stories' inline styles, or colors in TS strings.
+`romm/no-color-literal` (ESLint, `frontend/eslint-plugin-romm/`) flags hex and color-function literals in SFC `<style>` blocks under `src/`. It does not see `.css` files, stories' inline styles, or colors in TS strings.
 
 ## Style conventions
 

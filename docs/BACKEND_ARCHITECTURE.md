@@ -742,6 +742,7 @@ Token format: `rmm_` + 64 hex chars (32-byte random)
 | `0068`         | Device tables                               |
 | `0072`         | Client tokens table                         |
 | `0129`         | Drop emulator save data (irreversible)      |
+| `0152`         | Cross-user smart collection scopes          |
 | `0130`, `0131` | Notifications and notification channels     |
 | `0132`         | Audit events                                |
 | `0133`, `0134` | Indexed gallery sorts                       |
@@ -753,7 +754,8 @@ Token format: `rmm_` + 64 hex chars (32-byte random)
 | `0146`         | ROM search aliases                          |
 | `0147`         | ROM file title ids                          |
 | `0149`, `0150` | ROM file-name indexes                       |
-| `0152`         | Cross-user smart collection scopes          |
+
+The chain runs `0129`, `0152`, then `0130` to `0150`, so `0150` is the head. Upstream revisions for removed features are skipped.
 
 Migrations support batch mode for SQLite and DB-specific SQL for MariaDB/MySQL/PostgreSQL.
 
@@ -1156,6 +1158,7 @@ The core of RomM. Orchestrates library scanning and metadata enrichment.
    │   └── TheGamesDB
    ├── Download cover art and screenshots
    ├── Build aggregated metadata (RomMetadata)
+   ├── Translate the name and summary to zh-CN (utils/translator.py)
    └── Create/update ROM in DB
 4. Emit real-time progress via Socket.IO
 5. Mark missing ROMs (files no longer on filesystem)
