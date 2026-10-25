@@ -87,3 +87,9 @@ oms` (Chinese filenames), user's own provider keys, removed afterwards:
   - 7 of 10 matched on the first quick scan, almost all through Hasheous (file hash to IGDB); names and summaries came out in Chinese.
   - Not matched: `1.gba` (header: SHINING SOUL, code AHUJ, Japan), and the iQue China releases of Ocarina of Time and Star Fox 64 (region `C`). Their hashes are unknown to Hasheous, and Chinese filenames give IGDB's name search nothing to find.
   - After renaming the copies to English No-Intro style names, an UNMATCHED scan matched all three on IGDB (6593, 1029, 2591) with translated summaries; their names stayed as before because that scan keeps an existing name.
+- `E:\Roms
+oms\gba.gba` was renamed to `Shining Soul (Japan).gba` at the user's request (2026-10-26); it now matches IGDB 6593.
+- Second real ROM test (2026-10-26), 20 more ROMs (6 N64, 7 GameCube, 7 3DS, Chinese filenames) bind-mounted read-only from `E:\Roms`, user's keys, removed afterwards:
+  - Original names: 3 of 20 matched (all N64, by hash). Every file was hashed, but Hasheous knew none of the GameCube (`.iso`/`.rvz`/`.gcz`) or 3DS (`.cci`) images. Name search turns Chinese filenames into pinyin (`Chao Ji Ma Li Ao 64`), which finds nothing. MobyGames returns 401 for the user's key.
+  - Same files mounted under English names on a fresh database: 19 of 20 matched, names and summaries in Chinese. Only `DK - Jungle Beat` missed (IGDB title: Donkey Kong Jungle Beat).
+  - Takeaway: for this library, English filenames decide matching. A possible fork feature is translating CJK filenames to English before the name search, reusing `utils/translator.py`.
