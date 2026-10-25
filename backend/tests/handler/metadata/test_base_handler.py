@@ -531,6 +531,28 @@ class TestResolveIndexedTitle:
         assert fallback_rom == BaseRom(name="Indexed Title")
 
     @pytest.mark.asyncio
+    async def test_a_chinese_title_searches_in_english(self, handler: MetadataHandler):
+        fallback_rom = BaseRom()
+        with patch(
+            "utils.translator.translate_text",
+            AsyncMock(return_value="Super Mario 64"),
+        ) as translate:
+            term = await handler._resolve_indexed_title(
+                Rom(fs_name="超级马里奥64.z64"),
+                "超级马里奥64.z64",
+                "超级马里奥64",
+                99,
+                self.PLATFORMS,
+                fallback_rom,
+            )
+
+        assert term == "Super Mario 64"
+        assert fallback_rom == BaseRom()
+        translate.assert_awaited_once_with(
+            "超级马里奥64", target_lang="en", source_lang="zh-CN"
+        )
+
+    @pytest.mark.asyncio
     async def test_switch_entry_fills_the_fallback(self, handler: MetadataHandler):
         entry = {
             "name": "Celeste",

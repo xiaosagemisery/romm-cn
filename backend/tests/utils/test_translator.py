@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from utils.translator import _TRANSLATION_CACHE, translate_game_metadata, translate_text
+from utils.translator import (
+    _TRANSLATION_CACHE,
+    translate_game_metadata,
+    translate_search_term,
+    translate_text,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -70,3 +75,33 @@ async def test_translate_game_metadata():
         none_name, none_summary = await translate_game_metadata(None, None)
         assert none_name is None
         assert none_summary is None
+
+
+@pytest.mark.asyncio
+async def test_translate_search_term_leaves_non_chinese_terms_alone():
+    with patch("utils.translator.translate_text", new=AsyncMock()) as translate:
+        assert await translate_search_term("Super Mario 64") == "Super Mario 64"
+        assert await translate_search_term("ドラゴンクエスト") == "ドラゴンクエスト"
+
+    translate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_translate_search_term_drops_release_labels_before_translating():
+    with patch(
+        "utils.translator.translate_text", new=AsyncMock(return_value="Wario World")
+    ) as translate:
+        assert await translate_search_term("瓦力欧世界 英文版") == "Wario World"
+
+    translate.assert_awaited_once_with(
+        "瓦力欧世界", target_lang="en", source_lang="zh-CN"
+    )
+
+
+@pytest.mark.asyncio
+async def test_translate_search_term_keeps_the_title_when_translation_fails():
+    with patch(
+        "utils.translator.translate_text",
+        new=AsyncMock(side_effect=lambda text, **_: text),
+    ):
+        assert await translate_search_term("斑鸠 汉化版") == "斑鸠"

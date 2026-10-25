@@ -26,6 +26,7 @@ from utils import get_version, int_or_none
 from utils.cache import is_cache_store_ready
 from utils.context import ctx_httpx_client
 from utils.switch import derive_base_title_id
+from utils.translator import translate_search_term
 
 if TYPE_CHECKING:
     from models.rom import Rom
@@ -376,7 +377,8 @@ class MetadataHandler(abc.ABC):
             search_term = await self._scummvm_format(search_term)
             fallback_rom["name"] = search_term
 
-        return search_term
+        # The catalogs index English titles, so a Chinese filename searches as one.
+        return await translate_search_term(search_term)
 
     async def _ps2_opl_format(self, match: re.Match[str], search_term: str) -> str:
         serial_code = match.group(1)

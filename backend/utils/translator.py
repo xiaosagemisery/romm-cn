@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from logger.logger import log
 
 _TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
 GOOGLE_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+HAN_CHARACTER_PATTERN = re.compile(r"[\u4e00-\u9fff]")
+# Release labels in Chinese filenames, which only add noise to a title search.
+CHINESE_RELEASE_LABEL_PATTERN = re.compile(
+    r"(简体中文版|繁体中文版|中文版|汉化版|英文版|日文版|美版|日版|欧版)"
+)
 
 
 async def translate_text(
@@ -83,3 +90,13 @@ async def translate_game_metadata(
         translated_summary = await translate_text(summary, target_lang=target_lang)
 
     return translated_name, translated_summary
+
+
+async def translate_search_term(search_term: str) -> str:
+    """Translate a filename-derived search term with Chinese characters to English."""
+    if not HAN_CHARACTER_PATTERN.search(search_term):
+        return search_term
+
+    title = " ".join(CHINESE_RELEASE_LABEL_PATTERN.sub(" ", search_term).split())
+    translated = await translate_text(title, target_lang="en", source_lang="zh-CN")
+    return translated or title

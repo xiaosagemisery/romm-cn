@@ -84,6 +84,8 @@ The changes live on `sync/upstream-all`. The first removal set was commit `36322
 | `backend/handler/scan_handler.py` | Translates a scanned game's name and summary after metadata selection and before the attributes are persisted. |
 | `backend/endpoints/roms/__init__.py` | Translates automatically supplied name/summary values during ROM updates while retaining explicitly submitted values; translated values are used when available. |
 | `backend/tests/utils/test_translator.py` | Added tests for empty input, successful translation, cache hits, error fallback, paired metadata translation, and missing values. |
+| `backend/utils/translator.py`, `backend/handler/metadata/base_handler.py` | `translate_search_term` turns a filename-derived search term that contains Chinese characters into English, after dropping release labels such as 英文版 and 汉化版. `_resolve_indexed_title` applies it, so the IGDB, MobyGames and ScreenScraper name searches use the English title instead of a pinyin transliteration. Terms without Chinese characters are untouched, and a failed translation searches the label-free Chinese title. |
+| `backend/tests/utils/test_translator.py`, `backend/tests/handler/metadata/test_base_handler.py` | Cover the search term translation and its hook. |
 
 ## Configuration, startup, and database helpers
 
