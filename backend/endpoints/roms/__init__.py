@@ -2216,16 +2216,25 @@ async def update_rom(
         else cleaned_data.get("summary") or rom.summary
     )
 
-    if ("name" not in provided_fields and cleaned_data.get("name")) or (
-        "summary" not in provided_fields and cleaned_data.get("summary")
-    ):
+    # The match dialog posts the picked result's name and summary, so a posted
+    # value equal to the refetched one still came from the provider.
+    fetched_name = cleaned_data.get("name")
+    fetched_summary = cleaned_data.get("summary")
+    translate_name = bool(fetched_name) and (
+        "name" not in provided_fields or form_data.name == fetched_name
+    )
+    translate_summary = bool(fetched_summary) and (
+        "summary" not in provided_fields or form_data.summary == fetched_summary
+    )
+
+    if translate_name or translate_summary:
         t_name, t_summary = await translate_game_metadata(
-            cleaned_data.get("name") if "name" not in provided_fields else None,
-            cleaned_data.get("summary") if "summary" not in provided_fields else None,
+            fetched_name if translate_name else None,
+            fetched_summary if translate_summary else None,
         )
-        if "name" not in provided_fields and t_name:
+        if translate_name and t_name:
             name_value = t_name
-        if "summary" not in provided_fields and t_summary:
+        if translate_summary and t_summary:
             summary_value = t_summary
 
     cleaned_data.update({"name": name_value, "summary": summary_value})
