@@ -32,6 +32,8 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
+- Issue #1 (https://github.com/xiaosagemisery/romm-cn/issues/1): game names are machine translated instead of using official Chinese titles, and manual matches in the web UI aren't translated at all. Issues were enabled on the fork for this.
+- Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending a decision on #1.
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
   - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
