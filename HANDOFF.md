@@ -33,6 +33,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 ## Remaining
 
 - Issue #1 (https://github.com/xiaosagemisery/romm-cn/issues/1): game names are machine translated instead of using official Chinese titles, and manual matches in the web UI aren't translated at all. Issues were enabled on the fork for this.
+- Issue #2 (https://github.com/xiaosagemisery/romm-cn/issues/2): after a manual "Match ROM" in the web UI the name and summary stay in English, because the dialog submits them as form values and `update_rom` only translates provider-filled ones.
 - Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending a decision on #1.
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
