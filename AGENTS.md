@@ -40,6 +40,11 @@ These live in `.claude/skills/` and carry the detailed rules. Invoke the one tha
 
 ---
 
+## Talking to the user
+
+- Always answer the user in Simplified Chinese: replies, progress updates, summaries, questions and end-of-task reports. Keep code, commands, file names, identifiers and quoted error output as they are.
+- This covers chat only. Files in the repo still follow the English-first rule below.
+
 ## Branches and pull requests
 
 - The fork's `master` branch only mirrors the upstream RomM `master`. It is used for upstream syncs and carries none of the fork's changes. Never commit or push to it.
