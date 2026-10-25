@@ -1,22 +1,38 @@
 import "@mdi/font/css/materialdesignicons.css";
 import { withThemeByClassName } from "@storybook/addon-themes";
 import { setup, type Preview } from "@storybook/vue3-vite";
+import mitt from "mitt";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createVuetify } from "vuetify";
 import "vuetify/styles";
+import { installBreakpointAttribute } from "../src/composables/useBreakpoint";
+import { ChromeLabelsKey } from "../src/lib/a11y/chromeLabels";
 import i18n from "../src/locales";
 import storePermissions from "../src/stores/permissions";
 import "../src/styles/common.css";
 import "../src/styles/fonts.css";
+import "../src/styles/global.css";
 import { dark, light } from "../src/styles/themes";
-import "../src/v2/styles/global.css";
+import type { Events } from "../src/types/emitter";
+import { createChromeLabels } from "../src/utils/chromeLabels";
+import "./preview.css";
+import { ROMM_STORYBOOK_VIEWPORTS } from "./rommViewports";
+import {
+  INPUT_DEFAULT,
+  INPUT_GLOBAL,
+  INPUT_TOOLBAR,
+  withInputModality,
+} from "./withInputModality";
+
+// Mirror AppLayout/AuthLayout so html[data-bp] CSS matches useBreakpoint() in the iframe.
+installBreakpointAttribute();
 
 // Each story runs inside a Vue app with Pinia + i18n + Vuetify registered.
-// v2 primitives are Vuetify-free at runtime — Vuetify stays registered only
+// v2 primitives are Vuetify-free at runtime: Vuetify stays registered only
 // because some shared dependencies still pull it in. The visible theme for
-// v2 stories comes from the `.r-v2-dark` / `.r-v2-light` class toggled on
-// <body> by the theme switcher decorator below.
+// v2 stories comes from the `.r-dark` / `.r-light` class toggled on
+// <html> by the theme switcher decorator below.
 //
 // permissionsStore is hydrated with admin grants so any primitive that
 // consumes `useCan(...)` renders its enabled state. Stories that need to
@@ -25,6 +41,11 @@ import "../src/v2/styles/global.css";
 setup((app) => {
   app.use(createPinia());
   app.use(i18n);
+  // Stories exercise the same injected-label path as the app, so a
+  // primitive rendering an un-translated label fails here too.
+  app.provide(ChromeLabelsKey, createChromeLabels());
+  // Snackbar and confirm composables inject the app-wide event bus.
+  app.provide("emitter", mitt<Events>());
   // A catch-all router so primitives that render real `<router-link>`s
   // (RBtn / RListItem / RMenuItem with `to`) resolve a proper `href`
   // instead of crashing on `router.resolve`. Any string path resolves.
@@ -52,9 +73,20 @@ setup((app) => {
 });
 
 const preview: Preview = {
+  tags: ["autodocs"],
+  globalTypes: {
+    [INPUT_GLOBAL]: INPUT_TOOLBAR,
+  },
+  initialGlobals: {
+    viewport: { value: "rommDesktopMd" },
+    [INPUT_GLOBAL]: INPUT_DEFAULT,
+  },
   parameters: {
     layout: "centered",
     backgrounds: { disable: true },
+    viewport: {
+      options: ROMM_STORYBOOK_VIEWPORTS,
+    },
     // Accessibility gate
     a11y: {
       test: "error",
@@ -86,12 +118,14 @@ const preview: Preview = {
     },
   },
   decorators: [
+    withInputModality,
     withThemeByClassName({
       themes: {
-        dark: "r-v2 r-v2-dark",
-        light: "r-v2 r-v2-light",
+        dark: "r-app r-dark v-theme--dark",
+        light: "r-app r-light v-theme--light",
       },
       defaultTheme: "dark",
+      parentSelector: "html",
     }),
   ],
 };

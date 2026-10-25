@@ -1,11 +1,14 @@
 import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
-import browserslist from "browserslist";
-import { URL, fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import mkcert from "vite-plugin-mkcert";
 import { VitePWA } from "vite-plugin-pwa";
 import vuetify, { transformAssetUrls } from "vite-plugin-vuetify";
+import { appAliases } from "./scripts/aliases";
+import { platformIconManifest } from "./scripts/platformIconManifest";
+import { precompress } from "./scripts/precompress";
+import { previewAssets } from "./scripts/previewAssets";
+import { trimMdiIcons } from "./scripts/trimMdiIcons";
 
 // Vuetify components to preoptimize for faster dev startup
 const VUETIFY_COMPONENTS = [
@@ -56,43 +59,6 @@ const VUETIFY_COMPONENTS = [
   "vuetify/components/VWindow",
 ];
 
-// Maps browserslist browser ids to the esbuild-style ids that Vite's
-// `build.cssTarget` understands. Engines not listed here (and_chr, samsung,
-// kaios, ...) share a rendering engine with one of these or track "latest",
-// so skipping them does not change the emitted prefixes.
-const BROWSERSLIST_TO_ESBUILD = {
-  chrome: "chrome",
-  edge: "edge",
-  firefox: "firefox",
-  ios_saf: "ios",
-  opera: "opera",
-  safari: "safari",
-};
-
-// Translate the shared `.browserslistrc` baseline into Vite's CSS target
-// format. Vite 8 minifies CSS with Lightning CSS, which auto-prefixes and
-// down-levels from the standard property based on browser targets, but on the
-// minify path it only reads `build.cssTarget` (esbuild-style ids), never
-// `css.lightningcss.targets`. Deriving it here keeps `.browserslistrc` the
-// single source of truth. Without targets Lightning CSS drops the generated
-// `-webkit-backdrop-filter`, breaking every glass/blur surface in Safari.
-function cssTargetsFromBrowserslist() {
-  const lowest = {};
-  for (const entry of browserslist()) {
-    const [id, range] = entry.split(" ");
-    const name = BROWSERSLIST_TO_ESBUILD[id];
-    if (!name) continue;
-    const version = range.split("-")[0]; // "16.4-16.5" -> "16.4"
-    const asNumber = Number.parseFloat(version);
-    if (lowest[name] === undefined || asNumber < lowest[name].asNumber) {
-      lowest[name] = { asNumber, version };
-    }
-  }
-  return Object.entries(lowest).map(
-    ([name, { version }]) => `${name}${version}`,
-  );
-}
-
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load ENV variables from the parent directory and the current directory.
@@ -106,18 +72,26 @@ export default defineConfig(({ mode }) => {
   const httpsMode = env.DEV_HTTPS === "true";
   const pwaDevEnabled = env.DEV_PWA === "true";
 
+  const proxyTarget = env.DEV_PROXY_TARGET || `http://127.0.0.1:${backendPort}`;
+  const remote = Boolean(env.DEV_PROXY_TARGET);
+  const upstream = {
+    target: proxyTarget,
+    changeOrigin: remote,
+    secure: remote,
+  };
+  const proxy = {
+    "/api": upstream,
+    "/ws": { ...upstream, ws: true },
+    "/openapi.json": upstream,
+    // Local dev serves covers from the frontend/assets symlink.
+    ...(remote ? { "/assets/romm": upstream } : {}),
+  };
+
   return {
     optimizeDeps: {
       include: VUETIFY_COMPONENTS,
     },
-    build: {
-      target: "esnext",
-      // Browser targets for CSS (prefixing + down-leveling) come from the
-      // shared `.browserslistrc`. Never hand-write a `-webkit-` twin next to a
-      // standard property: Lightning CSS collapses the pair to whichever is
-      // declared last, so let it generate the prefixes from these targets.
-      cssTarget: cssTargetsFromBrowserslist(),
-    },
+    build: {},
     plugins: [
       tailwindcss(),
       vue({
@@ -143,21 +117,27 @@ export default defineConfig(({ mode }) => {
           type: "module",
         },
       }),
+      precompress(),
+      previewAssets(),
+      platformIconManifest(),
+      trimMdiIcons(),
       httpsMode &&
         mkcert({
           savePath: "/app/.vite-plugin-mkcert",
           hosts: ["localhost", "127.0.0.1", "romm.dev"],
         }),
     ],
+    // Prefixes dev too, not just the build's minify path. Never hand-write a
+    // `-webkit-` twin: Lightning CSS keeps only the last of the pair.
+    css: {
+      transformer: "lightningcss",
+    },
     define: {
       "process.env": {},
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: true,
     },
     resolve: {
-      alias: {
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-        "@v2": fileURLToPath(new URL("./src/v2", import.meta.url)),
-      },
+      alias: appAliases,
       extensions: [".js", ".json", ".jsx", ".mjs", ".ts", ".tsx", ".vue"],
     },
     server: {
@@ -168,25 +148,11 @@ export default defineConfig(({ mode }) => {
         ignored: [
           "**/assets/romm/resources/**",
           "**/assets/romm/resources",
+          "**/assets/gme/**",
+          "**/assets/easyrpg/**",
         ],
       },
-      proxy: {
-        "/api": {
-          target: `http://127.0.0.1:${backendPort}`,
-          changeOrigin: false,
-          secure: false,
-        },
-        "/ws": {
-          target: `http://127.0.0.1:${backendPort}`,
-          changeOrigin: false,
-          ws: true,
-        },
-        "/openapi.json": {
-          target: `http://127.0.0.1:${backendPort}`,
-          changeOrigin: false,
-          rewrite: (path) => path.replace(/^\/openapi.json/, "/openapi.json"),
-        },
-      },
+      proxy,
       port: httpsMode ? 8443 : 3000,
       allowedHosts: ["localhost", "127.0.0.1", "romm.dev"],
       ...(httpsMode
@@ -197,6 +163,9 @@ export default defineConfig(({ mode }) => {
             },
           }
         : {}),
+    },
+    preview: {
+      proxy,
     },
   };
 });

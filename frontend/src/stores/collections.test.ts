@@ -1,15 +1,22 @@
 import { AxiosError } from "axios";
-import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import storeCollections, { type VirtualCollection } from "@/stores/collections";
+import storeAuth from "@/stores/auth";
+import storeCollections, {
+  type Collection,
+  type VirtualCollection,
+} from "@/stores/collections";
+import { collectionFixture } from "@/utils/collection.fixtures";
+import { userFixture } from "@/utils/user.fixtures";
 
-const { getVirtualCollection, getVirtualCollections } = vi.hoisted(() => ({
-  getVirtualCollection: vi.fn(),
-  getVirtualCollections: vi.fn(),
-}));
+const { getCollections, getVirtualCollection, getVirtualCollections } =
+  vi.hoisted(() => ({
+    getCollections: vi.fn(),
+    getVirtualCollection: vi.fn(),
+    getVirtualCollections: vi.fn(),
+  }));
 
 vi.mock("@/services/api/collection", () => ({
-  default: { getVirtualCollection, getVirtualCollections },
+  default: { getCollections, getVirtualCollection, getVirtualCollections },
 }));
 
 function httpError(status: number) {
@@ -37,7 +44,6 @@ function deferred() {
 
 describe("collections store virtual refresh", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     getVirtualCollection.mockReset();
     getVirtualCollections.mockReset();
   });
@@ -58,7 +64,7 @@ describe("collections store virtual refresh", () => {
     first.settle({ data: [virtualCollection(8)] });
     await initial;
     await vi.waitFor(() =>
-      expect(collections.virtualCollections[0].rom_count).toBe(9),
+      expect(collections.virtualCollections[0]?.rom_count).toBe(9),
     );
     expect(getVirtualCollections).toHaveBeenCalledTimes(2);
   });
@@ -74,7 +80,7 @@ describe("collections store virtual refresh", () => {
     // Resolves rather than rejects: every caller fires this in the background,
     // so a rejection would surface as an unhandled one.
     await expect(collections.refreshVirtualCollections()).resolves.toEqual([]);
-    expect(collections.virtualCollections[0].rom_count).toBe(8);
+    expect(collections.virtualCollections[0]?.rom_count).toBe(8);
   });
 
   it("does nothing until a slice has been fetched", async () => {
@@ -106,5 +112,57 @@ describe("collections store virtual refresh", () => {
       collections.refreshVirtualCollection("collection-zelda"),
     ).resolves.toBeNull();
     expect(collections.virtualCollections).toHaveLength(1);
+  });
+});
+
+function favoriteCollection(id: number, userId: number): Collection {
+  return collectionFixture({
+    id,
+    is_favorite: true,
+    is_public: true,
+    user_id: userId,
+  });
+}
+
+describe("collections store favorites", () => {
+  beforeEach(() => {
+    getCollections.mockReset();
+    storeAuth().setCurrentUser(userFixture({ id: 7 }));
+  });
+
+  // Another user's favorites collection turns up here once they make it
+  // public, and every write to it is a 403.
+  it("picks the current user's favorites, not another user's public one", async () => {
+    getCollections.mockResolvedValueOnce({
+      data: [favoriteCollection(3, 2), favoriteCollection(5, 7)],
+    });
+    const collections = storeCollections();
+
+    await collections.fetchCollections();
+
+    expect(collections.favoriteCollection?.id).toBe(5);
+  });
+
+  it("leaves the favorites target unset when the user owns none", async () => {
+    getCollections.mockResolvedValueOnce({
+      data: [favoriteCollection(3, 2)],
+    });
+    const collections = storeCollections();
+
+    await collections.fetchCollections();
+
+    expect(collections.favoriteCollection).toBeUndefined();
+  });
+
+  it("follows membership writes to the favorites collection", () => {
+    const collections = storeCollections();
+    collections.setCollections([favoriteCollection(5, 7)]);
+
+    collections.updateCollection({
+      ...favoriteCollection(5, 7),
+      rom_ids: [1, 2],
+    });
+
+    expect(collections.favoriteCollection?.rom_ids).toEqual([1, 2]);
   });
 });

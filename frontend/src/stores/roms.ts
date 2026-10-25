@@ -1,4 +1,3 @@
-import { useLocalStorage } from "@vueuse/core";
 import { isNull, isUndefined } from "lodash";
 import { defineStore } from "pinia";
 import type {
@@ -7,6 +6,10 @@ import type {
   SearchRomSchema,
 } from "@/__generated__/";
 import type { CustomLimitOffsetPage_SimpleRomSchema_ as GetRomsResponse } from "@/__generated__/models/CustomLimitOffsetPage_SimpleRomSchema_";
+import {
+  userStorage,
+  useUserLocalStorage,
+} from "@/composables/useUserLocalStorage";
 import cachedApiService from "@/services/cache/api";
 import {
   type Collection,
@@ -17,6 +20,7 @@ import storeGalleryFilter from "@/stores/galleryFilter";
 import storePlatforms from "@/stores/platforms";
 import { type Platform } from "@/stores/platforms";
 import type { ExtractPiniaStoreType } from "@/types";
+import { toError } from "@/utils/toError";
 
 type GalleryFilterStore = ExtractPiniaStoreType<typeof storeGalleryFilter>;
 type PlatformsStore = ExtractPiniaStoreType<typeof storePlatforms>;
@@ -25,20 +29,24 @@ export type SimpleRom = SimpleRomSchema;
 export type SearchRom = SearchRomSchema;
 export type DetailedRom = DetailedRomSchema;
 
-const orderByStorage = useLocalStorage<string>("roms.orderBy", "");
-const orderDirStorage = useLocalStorage("roms.orderDir", "asc");
+// The page on screen, the game a navigation is loading, and one to spare for
+// the player view that picks up the details page's record.
+export const DETAILED_ROM_CACHE_SIZE = 3;
+
+const orderByStorage = useUserLocalStorage<string>("roms.orderBy", "");
+const orderDirStorage = useUserLocalStorage("roms.orderDir", "asc");
 
 // NOTE on deprecation: the gallery-list responsibility (currentPlatform /
 // Collection / Virtual / Smart, _allRoms, fetchOffset, fetchTotalRoms,
 // characterIndex, romIdIndex, fetchRoms / resetPagination / reset, plus
 // the order-by setters) has moved to the v2 store at
-// `src/v2/stores/galleryRoms.ts` (windowed sparse loading). v1 keeps the
+// `src/stores/galleryRoms.ts` (windowed sparse loading). v1 keeps the
 // originals for the frozen v1 UI; v2 imports the new store. Per-field
 // @deprecated tags annotate the migrated surface so v1 cleanup is
 // trivial when the time comes.
 const defaultRomsState = {
   /** @deprecated v2: use `useGalleryRoms().currentPlatform` from
-   * `@/v2/stores/galleryRoms`. */
+   * `@/stores/galleryRoms`. */
   currentPlatform: null as Platform | null,
   /** @deprecated v2: use `useGalleryRoms().currentCollection`. */
   currentCollection: null as Collection | null,
@@ -46,6 +54,8 @@ const defaultRomsState = {
   currentVirtualCollection: null as VirtualCollection | null,
   /** @deprecated v2: use `useGalleryRoms().currentSmartCollection`. */
   currentSmartCollection: null as SmartCollection | null,
+  /** @deprecated v2: read the route's ROM with `useRouteRom()`, which
+   * looks it up in `detailedRoms`. */
   currentRom: null as DetailedRom | null,
   /** @deprecated v2: rooms live in a sparse `byPosition` map on
    * `useGalleryRoms()`; iterate via `getRomAt(position)`. */
@@ -77,9 +87,15 @@ const defaultRomsState = {
 };
 
 export default defineStore("roms", {
-  state: () => ({ ...defaultRomsState }),
+  state: () => ({
+    ...defaultRomsState,
+    /** Detailed ROMs by id, most recently cached last. */
+    detailedRoms: new Map<number, DetailedRom>(),
+  }),
 
   getters: {
+    getDetailedRom: (state) => (id: number) =>
+      state.detailedRoms.get(id) ?? null,
     filteredRoms: (state) => state._allRoms,
     selectedRoms: (state) =>
       state._allRoms.filter((rom) => state.selectedIDs.has(rom.id)),
@@ -94,9 +110,9 @@ export default defineStore("roms", {
 
   actions: {
     _shouldGroupRoms(): boolean {
-      return isNull(localStorage.getItem("settings.groupRoms"))
+      return isNull(userStorage.getItem("settings.groupRoms"))
         ? true
-        : localStorage.getItem("settings.groupRoms") === "true";
+        : userStorage.getItem("settings.groupRoms") === "true";
     },
     /** @deprecated v2: use `useGalleryRoms().setCurrentPlatform`. */
     setCurrentPlatform(platform: Platform | null) {
@@ -104,6 +120,28 @@ export default defineStore("roms", {
     },
     setCurrentRom(rom: DetailedRom) {
       this.currentRom = rom;
+      this.cacheDetailedRom(rom);
+    },
+    cacheDetailedRom(rom: DetailedRom) {
+      this.detailedRoms.delete(rom.id);
+      this.detailedRoms.set(rom.id, rom);
+      if (this.detailedRoms.size > DETAILED_ROM_CACHE_SIZE) {
+        const oldest = this.detailedRoms.keys().next().value;
+        if (oldest !== undefined) this.detailedRoms.delete(oldest);
+      }
+    },
+    /** Drop records for games that no longer exist. */
+    forgetDetailedRoms(ids: number[]) {
+      for (const id of ids) this.detailedRoms.delete(id);
+    },
+    /** Spread `rom` over the cached record so its detailed-only fields
+     * survive a SimpleRom write. */
+    mergeIntoDetailedRom(rom: SimpleRom) {
+      if (this.currentRom?.id === rom.id) {
+        this.currentRom = { ...this.currentRom, ...rom };
+      }
+      const cached = this.detailedRoms.get(rom.id);
+      if (cached) this.detailedRoms.set(rom.id, { ...cached, ...rom });
     },
     setRecentRoms(roms: SimpleRom[]) {
       this.recentRoms = roms;
@@ -206,10 +244,9 @@ export default defineStore("roms", {
 
       // Only set the list of platforms on first fetch
       if (galleryFilter.filterPlatforms.length === 0) {
+        const platformIds = filter_values?.platforms ?? [];
         galleryFilter.setFilterPlatforms(
-          platformsStore.allPlatforms.filter((p) =>
-            filter_values.platforms.includes(p.id),
-          ),
+          platformsStore.allPlatforms.filter((p) => platformIds.includes(p.id)),
         );
       }
 
@@ -265,7 +302,7 @@ export default defineStore("roms", {
             resolve(response.data.items);
           })
           .catch((error) => {
-            reject(error);
+            reject(toError(error));
           })
           .finally(() => {
             this.fetchingRoms = false;
@@ -295,21 +332,21 @@ export default defineStore("roms", {
     },
     addToRecent(rom: SimpleRom) {
       this.recentRoms = [rom, ...this.recentRoms];
-      cachedApiService.clearRecentRomsCache();
+      void cachedApiService.clearRecentRomsCache();
     },
     removeFromRecent(rom: SimpleRom) {
       this.recentRoms = this.recentRoms.filter((value) => value.id !== rom.id);
-      cachedApiService.clearRecentRomsCache();
+      void cachedApiService.clearRecentRomsCache();
     },
     addToContinuePlaying(rom: SimpleRom) {
       this.continuePlayingRoms = [rom, ...this.continuePlayingRoms];
-      cachedApiService.clearRecentPlayedRomsCache();
+      void cachedApiService.clearRecentPlayedRomsCache();
     },
     removeFromContinuePlaying(rom: SimpleRom) {
       this.continuePlayingRoms = this.continuePlayingRoms.filter(
         (value) => value.id !== rom.id,
       );
-      cachedApiService.clearRecentPlayedRomsCache();
+      void cachedApiService.clearRecentPlayedRomsCache();
     },
     update(rom: SimpleRom) {
       this._allRoms = this._allRoms.map((value) =>
@@ -321,16 +358,9 @@ export default defineStore("roms", {
       this.continuePlayingRoms = this.continuePlayingRoms.map((value) =>
         value.id === rom.id ? rom : value,
       );
-      // Keep `currentRom` in sync too — otherwise an optimistic mutation
-      // on a SimpleRom from the gallery (status toggle from a GameCard
-      // badge, favourite, …) leaves the detail view rendering stale
-      // `rom_user` data, since the rom-route `beforeEnter` skips its
-      // refetch when `currentRom.id` already matches. Spread merges the
-      // SimpleRom shape over the cached DetailedRom so detailed-only
-      // fields (metadatum, screenshots, related games, …) survive.
-      if (this.currentRom?.id === rom.id) {
-        this.currentRom = { ...this.currentRom, ...rom };
-      }
+      // A gallery toggle (status, favourite) would otherwise leave the detail
+      // view on stale `rom_user` data until the next route entry.
+      this.mergeIntoDetailedRom(rom);
     },
     remove(roms: SimpleRom[]) {
       this._allRoms = this._allRoms.filter((value) => {
@@ -346,6 +376,7 @@ export default defineStore("roms", {
       this.currentVirtualCollection = null;
       this.currentSmartCollection = null;
       this.currentRom = null;
+      this.detailedRoms.clear();
       this._allRoms = [];
       this.selectedIDs = new Set<number>();
       this.lastSelectedIndex = -1;

@@ -19,6 +19,15 @@ elif [[ ! -e /app/frontend/assets/romm/resources ]]; then
 	ln -s "${ROMM_BASE_PATH}/resources" "/app/frontend/assets/romm/resources"
 fi
 
+# The ./frontend bind mount hides whatever the build wrote under /app/frontend,
+# so link the image's libgme build into the tree the dev server serves.
+if [[ -n ${GME_ASSETS_DIR-} && -d ${GME_ASSETS_DIR} ]]; then
+	mkdir -p /app/frontend/assets/gme
+	for entry in "${GME_ASSETS_DIR}"/*; do
+		ln -sfn "${entry}" "/app/frontend/assets/gme/$(basename "${entry}")"
+	done
+fi
+
 # Define a signal handler to propagate termination signals
 function handle_termination() {
 	echo "Terminating child processes..."

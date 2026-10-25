@@ -53,6 +53,13 @@ const defaultHeartbeat: Heartbeat = {
     PROVIDER: "",
     RP_INITIATED_LOGOUT: false,
   },
+  NOTIFICATIONS: {
+    EMAIL_ENABLED: false,
+    EMAILS_RESET_LINKS: false,
+  },
+  CONVERTO: {
+    ENABLED: false,
+  },
   TASKS: {
     ENABLE_SCHEDULED_RESCAN: false,
     SCHEDULED_RESCAN_CRON: "",
@@ -62,13 +69,6 @@ const defaultHeartbeat: Heartbeat = {
     SCHEDULED_UPDATE_LAUNCHBOX_METADATA_CRON: "",
     ENABLE_SCHEDULED_CONVERT_IMAGES_TO_WEBP: false,
     SCHEDULED_CONVERT_IMAGES_TO_WEBP_CRON: "",
-  },
-  NOTIFICATIONS: {
-    EMAIL_ENABLED: false,
-    EMAILS_RESET_LINKS: false,
-  },
-  CONVERTO: {
-    ENABLED: false,
   },
 };
 
@@ -188,7 +188,7 @@ export default defineStore("heartbeat", {
             : "",
         },
         {
-          name: "Flashpoint Project",
+          name: "Flashpoint",
           value: "flashpoint",
           logo_path: "/assets/scrappers/flashpoint.png",
           disabled: !this.value.METADATA_SOURCES?.FLASHPOINT_API_ENABLED
