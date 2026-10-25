@@ -1705,7 +1705,7 @@ class TestUpdateRomTranslation:
             igdb_id=MOCK_IGDB_ID, name="Kirby: Triple Deluxe", summary="A platformer."
         ),
     )
-    def test_manual_match_translates_the_posted_provider_values(
+    def test_manual_match_resolves_the_posted_provider_values(
         self,
         _get_rom_by_id_mock: AsyncMock,
         client: TestClient,
@@ -1724,8 +1724,36 @@ class TestUpdateRomTranslation:
         assert response.status_code == status.HTTP_200_OK
 
         body = response.json()
-        assert body["name"] == "zh:Kirby: Triple Deluxe"
+        assert body["name"] == "Kirby: Triple Deluxe"
         assert body["summary"] == "zh:A platformer."
+
+    @patch.object(
+        IGDBHandler,
+        "get_rom_by_id",
+        return_value=IGDBRom(
+            igdb_id=MOCK_IGDB_ID,
+            name="Super Smash Bros.",
+            summary="Super Smash Bros. is a fighting game.",
+        ),
+    )
+    def test_manual_match_uses_the_official_chinese_name(
+        self,
+        _get_rom_by_id_mock: AsyncMock,
+        client: TestClient,
+        access_token: str,
+        rom: Rom,
+    ):
+        response = client.put(
+            f"/api/roms/{rom.id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            data={
+                "igdb_id": str(MOCK_IGDB_ID),
+                "name": "Super Smash Bros.",
+                "summary": "Super Smash Bros. is a fighting game.",
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["name"] == "任天堂明星大乱斗"
 
     @patch.object(
         IGDBHandler,
