@@ -32,7 +32,6 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- Deploy test with real provider keys (IGDB or ScreenScraper with developer credentials) to see translated names and summaries end to end; the local test had no keys.
 - Not done by choice:
   - The translator stays as is (no switch, hard-coded zh-CN, re-translates on rescans, no Redis cache).
   - Orphaned i18n keys and small dead helpers in files shared with upstream stay, to keep syncs clean.
@@ -56,7 +55,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## First step next time
 
-Rerun the deploy test with real provider keys (IGDB, or ScreenScraper with developer credentials) to check that scanned names and summaries come out in Chinese.
+Nothing is blocking. Optional: a deploy test with ScreenScraper developer credentials of the fork's own, since builds from source have none.
 
 ## Pitfalls
 
@@ -82,3 +81,4 @@ Rerun the deploy test with real provider keys (IGDB, or ScreenScraper with devel
   - The translator reached Google from the container (name and summary in 0.8 s). It wasn't exercised by the scan because no provider returned a name without keys.
   - Home stats widget in extended mode shows games, platforms, favorites and disk size with no errors; server stats shows three cards; the game page has no play button or save tab; light and dark themes checked.
 - CI on `7e48d365b` (scan fix): Run Pytest (MariaDB and PostgreSQL) and Run E2E Tests passed.
+- Deploy test with provider keys (2026-10-25): the user's own IGDB, MobyGames, SteamGridDB and ScreenScraper account keys, copied from their running `romm` container into a scratch override and deleted afterwards. The ScreenScraper developer credentials in that container come from the upstream image and were not used. A quick scan matched all three mock ROMs on IGDB and stored Chinese names and summaries (超级马里奥世界, 塞尔达传说：时之笛, 神奇宝贝翡翠版), and `/api/roms/<id>` serves them with covers. Stack removed with `down -v`.
