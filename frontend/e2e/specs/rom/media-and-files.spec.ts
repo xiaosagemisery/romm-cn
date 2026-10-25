@@ -4,7 +4,6 @@ import { gotoFirstRom } from "../../support/navigation";
 import { expect, test } from "../../support/test";
 
 // A viewer gets no ROMS_WRITE upload or delete on the Media and Files tabs.
-// "My screenshots" writes the user's own assets, so it stays.
 
 async function openTab(page: Page, tab: string) {
   await page.getByRole("tab", { name: tab }).click();
@@ -59,17 +58,11 @@ test.describe(
       });
     }
 
-    test("Screenshots: the shared ROM section is hidden but the per-user one stays writable", async ({
-      page,
-    }) => {
+    test("Screenshots: the shared ROM section is hidden", async ({ page }) => {
       const panel = await openMediaSubtab(page, "Screenshots");
       // Shared section writes to the ROM: gone for a read-only user with nothing
       // to show.
       await expect(panel.getByText("ROM screenshots")).toHaveCount(0);
-      // Per-user section writes user assets: must survive, dropzone included.
-      // Hiding this would be the regression in the opposite direction.
-      await expect(panel.getByText("My screenshots")).toBeVisible();
-      await expect(panel.locator(".r-dropzone__cta")).not.toHaveCount(0);
     });
   },
 );

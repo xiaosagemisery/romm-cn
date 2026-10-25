@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // SummaryStatsSection: v2-native rebuild of v1
-// `Settings/ServerStats/SummaryStats.vue`. 6-card mock-faithful grid
+// `Settings/ServerStats/SummaryStats.vue`. 3-card mock-faithful grid
 // inside a SettingsSection: each card is a simple icon + big number +
 // uppercase label.
 import { computed } from "vue";
@@ -15,9 +15,6 @@ interface Props {
   stats: {
     PLATFORMS: number;
     ROMS: number;
-    SAVES: number;
-    STATES: number;
-    SCREENSHOTS: number;
     TOTAL_FILESIZE_BYTES: number;
   };
 }
@@ -41,21 +38,6 @@ const cards = computed<StatCard[]>(() => [
     icon: "mdi-disc",
     value: props.stats.ROMS.toLocaleString(),
     label: t("settings.games-label"),
-  },
-  {
-    icon: "mdi-content-save",
-    value: props.stats.SAVES.toLocaleString(),
-    label: t("settings.saves"),
-  },
-  {
-    icon: "mdi-file-cabinet",
-    value: props.stats.STATES.toLocaleString(),
-    label: t("settings.states"),
-  },
-  {
-    icon: "mdi-image-multiple-outline",
-    value: props.stats.SCREENSHOTS.toLocaleString(),
-    label: t("settings.screenshots"),
   },
   {
     icon: "mdi-harddisk",

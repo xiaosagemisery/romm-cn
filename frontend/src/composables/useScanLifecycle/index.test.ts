@@ -220,7 +220,6 @@ describe("installScanLifecycle", () => {
       slug: "n64",
       fs_slug: "n64",
       is_identified: true,
-      new_firmware_count: 0,
     });
     fire("scan:scanning_rom", newRom);
     await drainRomBatch();

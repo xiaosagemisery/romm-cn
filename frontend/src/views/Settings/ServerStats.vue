@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // ServerStats: v2-native rewrite. Composes the two stat sections
 // (Summary + Platforms breakdown). The summary is fetched on its own first
-// so the six cards paint immediately; the heavier per-platform breakdown
+// so the summary cards paint immediately; the heavier per-platform breakdown
 // loads as a second request.
 import { onBeforeMount, ref } from "vue";
 import type { MetadataCoverageItem } from "@/__generated__/models/MetadataCoverageItem";
@@ -13,16 +13,13 @@ import api from "@/services/api";
 const stats = ref({
   PLATFORMS: 0,
   ROMS: 0,
-  SAVES: 0,
-  STATES: 0,
-  SCREENSHOTS: 0,
   TOTAL_FILESIZE_BYTES: 0,
   METADATA_COVERAGE: {} as Record<string, MetadataCoverageItem[]>,
   REGION_BREAKDOWN: {} as Record<string, RegionBreakdownItem[]>,
 });
 
 onBeforeMount(async () => {
-  // The six summary cards are cheap to compute, so load them first and let
+  // The summary cards are cheap to compute, so load them first and let
   // them render right away rather than waiting on the breakdown's queries.
   const { data: summary } = await api.get("/stats");
   stats.value = { ...stats.value, ...summary };

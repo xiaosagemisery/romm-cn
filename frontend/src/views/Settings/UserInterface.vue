@@ -8,9 +8,8 @@
 //   4. Gallery           (toggle grid + boxart RSelect prefix-label +
 //                         advanced per-page boxart overrides)
 //   5. Jukebox           (resume-after-reload toggle)
-//   6. Gameplay          (launch-confirmation toggle)
-//   7. Desktop shell     (only inside it; opens its own settings)
-//   8. Virtual collections (RSelect prefix-label)
+//   6. Desktop shell     (only inside it; opens its own settings)
+//   7. Virtual collections (RSelect prefix-label)
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import CrtWarmup from "@/components/AppShell/CrtWarmup.vue";
@@ -59,11 +58,8 @@ const {
   enableExperimentalCache,
   boxartStyle,
   boxartStyleDetails,
-  boxartStylePlayer,
   // Jukebox
   resumeMusic,
-  // Gameplay
-  confirmProtectedLaunch,
 } = useUISettings();
 
 type Theme = "dark" | "light" | "auto";
@@ -127,15 +123,6 @@ const boxartDetailsModel = computed<string>({
     boxartStyleDetails.value = value;
   },
 });
-const boxartPlayerModel = computed<string>({
-  get: () =>
-    isBoxartStyle(boxartStylePlayer.value)
-      ? boxartStylePlayer.value
-      : boxartGallery.value,
-  set: (value) => {
-    boxartStylePlayer.value = value;
-  },
-});
 
 // Changing the gallery-wide style resets the per-page styles to match,
 // so pages only diverge when the user explicitly re-picks one (#3943).
@@ -143,7 +130,6 @@ function onBoxartStyleChange(value: unknown) {
   if (!isBoxartStyle(value)) return;
   boxartStyle.value = value;
   boxartStyleDetails.value = value;
-  boxartStylePlayer.value = value;
 }
 
 const showAdvancedBoxart = ref(false);
@@ -405,17 +391,6 @@ function onVirtualCollectionTypeChange(value: unknown) {
               {{ t("settings.boxart-style-details") }}
             </template>
           </RSelect>
-          <RSelect
-            v-model="boxartPlayerModel"
-            :items="boxartStyleItems"
-            prefix-label="stacked"
-            hide-details
-          >
-            <template #prefix-label>
-              <RIcon icon="mdi-play-box-outline" size="14" />
-              {{ t("settings.boxart-style-player") }}
-            </template>
-          </RSelect>
         </template>
       </div>
     </SettingsSection>
@@ -430,20 +405,6 @@ function onVirtualCollectionTypeChange(value: unknown) {
           v-model="resumeMusic"
           :title="t('settings.resume-music')"
           :description="t('settings.resume-music-desc')"
-        />
-      </div>
-    </SettingsSection>
-
-    <!-- Gameplay -->
-    <SettingsSection
-      :title="t('settings.gameplay')"
-      icon="mdi-play-circle-outline"
-    >
-      <div class="r-ui__toggle-grid r-ui__toggle-grid--single">
-        <SettingsToggleRow
-          v-model="confirmProtectedLaunch"
-          :title="t('settings.confirm-protected-launch')"
-          :description="t('settings.confirm-protected-launch-desc')"
         />
       </div>
     </SettingsSection>

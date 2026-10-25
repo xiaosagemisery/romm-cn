@@ -130,7 +130,7 @@ export default withVueTs(
     },
   },
   {
-    files: ["src/utils/gmeAudioWorklet.js", "src/utils/pico8AudioWorklet.js"],
+    files: ["src/utils/gmeAudioWorklet.js"],
     languageOptions: { globals: globals.audioWorklet },
   },
   // Import cycles. The resolver has to be the one that reads tsconfig `paths`,
@@ -354,23 +354,6 @@ export default withVueTs(
     // `expect(obj.method)` reads a spy without calling it.
     files: ["**/*.test.ts"],
     rules: { "@typescript-eslint/unbound-method": "off" },
-  },
-  // These files read raw `localStorage` keys that hold users' saved settings.
-  {
-    files: [
-      "src/components/Player/EmulatorJSPlayer.vue",
-      "src/views/Player/emulatorJSRuntime.ts",
-      "src/views/Player/emulatorJSRuntime.test.ts",
-    ],
-    rules: {
-      "@typescript-eslint/no-base-to-string": "off",
-      "@typescript-eslint/no-misused-promises": "off",
-      "@typescript-eslint/require-await": "off",
-      "@typescript-eslint/restrict-template-expressions": "off",
-      "@typescript-eslint/unbound-method": "off",
-      "no-restricted-syntax": "off",
-      "romm/no-unscoped-local-storage": "off",
-    },
   },
   // After the base configs, so its exceptions win.
   ...e2eConfig,

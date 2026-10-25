@@ -82,7 +82,6 @@ vi.mock("@/components/GameDetails/NotesTab.vue", () => panel("notes"));
 vi.mock("@/components/GameDetails/OverviewTab.vue", () => panel("overview"));
 vi.mock("@/components/GameDetails/PatcherTab.vue", () => panel("patcher"));
 vi.mock("@/components/GameDetails/PrevNextNav.vue", () => panel("prev-next"));
-vi.mock("@/components/GameDetails/SaveDataTab.vue", () => panel("save-data"));
 
 const achievement: RAGameRomAchievement = {
   ra_id: 1,

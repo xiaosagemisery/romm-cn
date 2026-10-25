@@ -1,4 +1,4 @@
-// Serves frontend/assets (emulator runtimes, icons) under `vite preview`, as
+// Serves frontend/assets (audio runtimes, patcher, icons) under `vite preview`, as
 // the dev server and the Docker image do; the build leaves it out of dist/.
 import { fileURLToPath } from "node:url";
 import sirv from "sirv";

@@ -91,7 +91,6 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       include: VUETIFY_COMPONENTS,
     },
-    build: {},
     plugins: [
       tailwindcss(),
       vue({
@@ -149,7 +148,6 @@ export default defineConfig(({ mode }) => {
           "**/assets/romm/resources/**",
           "**/assets/romm/resources",
           "**/assets/gme/**",
-          "**/assets/easyrpg/**",
         ],
       },
       proxy,
