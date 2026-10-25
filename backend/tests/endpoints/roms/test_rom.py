@@ -1690,6 +1690,87 @@ def test_update_rom_user_props_rejects_invalid_pinned_media(
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+class TestUpdateRomTranslation:
+    @pytest.fixture(autouse=True)
+    def marker_translation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def translate(text: str | None, *_args: Any, **_kwargs: Any):
+            return f"zh:{text}" if text else text
+
+        monkeypatch.setattr("utils.translator.translate_text", translate)
+
+    @patch.object(
+        IGDBHandler,
+        "get_rom_by_id",
+        return_value=IGDBRom(
+            igdb_id=MOCK_IGDB_ID, name="Kirby: Triple Deluxe", summary="A platformer."
+        ),
+    )
+    def test_manual_match_translates_the_posted_provider_values(
+        self,
+        _get_rom_by_id_mock: AsyncMock,
+        client: TestClient,
+        access_token: str,
+        rom: Rom,
+    ):
+        response = client.put(
+            f"/api/roms/{rom.id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            data={
+                "igdb_id": str(MOCK_IGDB_ID),
+                "name": "Kirby: Triple Deluxe",
+                "summary": "A platformer.",
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        body = response.json()
+        assert body["name"] == "zh:Kirby: Triple Deluxe"
+        assert body["summary"] == "zh:A platformer."
+
+    @patch.object(
+        IGDBHandler,
+        "get_rom_by_id",
+        return_value=IGDBRom(
+            igdb_id=MOCK_IGDB_ID, name="Kirby: Triple Deluxe", summary="A platformer."
+        ),
+    )
+    def test_user_edited_values_are_kept_as_typed(
+        self,
+        _get_rom_by_id_mock: AsyncMock,
+        client: TestClient,
+        access_token: str,
+        rom: Rom,
+    ):
+        response = client.put(
+            f"/api/roms/{rom.id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            data={
+                "igdb_id": str(MOCK_IGDB_ID),
+                "name": "My own title",
+                "summary": "My own summary.",
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        body = response.json()
+        assert body["name"] == "My own title"
+        assert body["summary"] == "My own summary."
+
+    def test_edit_without_a_provider_refetch_leaves_values_untouched(
+        self, client: TestClient, access_token: str, rom: Rom
+    ):
+        response = client.put(
+            f"/api/roms/{rom.id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            data={"name": "Typed title", "summary": "Typed summary."},
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        body = response.json()
+        assert body["name"] == "Typed title"
+        assert body["summary"] == "Typed summary."
+
+
 class TestUpdateMetadataIDs:
     @patch.object(
         IGDBHandler, "get_rom_by_id", return_value=IGDBRom(igdb_id=MOCK_IGDB_ID)
