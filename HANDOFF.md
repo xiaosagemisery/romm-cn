@@ -82,3 +82,8 @@ Nothing is blocking. Optional: a deploy test with ScreenScraper developer creden
   - Home stats widget in extended mode shows games, platforms, favorites and disk size with no errors; server stats shows three cards; the game page has no play button or save tab; light and dark themes checked.
 - CI on `7e48d365b` (scan fix): Run Pytest (MariaDB and PostgreSQL) and Run E2E Tests passed.
 - Deploy test with provider keys (2026-10-25): the user's own IGDB, MobyGames, SteamGridDB and ScreenScraper account keys, copied from their running `romm` container into a scratch override and deleted afterwards. The ScreenScraper developer credentials in that container come from the upstream image and were not used. A quick scan matched all three mock ROMs on IGDB and stored Chinese names and summaries (超级马里奥世界, 塞尔达传说：时之笛, 神奇宝贝翡翠版), and `/api/roms/<id>` serves them with covers. Stack removed with `down -v`.
+- Real ROM test (2026-10-25), copies of 1 GBA and 9 N64 ROMs from the user's `E:\Roms
+oms` (Chinese filenames), user's own provider keys, removed afterwards:
+  - 7 of 10 matched on the first quick scan, almost all through Hasheous (file hash to IGDB); names and summaries came out in Chinese.
+  - Not matched: `1.gba` (header: SHINING SOUL, code AHUJ, Japan), and the iQue China releases of Ocarina of Time and Star Fox 64 (region `C`). Their hashes are unknown to Hasheous, and Chinese filenames give IGDB's name search nothing to find.
+  - After renaming the copies to English No-Intro style names, an UNMATCHED scan matched all three on IGDB (6593, 1029, 2591) with translated summaries; their names stayed as before because that scan keeps an existing name.
