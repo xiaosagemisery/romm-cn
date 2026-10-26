@@ -34,7 +34,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- Official Chinese titles are looked up on Wikidata by IGDB slug (`wikidata_zh_title`), using only labels tagged zh-cn, zh-hans, zh-sg or zh-my (no Traditional conversion, by the user's choice, so Taiwan and Hong Kong titles never pass as mainland ones). `backend/utils/official_names_zh.json` holds manual overrides for titles Wikidata lacks (Shining Soul, listed as 光明之魂 by MobyGames). Open questions and the Douban/Baidu Baike evaluation are recorded in issue #1.
+- Official Chinese titles are looked up on Wikidata by IGDB slug (`wikidata_zh_title`), using the labels zh-cn, zh-hans, zh-sg, zh-my and then the generic zh, in that order (the user accepted the generic label; no Traditional conversion and no zh-hant, zh-tw, zh-hk labels, so Taiwan and Hong Kong titles stay out). `backend/utils/official_names_zh.json` holds manual overrides for titles Wikidata lacks (Shining Soul, listed as 光明之魂 by MobyGames). Open questions and the Douban/Baidu Baike evaluation are recorded in issue #1.
 - Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending issue #1; it can resume now that titles are kept as provided.
 - The summary title placeholder (`TITLE_PLACEHOLDER`) was only tested with a mocked translator; check it once against the live Google endpoint from a network that isn't rate limited.
 - Not done by choice:

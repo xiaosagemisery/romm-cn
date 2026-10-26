@@ -220,10 +220,23 @@ async def test_wikidata_zh_title_prefers_simplified_and_drops_the_qualifier():
 
 
 @pytest.mark.asyncio
-async def test_wikidata_zh_title_ignores_generic_and_traditional_labels():
+async def test_wikidata_zh_title_takes_the_generic_label_over_traditional_ones():
     patcher, _client = _patch_wikidata(
         _wikidata_response(
-            {"zh": "逆轉裁判5", "zh-hant": "逆轉裁判5", "zh-hk": "逆轉裁判5"}
+            {"zh-hant": "星之卡比 三重豪華版", "zh": "星之卡比 三重豪华版"}
+        )
+    )
+    try:
+        assert await wikidata_zh_title("kirby-triple-deluxe") == "星之卡比 三重豪华版"
+    finally:
+        patcher.stop()
+
+
+@pytest.mark.asyncio
+async def test_wikidata_zh_title_ignores_traditional_taiwan_and_hong_kong_labels():
+    patcher, _client = _patch_wikidata(
+        _wikidata_response(
+            {"zh-hant": "逆轉裁判5", "zh-tw": "逆轉裁判5", "zh-hk": "逆轉裁判5"}
         )
     )
     try:
