@@ -1,6 +1,7 @@
 import io
 import zipfile
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -235,44 +236,94 @@ async def test_a_western_gametdb_title_skips_igdb(mocker):
     lookup.assert_not_awaited()
 
 
+def _alias(alias: str, game: str, platforms: list[int]) -> dict[str, Any]:
+    return {"name": alias, "game": {"name": game, "platforms": platforms}}
+
+
+@pytest.fixture
+def alternative_names(mocker) -> AsyncMock:
+    from handler.metadata import meta_igdb_handler
+
+    mocker.patch.object(meta_igdb_handler, "is_enabled", return_value=True)
+    return mocker.patch.object(
+        meta_igdb_handler.igdb_service, "list_alternative_names", new=AsyncMock()
+    )
+
+
 @pytest.mark.parametrize(
     ("results", "name"),
     [
         (
-            [{"game": {"name": "Pokemon Rumble Blast", "platforms": [37]}}] * 2,
+            [_alias('Super "Scramble"', "Pokemon Rumble Blast", [37])] * 2,
             "Pokemon Rumble Blast",
         ),
         (
             [
-                {"game": {"name": "Fire Emblem Warriors", "platforms": [137, 130]}},
-                {"game": {"name": "Fire Emblem Warriors (Wii U)", "platforms": [41]}},
+                _alias('Super "Scramble"', "Fire Emblem Warriors", [137, 130]),
+                _alias('Super "Scramble"', "Fire Emblem Warriors (Wii U)", [41]),
             ],
             "Fire Emblem Warriors",
         ),
         (
             [
-                {"game": {"name": "A", "platforms": [37]}},
-                {"game": {"name": "B", "platforms": [37]}},
+                _alias('Super "Scramble"', "A", [37]),
+                _alias('Super "Scramble"', "B", [37]),
             ],
             None,
         ),
-        ([], None),
     ],
 )
 async def test_igdb_title_by_alternative_name_needs_one_game_on_the_platform(
-    mocker, results, name
+    alternative_names: AsyncMock, results, name
 ):
-    from handler.metadata import meta_igdb_handler
-
-    mocker.patch.object(meta_igdb_handler, "is_enabled", return_value=True)
-    lookup = mocker.patch.object(
-        meta_igdb_handler.igdb_service,
-        "list_alternative_names",
-        new=AsyncMock(return_value=results),
-    )
+    alternative_names.return_value = results
 
     assert await igdb_title_by_alternative_name(UPS.N3DS, 'Super "Scramble"') == name
-    assert lookup.await_args.kwargs["where"] == 'name ~ "Super \\"Scramble\\""'
+    assert alternative_names.await_args_list[0].kwargs["where"] == (
+        'name ~ "Super \\"Scramble\\""'
+    )
+
+
+async def test_igdb_title_by_alternative_name_ignores_spacing_and_punctuation(
+    alternative_names: AsyncMock,
+):
+    alternative_names.side_effect = [
+        [],
+        [
+            _alias(
+                "Taiko no Tatsujin: Dokodon! Mystery Adventure",
+                "Taiko no Tatsujin: Rhythmic Adventure 2",
+                [37, 130],
+            ),
+            _alias("Mio no Mystery Adventure", "Mio no Mystery Adventure", [37]),
+        ],
+    ]
+
+    assert (
+        await igdb_title_by_alternative_name(
+            UPS.N3DS, "Taiko no Tatsujin: Doko Don! Mystery Adventure"
+        )
+        == "Taiko no Tatsujin: Rhythmic Adventure 2"
+    )
+    assert alternative_names.await_args_list[1].kwargs["where"] == (
+        'name ~ *"Adventure"* & name ~ *"Tatsujin"*'
+    )
+
+
+async def test_igdb_title_by_alternative_name_finds_nothing(
+    alternative_names: AsyncMock,
+):
+    alternative_names.return_value = [
+        _alias("Mio no Mystery Adventure", "Mio no Mystery Adventure", [37])
+    ]
+
+    assert (
+        await igdb_title_by_alternative_name(
+            UPS.N3DS, "Taiko no Tatsujin: Doko Don! Mystery Adventure"
+        )
+        is None
+    )
+    assert alternative_names.await_count == 2
 
 
 async def test_a_chinese_filename_searches_by_its_product_code_title(mocker):

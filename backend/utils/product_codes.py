@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import string
 import zipfile
 from pathlib import Path
@@ -15,7 +16,11 @@ from handler.redis_handler import async_cache
 from logger.logger import log
 from utils.context import ctx_httpx_client
 from utils.platform_slugs import UniversalPlatformSlug as UPS
-from utils.translator import HAN_CHARACTER_PATTERN, translate_search_term
+from utils.translator import (
+    HAN_CHARACTER_PATTERN,
+    normalize_title,
+    translate_search_term,
+)
 
 if TYPE_CHECKING:
     from models.rom import Rom
@@ -36,6 +41,7 @@ GAMETDB_SKIPPED_TYPES: Final = frozenset({"CUSTOM", "Homebrew"})
 # A product code ends in its region letter. The US (E) and European (P) entries of
 # a game carry its official English title, where a Japanese entry is romanized.
 WESTERN_REGION_LETTERS: Final = ("E", "P")
+ALIAS_KEYWORD_PATTERN: Final = re.compile(r"[A-Za-z0-9]{4,}")
 _gametdb_locks: dict[str, asyncio.Lock] = {}
 
 N3DS_EXTENSIONS: Final = frozenset({"3ds", "cci"})
@@ -175,7 +181,10 @@ async def gametdb_title(platform: str, code: str) -> GameTDBTitle | None:
 
 
 async def igdb_title_by_alternative_name(platform: str, title: str) -> str | None:
-    """IGDB's own name for the one game on the platform that lists `title` as an alternative name."""
+    """IGDB's own name for the one game on the platform with `title` as an alternative name.
+
+    Spacing and punctuation may differ, as in "Doko Don!" against "Dokodon!".
+    """
     from adapters.services.igdb import IGDB_PLATFORM_LIST
     from handler.metadata import meta_igdb_handler
     from handler.metadata.igdb_handler import _platform_igdb_ids_with_twin
@@ -185,20 +194,32 @@ async def igdb_title_by_alternative_name(platform: str, title: str) -> str | Non
     platform_ids = set(
         _platform_igdb_ids_with_twin(IGDB_PLATFORM_LIST[UPS(platform)]["id"])
     )
+    wanted = normalize_title(title)
     escaped = title.replace("\\", "\\\\").replace('"', '\\"')
-    results = await meta_igdb_handler.igdb_service.list_alternative_names(
-        fields=["game.name", "game.platforms"],
-        where=f'name ~ "{escaped}"',
-        limit=10,
+    # The loose pass finds candidates by the title's longest words, then compares
+    # them with spacing and punctuation removed.
+    keywords = sorted(
+        set(ALIAS_KEYWORD_PATTERN.findall(title)), key=lambda word: (-len(word), word)
     )
-    names = {
-        name
-        for result in results
-        if (game := result.get("game"))
-        and (name := game.get("name"))
-        and platform_ids & set(game.get("platforms") or [])
-    }
-    return names.pop() if len(names) == 1 else None
+    queries = [f'name ~ "{escaped}"']
+    if keywords:
+        queries.append(" & ".join(f'name ~ *"{word}"*' for word in keywords[:2]))
+
+    for where in queries:
+        results = await meta_igdb_handler.igdb_service.list_alternative_names(
+            fields=["name", "game.name", "game.platforms"], where=where, limit=50
+        )
+        names = {
+            name
+            for result in results
+            if normalize_title(result.get("name") or "") == wanted
+            and (game := result.get("game"))
+            and (name := game.get("name"))
+            and platform_ids & set(game.get("platforms") or [])
+        }
+        if names:
+            return names.pop() if len(names) == 1 else None
+    return None
 
 
 async def _refresh_gametdb(platform: str) -> None:
