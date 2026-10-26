@@ -30,3 +30,13 @@
 ## Storybook tests need a local Chromium
 
 - Run `npx playwright install --only-shell chromium` once before `npm run test`.
+
+## Writing ZIP fixtures fails once the app is imported
+
+- Symptom: a test that builds a ZIP with `zipfile.ZipFile(..., "w")` fails with `_get_compressor() takes 1 positional argument but 2 were given`.
+- Cause: `zipfile-inflate64`, imported through the app, replaces `zipfile._get_compressor`.
+- Fix: call `tests._zipfile_shim.reload_zipfile()` right before writing the archive.
+
+## Running a few backend tests without the database
+
+- Pure tests (no `db_session` fixtures) can run in the test container: install `pytest pytest-asyncio pytest-mock fakeredis` with the image's `/usr/local/bin/python3 -m pip install --target /tmp/t/site`, copy the test files under `/tmp/t/tests`, add a `/tmp/t/conftest.py` that imports `endpoints.sockets.scan` (it loads every model), and run `/src/.venv/bin/python -m pytest` with `PYTHONPATH=/tmp/t:/backend:/tmp/t/site`.

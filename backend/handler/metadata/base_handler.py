@@ -25,8 +25,8 @@ from tasks.scheduled.update_switch_titledb import (
 from utils import get_version, int_or_none
 from utils.cache import is_cache_store_ready
 from utils.context import ctx_httpx_client
+from utils.product_codes import product_code_search_term
 from utils.switch import derive_base_title_id
-from utils.translator import translate_search_term
 
 if TYPE_CHECKING:
     from models.rom import Rom
@@ -378,7 +378,7 @@ class MetadataHandler(abc.ABC):
             fallback_rom["name"] = search_term
 
         # The catalogs index English titles, so a Chinese filename searches as one.
-        return await translate_search_term(search_term)
+        return await product_code_search_term(rom, search_term)
 
     async def _ps2_opl_format(self, match: re.Match[str], search_term: str) -> str:
         serial_code = match.group(1)

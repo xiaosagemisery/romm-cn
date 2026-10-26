@@ -1145,7 +1145,7 @@ The core of RomM. Orchestrates library scanning and metadata enrichment.
 3. For each ROM file in platform:
    ├── Parse filename (extract name, tags, region, version)
    ├── Calculate file hashes (CRC32, MD5, SHA1)
-   ├── Translate a Chinese filename to an English search term (utils/translator.py)
+   ├── For a Chinese filename: English title from the header's product code (utils/product_codes.py), else a translation (utils/translator.py)
    ├── Search metadata providers (in priority order):
    │   ├── IGDB
    │   ├── MobyGames
