@@ -77,6 +77,10 @@ IGDB_REGIONAL_TWIN_PLATFORMS: Final[dict[int, int]] = {
     NEW_N3DS_IGDB_ID: N3DS_IGDB_ID,
 }
 
+# Box titles some publishers brand ("Shonen Jump's One Piece: Grand Adventure"),
+# while IGDB files the game without the brand.
+BRAND_TITLE_PREFIXES: Final = ("Shonen Jump's",)
+
 # Regex to detect IGDB ID tags in filenames like (igdb-12345)
 IGDB_TAG_REGEX = provider_tag_regex("igdb")
 
@@ -890,6 +894,12 @@ class IGDBHandler(MetadataHandler):
             log.debug("Searching for %s on IGDB without game_type", search_term)
             res = await self._search_rom(search_term, platform_igdb_id)
 
+        if not res and (unbranded := self._without_brand_prefix(search_term)):
+            log.debug("Searching for %s on IGDB without its brand", unbranded)
+            res = await self._search_rom(
+                unbranded, platform_igdb_id, with_game_type=True
+            ) or await self._search_rom(unbranded, platform_igdb_id)
+
         # IGDB search is fuzzy so no need to split the search term by special characters
         if not res:
             return fallback_rom
@@ -897,6 +907,14 @@ class IGDBHandler(MetadataHandler):
         return build_igdb_rom(
             self, res, get_igdb_preferred_locale(rom=rom), platform_igdb_id
         )
+
+    def _without_brand_prefix(self, search_term: str) -> str | None:
+        """The normalized search term without a leading publisher brand, if it has one."""
+        for prefix in BRAND_TITLE_PREFIXES:
+            brand = f"{self.normalize_search_term(prefix)} "
+            if search_term.startswith(brand) and len(search_term) > len(brand):
+                return search_term[len(brand) :]
+        return None
 
     async def get_rom_by_id(self, rom: Rom, igdb_id: int) -> IGDBRom:
         if not self.is_enabled():

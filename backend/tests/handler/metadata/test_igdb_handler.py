@@ -1450,6 +1450,49 @@ class TestGetRom:
         assert rom["igdb_id"] == 7
         assert service.calls[0][1]["where"] == "id=999999"
 
+    async def test_a_branded_title_is_searched_again_without_the_brand(
+        self, handler: IGDBHandler, monkeypatch: pytest.MonkeyPatch
+    ):
+        game = _make_game(4053, "One Piece: Grand Adventure")
+        searched: list[str] = []
+
+        async def search_rom(
+            search_term: str, platform_igdb_id: int, with_game_type: bool = False
+        ) -> Game | None:
+            searched.append(search_term)
+            return game if search_term == "one piece grand adventure" else None
+
+        monkeypatch.setattr(handler, "_search_rom", search_rom)
+
+        rom = await handler.get_rom(
+            _rom(), "Shonen Jump's One Piece - Grand Adventure.iso", SNES_IGDB_ID
+        )
+
+        assert rom["igdb_id"] == 4053
+        assert searched == [
+            "shonen jump s one piece grand adventure",
+            "shonen jump s one piece grand adventure",
+            "one piece grand adventure",
+        ]
+
+    async def test_an_unbranded_miss_is_not_searched_again(
+        self, handler: IGDBHandler, monkeypatch: pytest.MonkeyPatch
+    ):
+        searched: list[str] = []
+
+        async def search_rom(
+            search_term: str, platform_igdb_id: int, with_game_type: bool = False
+        ) -> Game | None:
+            searched.append(search_term)
+            return None
+
+        monkeypatch.setattr(handler, "_search_rom", search_rom)
+
+        assert await handler.get_rom(_rom(), "Nothing Like It.sfc", SNES_IGDB_ID) == {
+            "igdb_id": None
+        }
+        assert searched == ["nothing like it", "nothing like it"]
+
     async def test_nothing_found_is_no_match(self, handler: IGDBHandler):
         rom = await handler.get_rom(_rom(), "Nothing Like It.sfc", SNES_IGDB_ID)
 
