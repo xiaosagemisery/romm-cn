@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import httpx
+from opencc import OpenCC
 
 from logger.logger import log
 
@@ -16,12 +17,10 @@ OFFICIAL_NAMES_PATH = Path(__file__).with_name("official_names_zh.json")
 SEARCH_TITLES_PATH = Path(__file__).with_name("search_titles_en.json")
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 WIKIDATA_USER_AGENT = "romm-cn/0.1 (https://github.com/xiaosagemisery/romm-cn)"
-# Wikidata label languages, Simplified Chinese first.
+WIKIDATA_SIMPLIFIED_LANGS = ("zh-cn", "zh-hans", "zh-sg", "zh-my")
+# Wikidata label languages, Simplified Chinese first; the rest get converted.
 WIKIDATA_ZH_LANGS = (
-    "zh-cn",
-    "zh-hans",
-    "zh-sg",
-    "zh-my",
+    *WIKIDATA_SIMPLIFIED_LANGS,
     "zh",
     "zh-hant",
     "zh-tw",
@@ -60,6 +59,11 @@ def _load_title_map(path: Path) -> dict[str, str]:
 @lru_cache(maxsize=1)
 def _official_names() -> dict[str, str]:
     return _load_title_map(OFFICIAL_NAMES_PATH)
+
+
+@lru_cache(maxsize=1)
+def _traditional_to_simplified() -> OpenCC:
+    return OpenCC("t2s")
 
 
 @lru_cache(maxsize=1)
@@ -164,14 +168,12 @@ async def wikidata_zh_title(igdb_slug: str | None) -> str | None:
         return None
 
     labels = {row["lang"]["value"]: row["label"]["value"] for row in bindings}
-    title = next(
-        (
-            LABEL_QUALIFIER_PATTERN.sub("", labels[lang]).strip()
-            for lang in WIKIDATA_ZH_LANGS
-            if lang in labels
-        ),
-        None,
-    )
+    lang = next((lang for lang in WIKIDATA_ZH_LANGS if lang in labels), None)
+    title = None
+    if lang:
+        title = LABEL_QUALIFIER_PATTERN.sub("", labels[lang]).strip()
+        if lang not in WIKIDATA_SIMPLIFIED_LANGS:
+            title = _traditional_to_simplified().convert(title)
     _WIKIDATA_CACHE[igdb_slug] = title or None
     return title or None
 

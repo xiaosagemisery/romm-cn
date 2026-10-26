@@ -220,10 +220,15 @@ async def test_wikidata_zh_title_prefers_simplified_and_drops_the_qualifier():
 
 
 @pytest.mark.asyncio
-async def test_wikidata_zh_title_falls_back_to_traditional_when_it_is_all_there_is():
-    patcher, _client = _patch_wikidata(_wikidata_response({"zh-hant": "完美黑暗"}))
+async def test_wikidata_zh_title_converts_a_traditional_only_label_to_simplified():
+    patcher, _client = _patch_wikidata(
+        _wikidata_response({"zh": "逆轉裁判5", "zh-hant": "逆轉裁判5"})
+    )
     try:
-        assert await wikidata_zh_title("perfect-dark") == "完美黑暗"
+        assert (
+            await wikidata_zh_title("phoenix-wright-ace-attorney-dual-destinies")
+            == "逆转裁判5"
+        )
     finally:
         patcher.stop()
 

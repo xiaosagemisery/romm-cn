@@ -34,7 +34,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- Official Chinese titles are looked up on Wikidata by IGDB slug (`wikidata_zh_title`); `backend/utils/official_names_zh.json` holds manual overrides for titles Wikidata lacks (Shining Soul, Majora's Mask) or gets wrong. Wikidata is only reachable from this sandbox after the user allowed `query.wikidata.org`.
+- Official Chinese titles are looked up on Wikidata by IGDB slug (`wikidata_zh_title`); `backend/utils/official_names_zh.json` holds manual overrides for titles Wikidata lacks (Shining Soul, listed as 光明之魂 by MobyGames) or gets wrong. Traditional-only labels are converted with OpenCC (`opencc-python-reimplemented`, pure Python). Sources disagree on Majora's Mask (Wikidata zh-cn 魔吉拉的面具, zh-hans and zh-hk 姆吉拉的假面), so it has no override; the user suggested 玛祖拉的假面, which no source lists. Wikidata is only reachable from this sandbox after the user allowed `query.wikidata.org`.
 - Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending issue #1; it can resume now that titles are kept as provided.
 - The summary title placeholder (`TITLE_PLACEHOLDER`) was only tested with a mocked translator; check it once against the live Google endpoint from a network that isn't rate limited.
 - Not done by choice:
@@ -98,3 +98,4 @@ oms\gba.gba` was renamed to `Shining Soul (Japan).gba` at the user's request (2
   - Same files mounted under English names on a fresh database: 19 of 20 matched, names and summaries in Chinese. Only `DK - Jungle Beat` missed (IGDB title: Donkey Kong Jungle Beat).
   - Takeaway: for this library, English filenames decide matching. This led to the search term translation below.
 - Chinese filename search (2026-10-26): `translate_search_term` translates filename search terms with Chinese characters to English before the IGDB, MobyGames and ScreenScraper name searches. Rerun of the same 20 ROMs with their original Chinese names on a fresh database: 17 of 20 matched (was 3). Misses are literal translations of titles whose English names differ: 斑鸠 -> "turtledove" (Ikaruga), 路易的鬼屋 -> "louie's haunted house" (Luigi's Mansion), 星之卡比 三重彩 -> "Kirby Trifecta" (Kirby: Triple Deluxe). Stack and key-bearing override removed.
+- Baidu Baike and Douban are blocked from the sandbox (tunnel refused); evaluate them as a second title source only after the user allows `baike.baidu.com` and the Douban hosts.
