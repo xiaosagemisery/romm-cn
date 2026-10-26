@@ -321,7 +321,7 @@ def test_exact_title_key_keeps_an_edition_plus():
         ("大盗伍佑卫门1", "大盗伍佑卫门"),
         ("勇者鬥惡龍7", "勇者斗恶龙7"),
         ("Shining Soul", None),
-        ("F-Zero GX 英文版", None),
+        ("Wave Race Blue Storm 英文版", None),
         ("シャイニング・ソウル", None),
         (None, None),
     ],
@@ -453,7 +453,13 @@ def _patch_sources(
         ({"zh": "逆轉裁判5"}, None, "Ace Attorney", None, "逆转裁判5"),
         # A Chinese provider name is converted; a Latin one takes the filename.
         ({}, None, "瑪利歐派對", "马里奥聚会", "玛利欧派对"),
-        ({}, None, "F-Zero GX", "F-Zero GX 英文版", "F-Zero GX"),
+        (
+            {},
+            None,
+            "Wave Race: Blue Storm",
+            "Wave Race Blue Storm 英文版",
+            "Wave Race: Blue Storm",
+        ),
         ({}, None, "Wetrix", "围水方块", "围水方块"),
         ({}, None, "Wetrix", "Wetrix (USA)", "Wetrix"),
     ],

@@ -41,3 +41,6 @@
 
 - Pure tests (no `db_session` fixtures) can run in the test container: install `pytest pytest-asyncio pytest-mock fakeredis` with the image's `/usr/local/bin/python3 -m pip install --target /tmp/t/site`, copy the test files under `/tmp/t/tests`, add a `/tmp/t/conftest.py` that imports `endpoints.sockets.scan` (it loads every model), and run `/src/.venv/bin/python -m pytest` with `PYTHONPATH=/tmp/t:/backend:/tmp/t/site`.
 - That setup does not load `backend/tests/conftest.py`, so its autouse stubs (`no_live_translation`) go untested there. After changing a stubbed function's signature, update the stub to take `*args, **kwargs`: CI failed 20 scan and update-rom tests with `no_bangumi_title() takes 1 positional argument but 2 were given` when `bangumi_zh_title` gained a `file_title` argument.
+- Symptom: after adding F-Zero GX to `official_names_zh.json`, `test_resolve_zh_title_order` failed with `assert '零式赛车GX' == 'F-Zero GX'`.
+- Cause: the test used F-Zero GX as a game with no Chinese name, and the official list is checked first.
+- Fix: use a title that is not in the list (Wave Race: Blue Storm). Pick test titles that no data file lists.
