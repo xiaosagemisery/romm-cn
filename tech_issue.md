@@ -59,6 +59,16 @@
 - Fix: run `python` with `PYTHONIOENCODING=utf-8`.
 - Future guidance: on this machine, never use `python3`; set `PYTHONIOENCODING=utf-8` for scripts that print non-ASCII.
 
+- Symptom: the native `opencc` package (1.4.2) has wheels for manylinux, macOS and Windows only.
+- Root cause: the runtime image is Alpine (musl), so it would build from source with CMake and a C++ toolchain.
+- Fix: depend on `opencc-python-reimplemented`, which is pure Python, ships the same dictionaries and gave identical `t2s` output on the 43 Traditional titles of the test library.
+- Future guidance: before adding a native dependency, check PyPI for a `musllinux` wheel matching the image's Python.
+
+- Symptom: a metadata update scan of 255 ROMs logged 46 `Wikidata lookup failed` warnings with an empty message, and those games fell back to lower-priority titles.
+- Root cause: under four scan workers the Wikidata query service took up to ~9 s per query, and the 10 s client timeout raised `ReadTimeout`, whose `str()` is empty.
+- Fix: 30 s timeout, one retry after a short pause, and the warning logs `repr(exc)`.
+- Future guidance: give public query services a generous timeout and a retry, and log exceptions with `!r` so a timeout is visible.
+
 ## Formatting
 
 - Symptom: running `isort` through `uvx` with `--settings-path .` rewrote imports into the default style, splitting first-party and third-party groups and wrapping lines with hanging indents.

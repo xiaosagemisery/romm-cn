@@ -1688,6 +1688,10 @@ async def scan_rom(
             rom_attrs.get("name"),
             rom_attrs.get("summary"),
             igdb_slug=igdb_handler_rom.get("slug"),
+            alternative_names=igdb_handler_rom.get("igdb_metadata", {}).get(
+                "alternative_names", []
+            ),
+            file_title=fs_rom_handler.get_file_name_with_no_tags(rom_attrs["fs_name"]),
         )
         if translated_name:
             rom_attrs["name"] = translated_name

@@ -440,16 +440,20 @@ def _clear_tables() -> None:
 
 @pytest.fixture(autouse=True)
 def no_live_translation(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the Google Translate and Wikidata steps off the network, so metadata stays as fetched."""
+    """Keep the Google Translate, Wikidata and Bangumi steps off the network, so metadata stays as fetched."""
 
     async def passthrough(text: str | None, *_args: Any, **_kwargs: Any) -> str | None:
         return text
 
-    async def no_wikidata_title(_igdb_slug: str | None) -> None:
+    async def no_wikidata_labels(_igdb_slug: str | None) -> dict[str, str]:
+        return {}
+
+    async def no_bangumi_title(_names: Any) -> None:
         return None
 
     monkeypatch.setattr("utils.translator.translate_text", passthrough)
-    monkeypatch.setattr("utils.translator.wikidata_zh_title", no_wikidata_title)
+    monkeypatch.setattr("utils.translator.wikidata_zh_labels", no_wikidata_labels)
+    monkeypatch.setattr("utils.translator.bangumi_zh_title", no_bangumi_title)
 
 
 @pytest.fixture(autouse=True)
