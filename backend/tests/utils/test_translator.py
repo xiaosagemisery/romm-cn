@@ -349,6 +349,13 @@ async def test_bangumi_zh_title_needs_an_exact_original_title():
 
 
 @pytest.mark.asyncio
+async def test_bangumi_zh_title_skips_a_chinese_title_without_han_characters():
+    search = AsyncMock(return_value=_bangumi_subjects(("F-ZERO X", "F-ZERO X")))
+    with patch("utils.translator._bangumi_search", search):
+        assert await bangumi_zh_title(["F-Zero X"]) is None
+
+
+@pytest.mark.asyncio
 async def test_bangumi_zh_title_searches_japanese_names_first_and_skips_empty_titles():
     search = AsyncMock(
         side_effect=[
@@ -436,17 +443,13 @@ def _patch_sources(
 @pytest.mark.parametrize(
     ("labels", "bangumi", "name", "file_title", "title"),
     [
-        # A Simplified Wikidata label, or a generic one already in Simplified, wins.
-        ({"zh-hans": "斑鸠", "zh": "斑鳩"}, "斑鸠Bangumi", "Ikaruga", None, "斑鸠"),
-        (
-            {"zh": "星之卡比 三重豪华版"},
-            "Bangumi",
-            "Kirby",
-            None,
-            "星之卡比 三重豪华版",
-        ),
-        # Bangumi beats a Traditional label, which is converted otherwise.
+        # Bangumi wins over every Wikidata label.
+        ({"zh-hans": "压缩空间"}, "压碎3D", "Crush3D", None, "压碎3D"),
         ({"zh": "薩爾達傳說"}, "塞尔达传说", "Zelda", None, "塞尔达传说"),
+        # Then a Simplified Wikidata label, or a generic one already in Simplified.
+        ({"zh-hans": "斑鸠", "zh": "斑鳩"}, None, "Ikaruga", None, "斑鸠"),
+        ({"zh": "星之卡比 三重豪华版"}, None, "Kirby", None, "星之卡比 三重豪华版"),
+        # A Traditional label is converted.
         ({"zh": "逆轉裁判5"}, None, "Ace Attorney", None, "逆转裁判5"),
         # A Chinese provider name is converted; a Latin one takes the filename.
         ({}, None, "瑪利歐派對", "马里奥聚会", "玛利欧派对"),

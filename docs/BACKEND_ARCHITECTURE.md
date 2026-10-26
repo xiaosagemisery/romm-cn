@@ -1159,7 +1159,7 @@ The core of RomM. Orchestrates library scanning and metadata enrichment.
    │   └── TheGamesDB
    ├── Download cover art and screenshots
    ├── Build aggregated metadata (RomMetadata)
-   ├── Simplified Chinese title: official list, Wikidata, Bangumi, OpenCC, filename; summary to zh-CN (utils/translator.py)
+   ├── Simplified Chinese title: official list, Bangumi, Wikidata, OpenCC, filename; summary to zh-CN (utils/translator.py)
    └── Create/update ROM in DB
 4. Emit real-time progress via Socket.IO
 5. Mark missing ROMs (files no longer on filesystem)

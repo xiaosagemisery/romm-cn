@@ -243,7 +243,8 @@ async def bangumi_zh_title(
     """Find a game's Chinese title on Bangumi.
 
     Only a subject whose original title equals one of `names` (ignoring case,
-    width, spaces and punctuation) counts. Japanese names are searched first,
+    width, spaces and punctuation) and whose Chinese title has Han characters
+    counts. Japanese names are searched first,
     since Bangumi lists Japanese games under their Japanese title. Provider
     names can include a sibling game's title, so when several subjects match,
     the one closest to the Chinese `file_title` wins.
@@ -261,7 +262,9 @@ async def bangumi_zh_title(
     for keyword in keywords[:BANGUMI_MAX_KEYWORDS]:
         for subject in await _bangumi_search(keyword):
             name_cn = (subject.get("name_cn") or "").strip()
-            if name_cn and exact_title_key(subject.get("name") or "") in keys:
+            if not HAN_CHARACTER_PATTERN.search(name_cn):
+                continue
+            if exact_title_key(subject.get("name") or "") in keys:
                 matches.append(to_simplified(name_cn))
         if matches and not file_zh_title:
             break
@@ -292,12 +295,15 @@ async def resolve_zh_title(
 ) -> str:
     """Pick a game's Simplified Chinese title without machine translation.
 
-    In order: the listed official title, a Simplified Wikidata label, the
-    Bangumi title, a Traditional Wikidata label or Chinese provider name
+    In order: the listed official title, the Bangumi title, a Simplified
+    Wikidata label, a Traditional Wikidata label or Chinese provider name
     converted to Simplified, then the Chinese filename. Falls back to `name`.
+    Bangumi comes before Wikidata because it names more games.
     """
     if official := official_name(name):
         return official
+    if bangumi := await bangumi_zh_title([name, *alternative_names], file_title):
+        return bangumi
 
     labels = await wikidata_zh_labels(igdb_slug)
     generic = labels.get("zh")
@@ -307,9 +313,6 @@ async def resolve_zh_title(
     )
     if simplified:
         return simplified
-
-    if bangumi := await bangumi_zh_title([name, *alternative_names], file_title):
-        return bangumi
     if generic:
         return to_simplified(generic)
     if HAN_CHARACTER_PATTERN.search(name) and not KANA_PATTERN.search(name):
