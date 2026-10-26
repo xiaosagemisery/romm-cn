@@ -448,7 +448,7 @@ def no_live_translation(monkeypatch: pytest.MonkeyPatch) -> None:
     async def no_wikidata_labels(_igdb_slug: str | None) -> dict[str, str]:
         return {}
 
-    async def no_bangumi_title(_names: Any) -> None:
+    async def no_bangumi_title(*_args: Any, **_kwargs: Any) -> None:
         return None
 
     monkeypatch.setattr("utils.translator.translate_text", passthrough)
