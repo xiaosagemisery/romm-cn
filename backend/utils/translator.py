@@ -7,7 +7,6 @@ from functools import lru_cache
 from pathlib import Path
 
 import httpx
-from opencc import OpenCC
 
 from logger.logger import log
 
@@ -17,16 +16,9 @@ OFFICIAL_NAMES_PATH = Path(__file__).with_name("official_names_zh.json")
 SEARCH_TITLES_PATH = Path(__file__).with_name("search_titles_en.json")
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 WIKIDATA_USER_AGENT = "romm-cn/0.1 (https://github.com/xiaosagemisery/romm-cn)"
-WIKIDATA_SIMPLIFIED_LANGS = ("zh-cn", "zh-hans", "zh-sg", "zh-my")
-# Wikidata label languages, Simplified Chinese first; the rest get converted.
-WIKIDATA_ZH_LANGS = (
-    *WIKIDATA_SIMPLIFIED_LANGS,
-    "zh",
-    "zh-hant",
-    "zh-tw",
-    "zh-hk",
-    "zh-mo",
-)
+# Only labels tagged as Simplified Chinese: the generic "zh" and the Traditional
+# ones can carry Taiwan or Hong Kong titles that differ from the mainland ones.
+WIKIDATA_ZH_LANGS = ("zh-cn", "zh-hans", "zh-sg", "zh-my")
 IGDB_SLUG_PATTERN = re.compile(r"[a-z0-9][a-z0-9_-]*")
 # Wikidata disambiguation suffix, e.g. "斑鳩 (電視遊戲)".
 LABEL_QUALIFIER_PATTERN = re.compile(r"\s*[（(][^()（）]*[)）]\s*$")
@@ -59,11 +51,6 @@ def _load_title_map(path: Path) -> dict[str, str]:
 @lru_cache(maxsize=1)
 def _official_names() -> dict[str, str]:
     return _load_title_map(OFFICIAL_NAMES_PATH)
-
-
-@lru_cache(maxsize=1)
-def _traditional_to_simplified() -> OpenCC:
-    return OpenCC("t2s")
 
 
 @lru_cache(maxsize=1)
@@ -136,9 +123,9 @@ async def translate_text(
 
 
 async def wikidata_zh_title(igdb_slug: str | None) -> str | None:
-    """Look up a game's Chinese title on Wikidata by its IGDB slug.
+    """Look up a game's Simplified Chinese title on Wikidata by its IGDB slug.
 
-    Returns None when Wikidata has no Chinese label or cannot be reached.
+    Returns None when Wikidata has no Simplified label or cannot be reached.
     """
     if not igdb_slug or not IGDB_SLUG_PATTERN.fullmatch(igdb_slug):
         return None
@@ -169,11 +156,7 @@ async def wikidata_zh_title(igdb_slug: str | None) -> str | None:
 
     labels = {row["lang"]["value"]: row["label"]["value"] for row in bindings}
     lang = next((lang for lang in WIKIDATA_ZH_LANGS if lang in labels), None)
-    title = None
-    if lang:
-        title = LABEL_QUALIFIER_PATTERN.sub("", labels[lang]).strip()
-        if lang not in WIKIDATA_SIMPLIFIED_LANGS:
-            title = _traditional_to_simplified().convert(title)
+    title = LABEL_QUALIFIER_PATTERN.sub("", labels[lang]).strip() if lang else None
     _WIKIDATA_CACHE[igdb_slug] = title or None
     return title or None
 
@@ -206,7 +189,7 @@ async def translate_game_metadata(
     """Resolve a game's title and translate its summary.
 
     The title is never machine translated: it becomes the listed official
-    title, else the game's Chinese title on Wikidata (found by `igdb_slug`),
+    title, else the game's Simplified Chinese title on Wikidata (found by `igdb_slug`),
     and stays as given when neither exists.
     """
     if not name and not summary:

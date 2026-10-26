@@ -31,7 +31,6 @@ dependencies = [
   "itsdangerous ~= 2.2",
   "joserfc ~= 1.7.5",
   "mutagen ~= 1.47",
-  "opencc-python-reimplemented ~= 0.1.7",
   "opentelemetry-distro ~= 0.56",
   "opentelemetry-exporter-otlp ~= 1.36",
   "opentelemetry-instrumentation-aiohttp-client ~= 0.56",
