@@ -183,6 +183,22 @@ class TestRequestsAgainstAServer:
         assert results == [{"id": 9, "game": {"id": 1}}]
         assert len(fake.endpoint("search")) == 1
 
+    async def test_alternative_names_use_their_endpoint(
+        self, igdb_server: tuple[ScriptedServer, IGDBService, MagicMock]
+    ):
+        fake, service, _ = igdb_server
+        fake.replies["alternative_names"] = [(200, [{"id": 3, "game": {"id": 1}}])]
+
+        results = await service.list_alternative_names(
+            fields=["game.name"], where='name ~ "Pocket Monsters Aka"', limit=10
+        )
+
+        assert results == [{"id": 3, "game": {"id": 1}}]
+        [request] = fake.endpoint("alternative_names")
+        assert await request.text() == (
+            'fields game.name; where name ~ "Pocket Monsters Aka"; limit 10;'
+        )
+
     async def test_a_second_unauthorized_reply_gives_up(
         self, igdb_server: tuple[ScriptedServer, IGDBService, MagicMock]
     ):

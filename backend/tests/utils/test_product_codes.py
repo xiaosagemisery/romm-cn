@@ -13,8 +13,10 @@ from utils import product_codes
 from utils.platform_slugs import UniversalPlatformSlug as UPS
 from utils.product_codes import (
     GAMETDB_TITLES_KEY,
+    GameTDBTitle,
     gamecube_product_code,
     gametdb_title,
+    igdb_title_by_alternative_name,
     n3ds_product_code,
     n64_header_title,
     parse_gametdb,
@@ -60,16 +62,22 @@ def test_gamecube_product_code_reads_the_hex_title_id(title_id, code):
     assert gamecube_product_code(title_id) == code
 
 
-def test_n3ds_product_code_follows_the_first_partition(tmp_path: Path):
+@pytest.mark.parametrize(
+    ("product", "code"),
+    [(b"CTR-P-BZLE", "BZLE"), (b"KTR-P-CFMJ", "CFMJ"), (b"homuhomu", None)],
+)
+def test_n3ds_product_code_follows_the_first_partition(
+    tmp_path: Path, product: bytes, code: str | None
+):
     image = bytearray(0x4400)
     image[0x100:0x104] = b"NCSD"
     image[0x120:0x124] = (0x20).to_bytes(4, "little")
     image[0x4100:0x4104] = b"NCCH"
-    image[0x4150:0x415A] = b"CTR-P-BZLE"
+    image[0x4150 : 0x4150 + len(product)] = product
     path = tmp_path / "game.cci"
     path.write_bytes(bytes(image))
 
-    assert n3ds_product_code(path) == "BZLE"
+    assert n3ds_product_code(path) == code
 
 
 def test_n3ds_product_code_ignores_other_files(tmp_path: Path):
@@ -128,23 +136,143 @@ def test_parse_gametdb_skips_3ds_homebrew():
 
 async def test_gametdb_title_refreshes_a_stale_database(mocker):
     mocker.patch.object(async_cache, "exists", new_callable=AsyncMock, return_value=0)
-    hget = mocker.patch.object(
-        async_cache, "hget", new_callable=AsyncMock, return_value="Super Mario Sunshine"
+    hmget = mocker.patch.object(
+        async_cache,
+        "hmget",
+        new_callable=AsyncMock,
+        return_value=["Super Mario Sunshine", None],
     )
     refresh = mocker.patch.object(product_codes, "_refresh_gametdb", new=AsyncMock())
 
-    assert await gametdb_title(UPS.NGC, "GMSE") == "Super Mario Sunshine"
+    assert await gametdb_title(UPS.NGC, "GMSE") == GameTDBTitle(
+        "Super Mario Sunshine", western=True
+    )
     refresh.assert_awaited_once_with(UPS.NGC)
-    hget.assert_awaited_once_with(GAMETDB_TITLES_KEY.format(platform=UPS.NGC), "GMSE")
+    hmget.assert_awaited_once_with(
+        GAMETDB_TITLES_KEY.format(platform=UPS.NGC), ["GMSE", "GMSP"]
+    )
 
 
 async def test_gametdb_title_reuses_a_fresh_database(mocker):
     mocker.patch.object(async_cache, "exists", new_callable=AsyncMock, return_value=1)
-    mocker.patch.object(async_cache, "hget", new_callable=AsyncMock, return_value=None)
+    mocker.patch.object(
+        async_cache, "hmget", new_callable=AsyncMock, return_value=[None, None, None]
+    )
     refresh = mocker.patch.object(product_codes, "_refresh_gametdb", new=AsyncMock())
 
-    assert await gametdb_title(UPS.N3DS, "ZZZZ") is None
+    assert await gametdb_title(UPS.N3DS, "ZZZJ") is None
     refresh.assert_not_awaited()
+
+
+async def test_gametdb_title_prefers_a_western_sibling_of_a_japanese_code(mocker):
+    mocker.patch.object(async_cache, "exists", new_callable=AsyncMock, return_value=1)
+    hmget = mocker.patch.object(
+        async_cache,
+        "hmget",
+        new_callable=AsyncMock,
+        return_value=[
+            "The Legend of Zelda: Tri Force Heroes",
+            None,
+            "Zelda no Densetsu: Triforce 3-Juushi",
+        ],
+    )
+
+    assert await gametdb_title(UPS.N3DS, "EA3J") == GameTDBTitle(
+        "The Legend of Zelda: Tri Force Heroes", western=True
+    )
+    hmget.assert_awaited_once_with(
+        GAMETDB_TITLES_KEY.format(platform=UPS.N3DS), ["EA3E", "EA3P", "EA3J"]
+    )
+
+
+async def test_gametdb_title_falls_back_to_the_japanese_entry(mocker):
+    mocker.patch.object(async_cache, "exists", new_callable=AsyncMock, return_value=1)
+    mocker.patch.object(
+        async_cache,
+        "hmget",
+        new_callable=AsyncMock,
+        return_value=[None, None, "Dai Gyakuten Saiban 2"],
+    )
+
+    assert await gametdb_title(UPS.N3DS, "AJ2J") == GameTDBTitle(
+        "Dai Gyakuten Saiban 2", western=False
+    )
+
+
+async def test_a_japanese_gametdb_title_resolves_through_igdb_alternative_names(
+    mocker,
+):
+    mocker.patch.object(
+        product_codes,
+        "gametdb_title",
+        new=AsyncMock(return_value=GameTDBTitle("Dai Gyakuten Saiban 2", False)),
+    )
+    mocker.patch.object(
+        product_codes,
+        "igdb_title_by_alternative_name",
+        new=AsyncMock(return_value="The Great Ace Attorney 2: Resolve"),
+    )
+
+    assert (
+        await product_codes._catalog_title(UPS.N3DS, "AJ2J")
+        == "The Great Ace Attorney 2: Resolve"
+    )
+
+
+async def test_a_western_gametdb_title_skips_igdb(mocker):
+    mocker.patch.object(
+        product_codes,
+        "gametdb_title",
+        new=AsyncMock(return_value=GameTDBTitle("Kirby: Planet Robobot", True)),
+    )
+    lookup = mocker.patch.object(
+        product_codes, "igdb_title_by_alternative_name", new=AsyncMock()
+    )
+
+    assert await product_codes._catalog_title(UPS.N3DS, "AT3A") == (
+        "Kirby: Planet Robobot"
+    )
+    lookup.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("results", "name"),
+    [
+        (
+            [{"game": {"name": "Pokemon Rumble Blast", "platforms": [37]}}] * 2,
+            "Pokemon Rumble Blast",
+        ),
+        (
+            [
+                {"game": {"name": "Fire Emblem Warriors", "platforms": [137, 130]}},
+                {"game": {"name": "Fire Emblem Warriors (Wii U)", "platforms": [41]}},
+            ],
+            "Fire Emblem Warriors",
+        ),
+        (
+            [
+                {"game": {"name": "A", "platforms": [37]}},
+                {"game": {"name": "B", "platforms": [37]}},
+            ],
+            None,
+        ),
+        ([], None),
+    ],
+)
+async def test_igdb_title_by_alternative_name_needs_one_game_on_the_platform(
+    mocker, results, name
+):
+    from handler.metadata import meta_igdb_handler
+
+    mocker.patch.object(meta_igdb_handler, "is_enabled", return_value=True)
+    lookup = mocker.patch.object(
+        meta_igdb_handler.igdb_service,
+        "list_alternative_names",
+        new=AsyncMock(return_value=results),
+    )
+
+    assert await igdb_title_by_alternative_name(UPS.N3DS, 'Super "Scramble"') == name
+    assert lookup.await_args.kwargs["where"] == 'name ~ "Super \\"Scramble\\""'
 
 
 async def test_a_chinese_filename_searches_by_its_product_code_title(mocker):
@@ -153,7 +281,7 @@ async def test_a_chinese_filename_searches_by_its_product_code_title(mocker):
     )
     mocker.patch.object(
         product_codes,
-        "gametdb_title",
+        "_catalog_title",
         new=AsyncMock(return_value="Super Mario Sunshine"),
     )
     rom = Rom(fs_name="阳光马里奥 英文版.gcm", title_id="474D5345")

@@ -27,7 +27,9 @@ from handler.metadata import igdb_handler
 from handler.metadata.base_handler import PS1_SERIAL_INDEX_KEY
 from handler.metadata.igdb_handler import (
     FAMICOM_IGDB_ID,
+    N3DS_IGDB_ID,
     NES_IGDB_ID,
+    NEW_N3DS_IGDB_ID,
     PS1_IGDB_ID,
     SNES_IGDB_ID,
     SUPER_FAMICOM_IGDB_ID,
@@ -534,6 +536,14 @@ class TestRegionalTwinPlatformHelpers:
         assert _platform_igdb_ids_with_twin(FAMICOM_IGDB_ID) == [
             FAMICOM_IGDB_ID,
             NES_IGDB_ID,
+        ]
+        assert _platform_igdb_ids_with_twin(N3DS_IGDB_ID) == [
+            N3DS_IGDB_ID,
+            NEW_N3DS_IGDB_ID,
+        ]
+        assert _platform_igdb_ids_with_twin(NEW_N3DS_IGDB_ID) == [
+            NEW_N3DS_IGDB_ID,
+            N3DS_IGDB_ID,
         ]
 
     def test_non_twin_platform_has_no_twin(self):

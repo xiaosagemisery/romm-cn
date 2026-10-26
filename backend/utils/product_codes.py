@@ -7,7 +7,7 @@ import io
 import string
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from defusedxml import ElementTree as ET
 
@@ -33,6 +33,9 @@ GAMETDB_REFRESH_SECONDS: Final = 7 * 24 * 3600
 GAMETDB_RETRY_SECONDS: Final = 3600
 # Entries of these types are hacks and homebrew that reuse a retail product code.
 GAMETDB_SKIPPED_TYPES: Final = frozenset({"CUSTOM", "Homebrew"})
+# A product code ends in its region letter. The US (E) and European (P) entries of
+# a game carry its official English title, where a Japanese entry is romanized.
+WESTERN_REGION_LETTERS: Final = ("E", "P")
 _gametdb_locks: dict[str, asyncio.Lock] = {}
 
 N3DS_EXTENSIONS: Final = frozenset({"3ds", "cci"})
@@ -76,11 +79,11 @@ async def product_code_title(rom: Rom) -> str | None:
     platform = rom.platform.slug if rom.platform else None
     if platform == UPS.NGC:
         code = gamecube_product_code(rom.title_id)
-        return await gametdb_title(UPS.NGC, code) if code else None
+        return await _catalog_title(UPS.NGC, code) if code else None
     if platform == UPS.N3DS and (rom.fs_extension or "").lower() in N3DS_EXTENSIONS:
         path = _rom_file_path(rom)
         code = await asyncio.to_thread(n3ds_product_code, path) if path else None
-        return await gametdb_title(UPS.N3DS, code) if code else None
+        return await _catalog_title(UPS.N3DS, code) if code else None
     if platform == UPS.N64 and (rom.fs_extension or "").lower() in N64_EXTENSIONS:
         path = _rom_file_path(rom)
         return await asyncio.to_thread(n64_header_title, path) if path else None
@@ -97,7 +100,7 @@ def gamecube_product_code(title_id: str | None) -> str | None:
 
 
 def n3ds_product_code(path: Path) -> str | None:
-    """The four-letter product code ("CTR-P-ABCE") in a 3DS cartridge image."""
+    """The four-letter product code ("CTR-P-ABCE", "KTR-P-ABCE" on New 3DS) in a 3DS image."""
     with path.open("rb") as rom_file:
         ncsd = rom_file.read(0x200)
         if ncsd[0x100:0x104] != b"NCSD":
@@ -109,7 +112,7 @@ def n3ds_product_code(path: Path) -> str | None:
         return None
     product = ncch[0x150:0x160].split(b"\0")[0].decode("ascii", "replace")
     code = product.rsplit("-", 1)[-1]
-    return code if product.startswith("CTR-") and len(code) == 4 else None
+    return code if product.startswith(("CTR-", "KTR-")) and len(code) == 4 else None
 
 
 def n64_header_title(path: Path) -> str | None:
@@ -131,8 +134,23 @@ def n64_header_title(path: Path) -> str | None:
     return name if len(name) >= 3 and set(name) <= N64_PRINTABLE else None
 
 
-async def gametdb_title(platform: str, code: str) -> str | None:
-    """The English GameTDB title for a product code, refreshing the cached database weekly."""
+class GameTDBTitle(NamedTuple):
+    title: str
+    western: bool
+
+
+async def _catalog_title(platform: str, code: str) -> str | None:
+    """The title to search a catalog for: GameTDB's western one, else IGDB's for a Japanese one."""
+    entry = await gametdb_title(platform, code)
+    if entry is None:
+        return None
+    if entry.western:
+        return entry.title
+    return await igdb_title_by_alternative_name(platform, entry.title) or entry.title
+
+
+async def gametdb_title(platform: str, code: str) -> GameTDBTitle | None:
+    """The GameTDB title for a product code, preferring its western releases."""
     lock = _gametdb_locks.setdefault(platform, asyncio.Lock())
     async with lock:
         if not await async_cache.exists(
@@ -140,8 +158,47 @@ async def gametdb_title(platform: str, code: str) -> str | None:
             GAMETDB_RETRY_KEY.format(platform=platform),
         ):
             await _refresh_gametdb(platform)
-    title = await async_cache.hget(GAMETDB_TITLES_KEY.format(platform=platform), code)
-    return title or None
+    candidates = list(
+        dict.fromkeys([*(code[:3] + letter for letter in WESTERN_REGION_LETTERS), code])
+    )
+    titles = await async_cache.hmget(
+        GAMETDB_TITLES_KEY.format(platform=platform), candidates
+    )
+    return next(
+        (
+            GameTDBTitle(title, candidate[3:] in WESTERN_REGION_LETTERS)
+            for candidate, title in zip(candidates, titles, strict=True)
+            if title
+        ),
+        None,
+    )
+
+
+async def igdb_title_by_alternative_name(platform: str, title: str) -> str | None:
+    """IGDB's own name for the one game on the platform that lists `title` as an alternative name."""
+    from adapters.services.igdb import IGDB_PLATFORM_LIST
+    from handler.metadata import meta_igdb_handler
+    from handler.metadata.igdb_handler import _platform_igdb_ids_with_twin
+
+    if not meta_igdb_handler.is_enabled():
+        return None
+    platform_ids = set(
+        _platform_igdb_ids_with_twin(IGDB_PLATFORM_LIST[UPS(platform)]["id"])
+    )
+    escaped = title.replace("\\", "\\\\").replace('"', '\\"')
+    results = await meta_igdb_handler.igdb_service.list_alternative_names(
+        fields=["game.name", "game.platforms"],
+        where=f'name ~ "{escaped}"',
+        limit=10,
+    )
+    names = {
+        name
+        for result in results
+        if (game := result.get("game"))
+        and (name := game.get("name"))
+        and platform_ids & set(game.get("platforms") or [])
+    }
+    return names.pop() if len(names) == 1 else None
 
 
 async def _refresh_gametdb(platform: str) -> None:

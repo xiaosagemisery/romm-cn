@@ -159,6 +159,27 @@ class IGDBService:
         )
         return games or []
 
+    async def list_alternative_names(
+        self,
+        *,
+        fields: Sequence[str] | None = None,
+        where: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Retrieve alternative names, such as a game's romanized Japanese title.
+
+        Reference: https://api-docs.igdb.com/#alternative-name
+        """
+        url = self.url.joinpath("alternative_names")
+        results = await self._request(
+            str(url),
+            list[dict[str, Any]],
+            fields=fields,
+            where=where,
+            limit=limit,
+        )
+        return results or []
+
     async def search(
         self,
         *,
