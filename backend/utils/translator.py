@@ -31,6 +31,10 @@ HAN_CHARACTER_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 CHINESE_RELEASE_LABEL_PATTERN = re.compile(
     r"(简体中文版|繁体中文版|中文版|汉化版|英文版|日文版|美版|日版|欧版)"
 )
+# Disc markers ("DiscA", "Disc 2"); a multi-disc game is catalogued as one title.
+DISC_MARKER_PATTERN = re.compile(r"\bdisc\s*[a-z0-9]\b", re.IGNORECASE)
+# A trailing "1" numbers the first entry of a series, which catalogs list without it.
+FIRST_ENTRY_NUMBER_PATTERN = re.compile(r"(?<![\d.])\s*1$")
 
 
 def normalize_title(title: str) -> str:
@@ -218,7 +222,9 @@ async def translate_search_term(search_term: str) -> str:
     if not HAN_CHARACTER_PATTERN.search(search_term):
         return search_term
 
-    title = " ".join(CHINESE_RELEASE_LABEL_PATTERN.sub(" ", search_term).split())
+    title = CHINESE_RELEASE_LABEL_PATTERN.sub(" ", search_term)
+    title = " ".join(DISC_MARKER_PATTERN.sub(" ", title).split())
+    title = FIRST_ENTRY_NUMBER_PATTERN.sub("", title)
     if known := _search_titles().get(normalize_title(title)):
         return known
 

@@ -160,6 +160,43 @@ async def test_translate_search_term_drops_release_labels_before_translating():
     )
 
 
+@pytest.mark.parametrize(
+    ("search_term", "title"),
+    [
+        ("生化危机4 英文版 DiscA", "生化危机4"),
+        ("生化危机 代号维罗妮卡 汉化版 Disc B", "生化危机 代号维罗妮卡"),
+        ("生化危机1 汉化版 DiscA", "生化危机"),
+        ("银河战士 Prime 1 汉化版", "银河战士 Prime"),
+        ("路易吉鬼屋1", "路易吉鬼屋"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_translate_search_term_drops_disc_markers_and_a_first_entry_number(
+    search_term: str, title: str
+):
+    with patch(
+        "utils.translator.translate_text",
+        new=AsyncMock(side_effect=lambda text, **_: text),
+    ) as translate:
+        assert await translate_search_term(search_term) == title
+
+    translate.assert_awaited_once_with(title, target_lang="en", source_lang="zh-CN")
+
+
+@pytest.mark.parametrize(
+    "search_term", ["勇者斗恶龙11", "马里奥与路易吉RPG1 DX", "圆形竞技场 1.2.1"]
+)
+@pytest.mark.asyncio
+async def test_translate_search_term_keeps_numbers_that_are_part_of_the_title(
+    search_term: str,
+):
+    with patch(
+        "utils.translator.translate_text",
+        new=AsyncMock(side_effect=lambda text, **_: text),
+    ):
+        assert await translate_search_term(search_term) == search_term
+
+
 @pytest.mark.asyncio
 async def test_translate_search_term_keeps_the_title_when_translation_fails():
     with patch(
