@@ -82,6 +82,11 @@
 - Fix: run local tests with `-p romm-cn-test` and an override that renames the containers, maps another port (8090) and uses fresh volumes; never stop or modify the existing `romm` containers.
 - Future guidance: check `docker ps -a` before any compose `up` on this machine.
 
+- Symptom: Docker Desktop quit at startup with "An unexpected error occurred", first on `remove C:\Users\18521\AppData\Local\Docker\run\dockerInference`, then on `C:\Users\18521\AppData\Local\docker-secrets-engine\engine.sock`: "The file cannot be accessed by the system."
+- Root cause: Docker Desktop had been launched from the agent shell, which runs inside the Claude desktop app's packaged-app context. The Unix socket files that run created were left behind as reparse points that neither Docker nor PowerShell or `cmd del` could open or delete on the next start.
+- Fix: quit Docker Desktop, rename the folders holding the stale sockets (`Docker\run`, `docker-secrets-engine`) from a normal PowerShell, then start Docker Desktop from the Start menu. Renaming works where deleting fails. Never press "Reset to factory defaults": it wipes the user's own RomM containers and volumes.
+- Future guidance: never start Docker Desktop from the agent shell. If the engine is down, ask the user to start it from the Start menu.
+
 ## Agent shell
 
 - Symptom: after a Bash call that ran `cd backend/...`, later relative commands ran in the wrong folder.
