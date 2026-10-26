@@ -14,6 +14,24 @@ _TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
 GOOGLE_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
 OFFICIAL_NAMES_PATH = Path(__file__).with_name("official_names_zh.json")
 SEARCH_TITLES_PATH = Path(__file__).with_name("search_titles_en.json")
+WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
+WIKIDATA_USER_AGENT = "romm-cn/0.1 (https://github.com/xiaosagemisery/romm-cn)"
+# Wikidata label languages, Simplified Chinese first.
+WIKIDATA_ZH_LANGS = (
+    "zh-cn",
+    "zh-hans",
+    "zh-sg",
+    "zh-my",
+    "zh",
+    "zh-hant",
+    "zh-tw",
+    "zh-hk",
+    "zh-mo",
+)
+IGDB_SLUG_PATTERN = re.compile(r"[a-z0-9][a-z0-9_-]*")
+# Wikidata disambiguation suffix, e.g. "斑鳩 (電視遊戲)".
+LABEL_QUALIFIER_PATTERN = re.compile(r"\s*[（(][^()（）]*[)）]\s*$")
+_WIKIDATA_CACHE: dict[str, str | None] = {}
 # Latin-only token that machine translation leaves alone, standing in for the
 # game title while the summary is translated.
 TITLE_PLACEHOLDER = "ZQX0ZQX"
@@ -113,6 +131,51 @@ async def translate_text(
     return text
 
 
+async def wikidata_zh_title(igdb_slug: str | None) -> str | None:
+    """Look up a game's Chinese title on Wikidata by its IGDB slug.
+
+    Returns None when Wikidata has no Chinese label or cannot be reached.
+    """
+    if not igdb_slug or not IGDB_SLUG_PATTERN.fullmatch(igdb_slug):
+        return None
+    if igdb_slug in _WIKIDATA_CACHE:
+        return _WIKIDATA_CACHE[igdb_slug]
+
+    langs = ", ".join(f'"{lang}"' for lang in WIKIDATA_ZH_LANGS)
+    query = (
+        "SELECT ?lang ?label WHERE { "
+        f'?item wdt:P5794 "{igdb_slug}" . ?item rdfs:label ?label . '
+        f"BIND(LANG(?label) AS ?lang) FILTER(?lang IN ({langs})) }}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                WIKIDATA_SPARQL_URL,
+                params={"query": query},
+                headers={
+                    "Accept": "application/sparql-results+json",
+                    "User-Agent": WIKIDATA_USER_AGENT,
+                },
+            )
+            response.raise_for_status()
+            bindings = response.json()["results"]["bindings"]
+    except Exception as exc:
+        log.warning(f"Wikidata lookup failed for {igdb_slug!r}: {exc}")
+        return None
+
+    labels = {row["lang"]["value"]: row["label"]["value"] for row in bindings}
+    title = next(
+        (
+            LABEL_QUALIFIER_PATTERN.sub("", labels[lang]).strip()
+            for lang in WIKIDATA_ZH_LANGS
+            if lang in labels
+        ),
+        None,
+    )
+    _WIKIDATA_CACHE[igdb_slug] = title or None
+    return title or None
+
+
 async def _translate_summary(
     summary: str, name: str | None, title: str | None, target_lang: str
 ) -> str:
@@ -136,16 +199,24 @@ async def translate_game_metadata(
     name: str | None,
     summary: str | None,
     target_lang: str = "zh-CN",
+    igdb_slug: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Resolve a game's title and translate its summary.
 
-    The title is never machine translated: it becomes the verified official
-    title when one is known, and stays as given otherwise.
+    The title is never machine translated: it becomes the listed official
+    title, else the game's Chinese title on Wikidata (found by `igdb_slug`),
+    and stays as given when neither exists.
     """
     if not name and not summary:
         return name, summary
 
-    title = (official_name(name, target_lang) or name) if name else name
+    title = name
+    if name and target_lang.lower().startswith("zh"):
+        title = (
+            official_name(name, target_lang)
+            or await wikidata_zh_title(igdb_slug)
+            or name
+        )
     translated_summary = summary
     if summary:
         translated_summary = await _translate_summary(summary, name, title, target_lang)

@@ -1685,7 +1685,9 @@ async def scan_rom(
 
     if rom_attrs.get("name") or rom_attrs.get("summary"):
         translated_name, translated_summary = await translate_game_metadata(
-            rom_attrs.get("name"), rom_attrs.get("summary")
+            rom_attrs.get("name"),
+            rom_attrs.get("summary"),
+            igdb_slug=igdb_handler_rom.get("slug"),
         )
         if translated_name:
             rom_attrs["name"] = translated_name

@@ -6,20 +6,24 @@ import pytest
 
 from utils.translator import (
     _TRANSLATION_CACHE,
+    _WIKIDATA_CACHE,
     TITLE_PLACEHOLDER,
     normalize_title,
     official_name,
     translate_game_metadata,
     translate_search_term,
     translate_text,
+    wikidata_zh_title,
 )
 
 
 @pytest.fixture(autouse=True)
 def clear_cache():
     _TRANSLATION_CACHE.clear()
+    _WIKIDATA_CACHE.clear()
     yield
     _TRANSLATION_CACHE.clear()
+    _WIKIDATA_CACHE.clear()
 
 
 @pytest.mark.asyncio
@@ -105,10 +109,10 @@ async def test_translate_game_metadata_falls_back_when_the_placeholder_is_lost()
 
     with patch("utils.translator.translate_text", fake_translate):
         name, summary = await translate_game_metadata(
-            "Shining Soul", "Shining Soul is an action RPG."
+            "Obscure Quest", "Obscure Quest is an action RPG."
         )
 
-    assert name == "Shining Soul"
+    assert name == "Obscure Quest"
     assert summary == "一款游戏。"
 
 
@@ -172,3 +176,114 @@ async def test_translate_search_term_prefers_a_known_english_title():
         assert await translate_search_term("星之卡比  三重彩") == "Kirby: Triple Deluxe"
 
     translate.assert_not_awaited()
+
+
+def _wikidata_response(rows: dict[str, str]) -> MagicMock:
+    response = MagicMock()
+    response.json = lambda: {
+        "results": {
+            "bindings": [
+                {"lang": {"value": lang}, "label": {"value": label}}
+                for lang, label in rows.items()
+            ]
+        }
+    }
+    return response
+
+
+def _patch_wikidata(response: MagicMock | Exception):
+    client = AsyncMock()
+    if isinstance(response, Exception):
+        client.get.side_effect = response
+    else:
+        client.get.return_value = response
+    patcher = patch("httpx.AsyncClient")
+    mock_cls = patcher.start()
+    mock_cls.return_value.__aenter__.return_value = client
+    return patcher, client
+
+
+@pytest.mark.asyncio
+async def test_wikidata_zh_title_prefers_simplified_and_drops_the_qualifier():
+    patcher, client = _patch_wikidata(
+        _wikidata_response(
+            {"zh": "斑鳩 (電視遊戲)", "zh-hant": "斑鳩", "zh-cn": "斑鸠 (电子游戏)"}
+        )
+    )
+    try:
+        assert await wikidata_zh_title("ikaruga") == "斑鸠"
+        assert await wikidata_zh_title("ikaruga") == "斑鸠"
+    finally:
+        patcher.stop()
+
+    client.get.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wikidata_zh_title_falls_back_to_traditional_when_it_is_all_there_is():
+    patcher, _client = _patch_wikidata(_wikidata_response({"zh-hant": "完美黑暗"}))
+    try:
+        assert await wikidata_zh_title("perfect-dark") == "完美黑暗"
+    finally:
+        patcher.stop()
+
+
+@pytest.mark.asyncio
+async def test_wikidata_zh_title_is_none_without_a_label_and_failures_are_not_cached():
+    patcher, _client = _patch_wikidata(_wikidata_response({}))
+    try:
+        assert await wikidata_zh_title("obscure-game") is None
+    finally:
+        patcher.stop()
+
+    patcher, client = _patch_wikidata(Exception("rate limited"))
+    try:
+        assert await wikidata_zh_title("flaky-game") is None
+    finally:
+        patcher.stop()
+    assert "flaky-game" not in _WIKIDATA_CACHE
+    client.get.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wikidata_zh_title_rejects_a_slug_that_is_not_an_igdb_slug():
+    with patch("httpx.AsyncClient") as mock_cls:
+        assert await wikidata_zh_title(None) is None
+        assert await wikidata_zh_title('x" . } #') is None
+    mock_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_game_metadata_uses_the_wikidata_title_in_the_summary():
+    async def fake_translate(text: str | None, **_kwargs):
+        return f"《{TITLE_PLACEHOLDER}》是一款赛车游戏。"
+
+    async def fake_title(slug: str | None):
+        assert slug == "mario-kart-7"
+        return "马力欧卡丁车7"
+
+    with (
+        patch("utils.translator.translate_text", fake_translate),
+        patch("utils.translator.wikidata_zh_title", fake_title),
+    ):
+        name, summary = await translate_game_metadata(
+            "Mario Kart 7",
+            "Mario Kart 7 is a racing game.",
+            igdb_slug="mario-kart-7",
+        )
+
+    assert name == "马力欧卡丁车7"
+    assert summary == "《马力欧卡丁车7》是一款赛车游戏。"
+
+
+@pytest.mark.asyncio
+async def test_listed_official_name_wins_over_wikidata():
+    async def fake_title(_slug: str | None):
+        raise AssertionError("Wikidata must not be asked for a listed title")
+
+    with patch("utils.translator.wikidata_zh_title", fake_title):
+        name, _summary = await translate_game_metadata(
+            "Shining Soul", None, igdb_slug="shining-soul"
+        )
+
+    assert name == "光明之魂"

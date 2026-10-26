@@ -2147,9 +2147,11 @@ async def update_rom(
     elif rom.steam_id and not cleaned_data["steam_id"]:
         cleaned_data.update({"steam_id": None, "steam_metadata": {}})
 
+    igdb_slug: str | None = None
     if cleaned_data["igdb_id"] and int(cleaned_data["igdb_id"]) != rom.igdb_id:
         igdb_rom = await meta_igdb_handler.get_rom_by_id(rom, cleaned_data["igdb_id"])
         if igdb_rom.get("igdb_id"):
+            igdb_slug = igdb_rom.get("slug")
             cleaned_data.update(igdb_rom)
     elif rom.igdb_id and not cleaned_data["igdb_id"]:
         cleaned_data.update({"igdb_id": None, "igdb_metadata": {}})
@@ -2231,6 +2233,7 @@ async def update_rom(
         t_name, t_summary = await translate_game_metadata(
             fetched_name if translate_name else None,
             fetched_summary if translate_summary else None,
+            igdb_slug=igdb_slug,
         )
         if translate_name and t_name:
             name_value = t_name

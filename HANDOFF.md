@@ -34,7 +34,7 @@ Cleanup after the upstream sync, one commit per area on `sync/upstream-all`:
 
 ## Remaining
 
-- `backend/utils/official_names_zh.json` has one verified entry (Super Smash Bros. -> 任天堂明星大乱斗). The other official titles listed in issue #1 still need a reliable source before they go in; add them there once confirmed.
+- Official Chinese titles are looked up on Wikidata by IGDB slug (`wikidata_zh_title`); `backend/utils/official_names_zh.json` holds manual overrides for titles Wikidata lacks (Shining Soul, Majora's Mask) or gets wrong. Wikidata is only reachable from this sandbox after the user allowed `query.wikidata.org`.
 - Manual matching of the six unmatched test games was paused after the first (Kirby: Triple Deluxe, stored in English) pending issue #1; it can resume now that titles are kept as provided.
 - The summary title placeholder (`TITLE_PLACEHOLDER`) was only tested with a mocked translator; check it once against the live Google endpoint from a network that isn't rate limited.
 - Not done by choice:
