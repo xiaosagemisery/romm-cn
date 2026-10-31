@@ -440,6 +440,7 @@ async def test_scan_rom_nameless_match_takes_the_cleaned_filename(
         platform,
         "P.N.03 英文版.rvz",
         fs_stem="P.N.03 英文版",
+        fs_extension="rvz",
         fs_name_no_tags="P.N.03 英文版",
         fs_path="n64/P.N.03 英文版",
         fs_size_bytes=1024,
