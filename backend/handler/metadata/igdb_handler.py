@@ -203,6 +203,30 @@ def _expanded_names(entries: Sequence[Any]) -> list[str]:
     ]
 
 
+def _version_parent(rom: Game) -> Game | None:
+    """The main game an edition (such as a launch edition) is a version of."""
+    parent = rom.get("version_parent")
+    if not isinstance(parent, dict):
+        return None
+    assert mark_expanded(parent)
+    return parent
+
+
+def _version_parent_names(rom: Game) -> list[str]:
+    parent = _version_parent(rom)
+    if parent is None:
+        return []
+    alternative_names = parent.get("alternative_names", [])
+    game_localizations = parent.get("game_localizations", [])
+    return pydash.compact(
+        [
+            parent.get("name"),
+            *_expanded_names(alternative_names),
+            *_expanded_names(game_localizations),
+        ]
+    )
+
+
 def extract_metadata_from_igdb_rom(
     self: MetadataHandler, rom: Game, platform_igdb_id: int | None
 ) -> IGDBMetadata:
@@ -304,13 +328,14 @@ def extract_metadata_from_igdb_rom(
                 )
             ),
             # The canonical name too, so it stays searchable when a localized
-            # title is displayed.
+            # title is displayed. An edition also goes by its main game's names.
             "alternative_names": pydash.uniq(
                 pydash.compact(
                     [
                         rom.get("name"),
                         *_expanded_names(alternative_names),
                         *_expanded_names(game_localizations),
+                        *_version_parent_names(rom),
                     ]
                 )
             ),
@@ -541,6 +566,9 @@ def build_igdb_rom(
     assert mark_list_expanded(rom_screenshots)
 
     localized_name, localized_cover = extract_localized_data(rom, preferred_locale)
+    # IGDB often has no cover for an edition, but its main game shows the same box.
+    if not localized_cover and (parent := _version_parent(rom)):
+        localized_cover = pydash.get(parent, "cover.url", "")
 
     return IGDBRom(
         igdb_id=rom["id"],
@@ -1186,6 +1214,10 @@ GAMES_FIELDS = (
     "multiplayer_modes.splitscreenonline",
     "multiplayer_modes.platform.id",
     "multiplayer_modes.platform.name",
+    "version_parent.name",
+    "version_parent.cover.url",
+    "version_parent.alternative_names.name",
+    "version_parent.game_localizations.name",
 )
 
 

@@ -18,6 +18,7 @@ from adapters.services.igdb import (
 )
 from adapters.services.igdb_types import (
     AlternativeName,
+    Cover,
     ExpandableField,
     Game,
     GameLocalization,
@@ -1634,3 +1635,33 @@ class TestAlternativeNames:
             "Bleach: The 3rd Phantom",
             "ブリーチ ザ・サード・ファントム",
         ]
+
+    def test_an_edition_without_a_cover_takes_its_main_game_cover_and_names(self):
+        parent = _make_game(
+            11317,
+            "The Legend of Legacy",
+            game_localizations=["レジェンド オブ レガシー"],
+        )
+        parent["cover"] = Cover(id=1, url="//images.igdb.com/t_thumb/co2hau.jpg")
+        game = _make_game(44020, "The Legend of Legacy: Launch Edition")
+        game["version_parent"] = parent
+
+        rom = build_igdb_rom(IGDBHandler(), game, None, N3DS_IGDB_ID)
+
+        assert rom["url_cover"].endswith("/t_1080p/co2hau.jpg")
+        assert rom["igdb_metadata"]["alternative_names"] == [
+            "The Legend of Legacy: Launch Edition",
+            "The Legend of Legacy",
+            "レジェンド オブ レガシー",
+        ]
+
+    def test_an_edition_keeps_its_own_cover(self):
+        parent = _make_game(11317, "The Legend of Legacy")
+        parent["cover"] = Cover(id=1, url="//images.igdb.com/t_thumb/parent.jpg")
+        game = _make_game(44020, "The Legend of Legacy: Launch Edition")
+        game["cover"] = Cover(id=2, url="//images.igdb.com/t_thumb/edition.jpg")
+        game["version_parent"] = parent
+
+        rom = build_igdb_rom(IGDBHandler(), game, None, N3DS_IGDB_ID)
+
+        assert rom["url_cover"].endswith("/t_1080p/edition.jpg")
