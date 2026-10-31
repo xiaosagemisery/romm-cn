@@ -44,3 +44,6 @@
 - Symptom: after adding F-Zero GX to `official_names_zh.json`, `test_resolve_zh_title_order` failed with `assert '零式赛车GX' == 'F-Zero GX'`.
 - Cause: the test used F-Zero GX as a game with no Chinese name, and the official list is checked first.
 - Fix: use a title that is not in the list (Wave Race: Blue Storm). Pick test titles that no data file lists.
+- Symptom: CI failed once with `tests/adapters/services/test_igdb.py::TestAgainstAServer::test_a_rejected_token_is_refreshed_and_retried` (`assert None == [{'id': 1}]`, a 401 from the local test server) on a commit that did not touch the IGDB adapter, in only one of the two database jobs.
+- Cause: flaky; the same commit passed after `gh run rerun <id> --failed`.
+- Fix: rerun the failed job before investigating, and look into the token refresh test if it fails again.
