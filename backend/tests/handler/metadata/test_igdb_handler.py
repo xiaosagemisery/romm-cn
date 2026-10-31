@@ -1493,6 +1493,48 @@ class TestGetRom:
         }
         assert searched == ["nothing like it", "nothing like it"]
 
+    async def test_a_dotted_title_is_searched_again_with_its_punctuation(
+        self, handler: IGDBHandler, monkeypatch: pytest.MonkeyPatch
+    ):
+        game = _make_game(4060, "P.N.03")
+        searched: list[str] = []
+
+        async def search_rom(
+            search_term: str, platform_igdb_id: int, with_game_type: bool = False
+        ) -> Game | None:
+            searched.append(search_term)
+            return game if search_term == "p.n.03" else None
+
+        monkeypatch.setattr(handler, "_search_rom", search_rom)
+
+        rom = await handler.get_rom(_rom(), "P.N.03 (USA).iso", SNES_IGDB_ID)
+
+        assert rom["igdb_id"] == 4060
+        assert searched == ["p n 03", "p n 03", "p.n.03"]
+
+    async def test_the_filename_spelling_is_tried_when_the_resolved_title_misses(
+        self, handler: IGDBHandler, monkeypatch: pytest.MonkeyPatch
+    ):
+        game = _make_game(4060, "P.N.03")
+        searched: list[str] = []
+
+        async def search_rom(
+            search_term: str, platform_igdb_id: int, with_game_type: bool = False
+        ) -> Game | None:
+            searched.append(search_term)
+            return game if search_term == "p.n.03" else None
+
+        async def catalog_title(*_args: Any) -> str:
+            return "P.N. 03"
+
+        monkeypatch.setattr(handler, "_search_rom", search_rom)
+        monkeypatch.setattr(handler, "_resolve_indexed_title", catalog_title)
+
+        rom = await handler.get_rom(_rom(), "P.N.03 英文版.rvz", SNES_IGDB_ID)
+
+        assert rom["igdb_id"] == 4060
+        assert searched == ["p n 03", "p n 03", "p.n. 03", "p.n.03"]
+
     async def test_nothing_found_is_no_match(self, handler: IGDBHandler):
         rom = await handler.get_rom(_rom(), "Nothing Like It.sfc", SNES_IGDB_ID)
 

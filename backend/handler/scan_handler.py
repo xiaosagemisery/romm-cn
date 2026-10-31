@@ -1683,26 +1683,27 @@ async def scan_rom(
             if ranked[0] == MetadataSource.SGDB:
                 rom_attrs["url_cover"] = sgdb_cover
 
-    if rom_attrs.get("name") or rom_attrs.get("summary"):
-        translated_name, translated_summary = await translate_game_metadata(
-            rom_attrs.get("name"),
-            rom_attrs.get("summary"),
-            igdb_slug=igdb_handler_rom.get("slug"),
-            alternative_names=igdb_handler_rom.get("igdb_metadata", {}).get(
-                "alternative_names", []
-            ),
-            file_title=fs_rom_handler.get_file_name_with_no_tags(rom_attrs["fs_name"]),
-        )
-        if translated_name:
-            rom_attrs["name"] = translated_name
-        if translated_summary:
-            rom_attrs["summary"] = translated_summary
-
-    # Libretro matches carry no name, so a ROM only it identified keeps its own.
+    file_title = fs_rom_handler.get_file_name_with_no_tags(rom_attrs["fs_name"])
+    # Libretro matches carry no name, so a ROM only it identified keeps its own,
+    # or takes its filename's, which still goes through title resolution.
     if not rom_attrs.get("name"):
-        rom_attrs["name"] = rom.name or fs_rom_handler.get_file_name_with_no_tags(
-            rom_attrs["fs_name"]
+        rom_attrs["name"] = (
+            file_title if rom.name in (None, "", rom.fs_name) else rom.name
         )
+
+    translated_name, translated_summary = await translate_game_metadata(
+        rom_attrs["name"],
+        rom_attrs.get("summary"),
+        igdb_slug=igdb_handler_rom.get("slug"),
+        alternative_names=igdb_handler_rom.get("igdb_metadata", {}).get(
+            "alternative_names", []
+        ),
+        file_title=file_title,
+    )
+    if translated_name:
+        rom_attrs["name"] = translated_name
+    if translated_summary:
+        rom_attrs["summary"] = translated_summary
 
     log.info(
         f"{hl(rom_attrs['fs_name'])} identified as {hl(rom_attrs['name'], color=BLUE)} {emoji.EMOJI_ALIEN_MONSTER}",

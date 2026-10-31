@@ -297,8 +297,9 @@ async def resolve_zh_title(
 
     In order: the listed official title, the Bangumi title, a Simplified
     Wikidata label, a Traditional Wikidata label or Chinese provider name
-    converted to Simplified, then the Chinese filename. Falls back to `name`.
-    Bangumi comes before Wikidata because it names more games.
+    converted to Simplified, then the Chinese filename. Falls back to `name`,
+    without its release labels when it is the filename itself. Bangumi comes
+    before Wikidata because it names more games.
     """
     if official := official_name(name):
         return official
@@ -315,9 +316,16 @@ async def resolve_zh_title(
         return simplified
     if generic:
         return to_simplified(generic)
-    if HAN_CHARACTER_PATTERN.search(name) and not KANA_PATTERN.search(name):
+    is_file_title = name == file_title
+    if (
+        HAN_CHARACTER_PATTERN.search(name)
+        and not KANA_PATTERN.search(name)
+        and not is_file_title
+    ):
         return to_simplified(name)
-    return filename_zh_title(file_title) or name
+    if title := filename_zh_title(file_title):
+        return title
+    return (_clean_chinese_title(name) or name) if is_file_title else name
 
 
 async def _translate_summary(
@@ -368,12 +376,15 @@ async def translate_search_term(search_term: str) -> str:
     """Turn a filename-derived search term with Chinese characters into English.
 
     A title listed in `search_titles_en.json` maps to its known English title;
-    any other is machine translated.
+    any other with Chinese characters left after the release labels go is
+    machine translated.
     """
     if not HAN_CHARACTER_PATTERN.search(search_term):
         return search_term
 
     title = _clean_chinese_title(search_term)
+    if not HAN_CHARACTER_PATTERN.search(title):
+        return title
     if known := _search_titles().get(normalize_title(title)):
         return known
 

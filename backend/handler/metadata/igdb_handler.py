@@ -27,6 +27,7 @@ from logger.logger import log
 from models.rom import Rom
 from utils.context import ctx_httpx_client
 from utils.platform_slugs import UniversalPlatformSlug as UPS
+from utils.translator import translate_search_term
 
 from .base_handler import (
     BaseRom,
@@ -875,18 +876,18 @@ class IGDBHandler(MetadataHandler):
                     f"IGDB ID {igdb_id_from_tag} from filename tag not found in IGDB"
                 )
 
-        search_term = fs_rom_handler.get_file_name_with_no_tags(fs_name)
+        file_term = fs_rom_handler.get_file_name_with_no_tags(fs_name)
         fallback_rom = IGDBRom(igdb_id=None)
-        search_term = await self._resolve_indexed_title(
+        resolved_term = await self._resolve_indexed_title(
             rom,
             fs_name,
-            search_term,
+            file_term,
             platform_igdb_id,
             IGDB_INDEXED_FORMAT_PLATFORMS,
             fallback_rom,
         )
 
-        search_term = self.normalize_search_term(search_term)
+        search_term = self.normalize_search_term(resolved_term)
 
         log.debug("Searching for %s on IGDB with game_type", search_term)
         res = await self._search_rom(search_term, platform_igdb_id, with_game_type=True)
@@ -900,6 +901,13 @@ class IGDBHandler(MetadataHandler):
                 unbranded, platform_igdb_id, with_game_type=True
             ) or await self._search_rom(unbranded, platform_igdb_id)
 
+        if not res:
+            res = await self._search_keeping_punctuation(
+                [resolved_term, await translate_search_term(file_term)],
+                search_term,
+                platform_igdb_id,
+            )
+
         # IGDB search is fuzzy so no need to split the search term by special characters
         if not res:
             return fallback_rom
@@ -907,6 +915,24 @@ class IGDBHandler(MetadataHandler):
         return build_igdb_rom(
             self, res, get_igdb_preferred_locale(rom=rom), platform_igdb_id
         )
+
+    async def _search_keeping_punctuation(
+        self, terms: Sequence[str], tried: str, platform_igdb_id: int
+    ) -> Game | None:
+        """Search for `terms` with their punctuation kept.
+
+        Normalizing turns "P.N.03" into "p n 03", which IGDB's search misses.
+        Both the resolved title and the filename's own are tried, since a
+        catalog can spell a title differently ("P.N. 03").
+        """
+        for term in dict.fromkeys(terms):
+            punctuated = self.normalize_search_term(term, remove_punctuation=False)
+            if punctuated == tried:
+                continue
+            log.debug("Searching for %s on IGDB with its punctuation", punctuated)
+            if res := await self._search_rom(punctuated, platform_igdb_id):
+                return res
+        return None
 
     def _without_brand_prefix(self, search_term: str) -> str | None:
         """The normalized search term without a leading publisher brand, if it has one."""

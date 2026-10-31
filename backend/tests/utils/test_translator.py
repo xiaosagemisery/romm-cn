@@ -216,6 +216,14 @@ async def test_translate_search_term_keeps_the_title_when_translation_fails():
 
 
 @pytest.mark.asyncio
+async def test_translate_search_term_keeps_a_latin_title_without_translating():
+    with patch("utils.translator.translate_text", new=AsyncMock()) as translate:
+        assert await translate_search_term("P.N.03 英文版") == "P.N.03"
+
+    translate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_translate_search_term_prefers_a_known_english_title():
     with patch("utils.translator.translate_text", new=AsyncMock()) as translate:
         assert await translate_search_term("斑鸠 汉化版") == "Ikaruga"
@@ -462,6 +470,9 @@ def _patch_sources(
         ),
         ({}, None, "Wetrix", "围水方块", "围水方块"),
         ({}, None, "Wetrix", "Wetrix (USA)", "Wetrix"),
+        # A name that is the filename itself loses its release labels.
+        ({}, None, "P.N.03 英文版", "P.N.03 英文版", "P.N.03"),
+        ({}, None, "大盗伍佑衛門2 汉化版", "大盗伍佑衛門2 汉化版", "大盗伍佑卫门2"),
     ],
 )
 @pytest.mark.asyncio

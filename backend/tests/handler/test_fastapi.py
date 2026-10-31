@@ -426,6 +426,52 @@ async def test_scan_rom_unmatched_replaces_placeholder_name(
 @patch.object(meta_playmatch_handler, "is_enabled", return_value=False)
 @patch.object(meta_hasheous_handler, "get_igdb_game", new_callable=AsyncMock)
 @patch.object(meta_hasheous_handler, "lookup_rom", new_callable=AsyncMock)
+async def test_scan_rom_nameless_match_takes_the_cleaned_filename(
+    mock_lookup, mock_get_igdb, mock_playmatch_enabled
+):
+    hasheous_result = HasheousRom(
+        hasheous_id=999, igdb_id=None, tgdb_id=None, name=None
+    )
+    mock_lookup.return_value = (hasheous_result, True)
+    mock_get_igdb.return_value = hasheous_result
+
+    platform = make_platform("n64", id=1, name="Nintendo 64", igdb_id=4, hasheous_id=64)
+    rom = make_rom(
+        platform,
+        "P.N.03 英文版.rvz",
+        fs_stem="P.N.03 英文版",
+        fs_name_no_tags="P.N.03 英文版",
+        fs_path="n64/P.N.03 英文版",
+        fs_size_bytes=1024,
+        tags=[],
+    )
+
+    async with initialize_context():
+        result = await scan_rom(
+            platform=platform,
+            scan_type=ScanType.UNMATCHED,
+            rom=rom,
+            fs_rom={
+                "fs_name": "P.N.03 英文版.rvz",
+                "fs_path": rom.fs_path,
+                "flat": True,
+                "files": [],
+                "crc_hash": "",
+                "md5_hash": "",
+                "sha1_hash": "",
+                "ra_hash": "",
+            },
+            metadata_sources=[MetadataSource.HASHEOUS],
+            newly_added=True,
+        )
+
+    assert result.hasheous_id == 999
+    assert result.name == "P.N.03"
+
+
+@patch.object(meta_playmatch_handler, "is_enabled", return_value=False)
+@patch.object(meta_hasheous_handler, "get_igdb_game", new_callable=AsyncMock)
+@patch.object(meta_hasheous_handler, "lookup_rom", new_callable=AsyncMock)
 async def test_scan_rom_unmatched_preserves_custom_name(
     mock_lookup, mock_get_igdb, mock_playmatch_enabled
 ):
