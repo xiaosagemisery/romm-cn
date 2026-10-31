@@ -212,21 +212,6 @@ def _version_parent(rom: Game) -> Game | None:
     return parent
 
 
-def _version_parent_names(rom: Game) -> list[str]:
-    parent = _version_parent(rom)
-    if parent is None:
-        return []
-    alternative_names = parent.get("alternative_names", [])
-    game_localizations = parent.get("game_localizations", [])
-    return pydash.compact(
-        [
-            parent.get("name"),
-            *_expanded_names(alternative_names),
-            *_expanded_names(game_localizations),
-        ]
-    )
-
-
 def extract_metadata_from_igdb_rom(
     self: MetadataHandler, rom: Game, platform_igdb_id: int | None
 ) -> IGDBMetadata:
@@ -328,14 +313,13 @@ def extract_metadata_from_igdb_rom(
                 )
             ),
             # The canonical name too, so it stays searchable when a localized
-            # title is displayed. An edition also goes by its main game's names.
+            # title is displayed.
             "alternative_names": pydash.uniq(
                 pydash.compact(
                     [
                         rom.get("name"),
                         *_expanded_names(alternative_names),
                         *_expanded_names(game_localizations),
-                        *_version_parent_names(rom),
                     ]
                 )
             ),
@@ -1214,10 +1198,7 @@ GAMES_FIELDS = (
     "multiplayer_modes.splitscreenonline",
     "multiplayer_modes.platform.id",
     "multiplayer_modes.platform.name",
-    "version_parent.name",
     "version_parent.cover.url",
-    "version_parent.alternative_names.name",
-    "version_parent.game_localizations.name",
 )
 
 

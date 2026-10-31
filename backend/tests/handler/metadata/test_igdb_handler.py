@@ -1636,12 +1636,8 @@ class TestAlternativeNames:
             "ブリーチ ザ・サード・ファントム",
         ]
 
-    def test_an_edition_without_a_cover_takes_its_main_game_cover_and_names(self):
-        parent = _make_game(
-            11317,
-            "The Legend of Legacy",
-            game_localizations=["レジェンド オブ レガシー"],
-        )
+    def test_an_edition_without_a_cover_takes_its_main_game_cover_only(self):
+        parent = _make_game(11317, "The Legend of Legacy")
         parent["cover"] = Cover(id=1, url="//images.igdb.com/t_thumb/co2hau.jpg")
         game = _make_game(44020, "The Legend of Legacy: Launch Edition")
         game["version_parent"] = parent
@@ -1650,9 +1646,7 @@ class TestAlternativeNames:
 
         assert rom["url_cover"].endswith("/t_1080p/co2hau.jpg")
         assert rom["igdb_metadata"]["alternative_names"] == [
-            "The Legend of Legacy: Launch Edition",
-            "The Legend of Legacy",
-            "レジェンド オブ レガシー",
+            "The Legend of Legacy: Launch Edition"
         ]
 
     def test_an_edition_keeps_its_own_cover(self):
