@@ -1,5 +1,5 @@
 {
-  "name": "ROMM Development",
+  "name": "RomM-CN Development",
   "dockerComposeFile": ["../docker-compose.yml"],
   "service": "romm-dev",
   "workspaceFolder": "/app",
@@ -42,6 +42,6 @@
       }
     }
   },
-  "postCreateCommand": "echo 'ROMM development environment ready!'",
+  "postCreateCommand": "echo 'RomM-CN development environment ready!'",
   "remoteUser": "root"
 }

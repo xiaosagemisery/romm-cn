@@ -156,7 +156,7 @@ export const UserMenu: Story = {
         <RList density="comfortable">
           <RListItem
             prepend-avatar="/assets/isotipo.svg"
-            title="RomM Admin"
+            title="RomM-CN Admin"
             subtitle="admin · last seen 3 min ago"
           />
           <RListItem prepend-icon="mdi-account" title="Your profile" />

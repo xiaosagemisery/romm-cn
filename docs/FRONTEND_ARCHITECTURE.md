@@ -1,6 +1,6 @@
-# RomM Frontend Architecture
+# RomM-CN Frontend Architecture
 
-Comprehensive documentation of the RomM frontend: a Vue 3 single-page application powering the retro gaming platform UI.
+Comprehensive documentation of the RomM-CN frontend: a Vue 3 single-page application powering the retro gaming platform UI.
 
 > **Scope: this document still describes the removed v1 UI** (`src/views/`, `src/components/`, `src/console/`, `src/layouts/`), and its sections on directory layout, components, views and console mode no longer match the code. The Vue/Vite/Pinia/router/i18n/Socket.IO foundation it covers is shared with the current UI under `src/`, which has its own design system: **no Vuetify, and no Tailwind utility classes** (a global Tailwind reset is still loaded, see `src/styles/tailwind.css`). It styles with generated tokens plus per-component scoped CSS. For the current UI, read the `frontend-components`, `frontend-theming`, `frontend-input`, and `frontend-patterns` skills in `.claude/skills/`.
 
@@ -736,7 +736,7 @@ Supports: `.ips`, `.ups`, `.bps`, `.ppf`, `.rup`, `.aps`, `.bdf`, `.pmsr`, `.vcd
 
 - Drag-and-drop ROM + patch files
 - Platform selection for output
-- Save locally or upload to RomM
+- Save locally or upload to RomM-CN
 
 ---
 

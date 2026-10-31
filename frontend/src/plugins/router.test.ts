@@ -65,9 +65,9 @@ describe("applyRouteTitle", () => {
     expect(document.title).toBe(i18n.global.t("settings.home"));
   });
 
-  it("falls back to RomM on a route that owns no title", () => {
+  it("falls back to RomM-CN on a route that owns no title", () => {
     applyRouteTitle(routeAt("/rom/1"), routeAt("/"));
-    expect(document.title).toBe("RomM");
+    expect(document.title).toBe("RomM-CN");
   });
 
   it("keeps the view's title across a query-only navigation", () => {

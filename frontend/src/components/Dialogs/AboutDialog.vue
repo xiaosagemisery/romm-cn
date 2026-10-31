@@ -99,7 +99,7 @@ watch(() => links.value.map((link) => link.value), measure, { flush: "post" });
             <RImg
               v-if="link.isotipo"
               src="/assets/isotipo.svg"
-              alt="RomM"
+              alt="RomM-CN"
               :width="18"
               :height="18"
               contain

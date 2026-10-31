@@ -138,7 +138,7 @@ MIN_MYSQL_VERSION = (8, 0, 17)
 
 
 def unsupported_server_version(dialect: sa.Dialect) -> str | None:
-    """Why the connected server is too old for RomM, or None when it is supported."""
+    """Why the connected server is too old for RomM-CN, or None when it is supported."""
     if dialect.name not in ("mysql", "mariadb") or not dialect.server_version_info:
         return None
 
@@ -153,9 +153,9 @@ def unsupported_server_version(dialect: sa.Dialect) -> str | None:
         return None
 
     return (
-        f"RomM needs {engine} {'.'.join(map(str, minimum))} or newer, but the "
+        f"RomM-CN needs {engine} {'.'.join(map(str, minimum))} or newer, but the "
         f"database server runs {'.'.join(map(str, version))}. Upgrade the server, "
-        "then start RomM again. See https://docs.romm.app/latest/install/databases/"
+        "then start RomM-CN again. See https://docs.romm.app/latest/install/databases/"
     )
 
 

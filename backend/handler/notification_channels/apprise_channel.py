@@ -32,7 +32,7 @@ ADMINS_ONLY: Final = "Only admins can use Apprise channels"
 CONNECT_TIMEOUT_SECONDS: Final = 10.0
 READ_TIMEOUT_SECONDS: Final = 15.0
 
-# Schemas that act on the machine running RomM instead of reaching a service,
+# Schemas that act on the machine running RomM-CN instead of reaching a service,
 # and FCM, which opens its key file from a path or URL itself.
 EXCLUDED_SCHEMAS: Final = frozenset(
     {
@@ -99,8 +99,8 @@ ROMM_ICON_URL: Final = (
 )
 
 _ASSET: Final = AppriseAsset(
-    app_id="RomM",
-    app_desc="RomM",
+    app_id="RomM-CN",
+    app_desc="RomM-CN",
     app_url="https://romm.app",
     image_url_mask=ROMM_ICON_URL,
     image_url_logo=ROMM_ICON_URL,
@@ -362,7 +362,7 @@ def _services_by_id() -> dict[str, AppriseService]:
 
 def find_service(service_id: str) -> AppriseService:
     """Raises:
-    ValueError: RomM has no such Apprise service.
+    ValueError: RomM-CN has no such Apprise service.
     """
     service = _services_by_id().get(service_id)
     if service is None:
@@ -614,9 +614,9 @@ def fields_from_url(url: str) -> tuple[AppriseService, dict[str, FieldValue]]:
         raise ValueError("Paste one URL, without spaces")
     pasted = urlsplit(url)
     if pasted.scheme.lower() in EXCLUDED_SCHEMAS:
-        raise ValueError("RomM doesn't offer that service")
+        raise ValueError("RomM-CN doesn't offer that service")
     if {key.lower() for key, _ in parse_qsl(pasted.query)} & FILE_OPTIONS:
-        raise ValueError("RomM doesn't take the options that read local files")
+        raise ValueError("RomM-CN doesn't take the options that read local files")
     try:
         plugin = Apprise.instantiate(url, asset=_ASSET, suppress_exceptions=False)
     except Exception as exc:  # noqa: BLE001 - a plugin says why it refused the URL
@@ -627,7 +627,7 @@ def fields_from_url(url: str) -> tuple[AppriseService, dict[str, FieldValue]]:
     parts = urlsplit(plugin.url(privacy=False))
     service = next((s for s in services() if parts.scheme in s.schemas), None)
     if service is None:
-        raise ValueError("RomM doesn't offer that service")
+        raise ValueError("RomM-CN doesn't offer that service")
 
     fields: dict[str, FieldValue] = {}
     base = f"{parts.scheme}://{parts.netloc}{parts.path}".rstrip("/")
@@ -636,7 +636,7 @@ def fields_from_url(url: str) -> tuple[AppriseService, dict[str, FieldValue]]:
         base = f"{parts.scheme}://{parts.netloc}"
     match = next((m for p in service.patterns if (m := p.fullmatch(base))), None)
     if match is None:
-        raise ValueError(f"RomM can't read the {service.name} fields from this URL")
+        raise ValueError(f"RomM-CN can't read the {service.name} fields from this URL")
 
     for key, text in match.groupdict().items():
         field = service.owners.get(key) or service.field(key)
@@ -657,7 +657,7 @@ def fields_from_url(url: str) -> tuple[AppriseService, dict[str, FieldValue]]:
     if _address(_plugin(service, fields).url(privacy=False)) != _address(
         plugin.url(privacy=False)
     ):
-        raise ValueError(f"RomM can't read the {service.name} fields from this URL")
+        raise ValueError(f"RomM-CN can't read the {service.name} fields from this URL")
     return service, fields
 
 

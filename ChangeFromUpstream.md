@@ -100,6 +100,23 @@ The changes live on `sync/upstream-all`. The first removal set was commit `36322
 | `backend/main.py` | Removed streaming and netplay endpoint/socket imports, router registration and socket mounts; also removed `/netplay` from the CSRF middleware exclusions. |
 | `backend/utils/database.py` | Rewrote exception handlers in `safe_str_to_bool`, `safe_float`, and `safe_int` as valid exception tuples. |
 
+## Product name shown as RomM-CN
+
+Every place that displays the product name as "RomM" now shows "RomM-CN". Identifiers stay as they are: environment variables (`ROMM_*`), image and package names, paths, the `RomM/<version>` User-Agent sent to metadata providers, and code comments.
+
+| File | Specific change |
+| --- | --- |
+| `frontend/src/locales/*/*.json` | The standalone word "RomM" in every translated value of all 18 locales became "RomM-CN" (keys such as `about-romm` are unchanged). |
+| `frontend/index.html`, `frontend/public/site.webmanifest`, `frontend/vite.config.js` | Page title, loading logo alt text, and the PWA `name`/`short_name`. |
+| `frontend/src/composables/usePageTitle/index.ts` and its tests, `frontend/src/plugins/router.test.ts` | The fallback page title is "RomM-CN". |
+| `frontend/assets/logotipo.svg`, `frontend/src/components/AppShell/AppNav.vue` | The nav wordmark spells "ROMM-CN" (hyphen, C and N drawn in the same style), and its width grew from 70 to 112 px to keep the letter height. `logotipo.png` is not used by the app and is unchanged. |
+| `frontend/src/components/**` (alt texts), `frontend/.storybook/rommViewports.ts`, `*.stories.ts` | Logo alt text, a collection hint, Storybook viewport names and sample text. |
+| `backend/main.py`, `backend/endpoints/feeds.py`, `backend/endpoints/responses/notification.py`, and two comments in `frontend/src/__generated__/models/` | OpenAPI title, feed titles and author, validation messages, and the generated field descriptions. |
+| `backend/handler/auth/base_handler.py`, `backend/handler/notification_channels/*.py` | Password reset and confirmation emails, the `[RomM-CN]` email subject prefix, the test notification, and the Apprise app id/description and error messages. |
+| `backend/logger/formatter.py`, `docker/gunicorn/logging.conf`, `docker/init_scripts/init`, `docker/nginx/default.conf` | The `[RomM-CN]` log prefix. |
+| `backend/config/__init__.py`, `env.template`, `backend/utils/database.py`, `backend/alembic/env.py`, `backend/exceptions/fs_exceptions.py`, `backend/handler/metadata/hltb_handler.py`, `backend/adapters/services/screenscraper.py`, `backend/utils/gamelist_exporter.py` | The default Tinfoil welcome message, startup and database error messages, provider error details, and the scraper name written to ES-DE `gamelist.xml`. |
+| `README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, `DEVELOPER_SETUP.md`, `docs/*.md`, `examples/config*.yml`, `.github/` | Titles and prose that name this project; the social preview image heading. References to the upstream project keep "RomM". |
+
 ## Upstream sync (`7eae2b8ff`)
 
 The backend, the migrations, the Docker and nginx files, `pyproject.toml` and `uv.lock` were brought up to the upstream `master` at `7eae2b8ff` (2026-10-23). The frontend follows upstream too, including #5309: the v1 UI and the console mode are gone and the former v2 UI lives in `frontend/src/`. The CI workflows stay at the fork's own state, apart from the removed v1 freeze check.

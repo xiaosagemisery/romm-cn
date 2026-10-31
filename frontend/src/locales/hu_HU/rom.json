@@ -131,7 +131,7 @@
   "delete-screenshot-body": "A képernyőkép véglegesen törlődik a fájlrendszerből.",
   "delete-screenshot-body-named": "A(z) „{name}” eltávolításra kerül erről a ROM-ról és a fájlrendszerből. Ez nem vonható vissza.",
   "delete-screenshot-title": "Törlöd a képernyőképet?",
-  "delete-select-instruction": "Válasszd ki azokat a játékokat, amelyeket el szeretnél távolítani a fájlrendszeredből, ellenkező esetben azok csak a RomM adatbázisból lesznek törölve.",
+  "delete-select-instruction": "Válasszd ki azokat a játékokat, amelyeket el szeretnél távolítani a fájlrendszeredből, ellenkező esetben azok csak a RomM-CN adatbázisból lesznek törölve.",
   "delete-state": "Állás törlése",
   "delete-state-body-named": "A(z) „{name}” eltávolításra kerül erről a ROM-ról és a fájlrendszerből. Ez nem vonható vissza.",
   "delete-state-title": "Törlöd az állást?",

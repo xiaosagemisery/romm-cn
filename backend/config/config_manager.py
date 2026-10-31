@@ -37,7 +37,7 @@ from utils.database import get_nested
 # `{game}` is the terminal, marking where the game itself begins.
 STRUCTURE_PLATFORM: Final = "platform"
 STRUCTURE_GAME: Final = "game"
-# Retrom spells the library root out; a RomM template is already relative to it.
+# Retrom spells the library root out; a RomM-CN template is already relative to it.
 _STRUCTURE_RESERVED_ROOT: Final = "library"
 
 # Keys of `filesystem.structure` that name a layout rather than a platform.
@@ -1075,7 +1075,7 @@ class ConfigManager:
         if unknown_media:
             log.warning(
                 f"Ignoring unknown values in scan.media: {unknown_media}. "
-                "These may be from a newer RomM version; update to use them."
+                "These may be from a newer RomM-CN version; update to use them."
             )
             self.config.SCAN_MEDIA = [
                 m for m in self.config.SCAN_MEDIA if m in MetadataMediaType

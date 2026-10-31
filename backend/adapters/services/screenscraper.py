@@ -133,7 +133,7 @@ CREDENTIAL_DETAILS: Final[dict[SSCredentialSet, str]] = {
         "ScreenScraper rejected your user account credentials. Check "
         "SCREENSCRAPER_USER and SCREENSCRAPER_PASSWORD."
     ),
-    SSCredentialSet.DEVELOPER: "ScreenScraper rejected the RomM developer credentials.",
+    SSCredentialSet.DEVELOPER: "ScreenScraper rejected the RomM-CN developer credentials.",
 }
 
 
@@ -144,7 +144,7 @@ class ScreenScraperCredentialsError(HTTPException):
     credentials are read at startup.
 
     Reported the way a blacklisted application version is, the other refusal an
-    operator has to act on. Never as a 401: it is RomM's credentials the provider
+    operator has to act on. Never as a 401: it is RomM-CN's credentials the provider
     refused, not the caller's, and the frontend reads a 401 as an expired session
     and sends the user back to the login page.
     """
@@ -378,7 +378,7 @@ def _handle_client_error(
     elif err.status == 426:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="ScreenScraper has blacklisted this application version. Please update RomM.",
+            detail="ScreenScraper has blacklisted this application version. Please update RomM-CN.",
         ) from err
     elif err.status == 430:
         _count_daily_quota_error(generation)

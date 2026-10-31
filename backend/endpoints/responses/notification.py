@@ -59,7 +59,7 @@ class NotificationCreatePayload(BaseModel):
     link: str | None = Field(
         default=None,
         max_length=NOTIFICATION_LINK_MAX_LENGTH,
-        description="A path inside RomM, such as `/rom/12`.",
+        description="A path inside RomM-CN, such as `/rom/12`.",
     )
     icon: str | None = Field(
         default=None,
@@ -77,9 +77,9 @@ class NotificationCreatePayload(BaseModel):
     @field_validator("kind")
     @classmethod
     def _kind_not_reserved(cls, value: str) -> str:
-        # Stops a client passing itself off as one of RomM's own events.
+        # Stops a client passing itself off as one of RomM-CN's own events.
         if value != NotificationKind.CUSTOM and value in NotificationKind:
-            raise ValueError(f"'{value}' is reserved for RomM's own notifications")
+            raise ValueError(f"'{value}' is reserved for RomM-CN's own notifications")
         return value
 
     @field_validator("title", "body", "link")
@@ -120,7 +120,7 @@ class NotificationCreatePayload(BaseModel):
             or "\\" in value
             or any(char.isspace() for char in value)
         ):
-            raise ValueError("link must be a path inside RomM, such as /rom/12")
+            raise ValueError("link must be a path inside RomM-CN, such as /rom/12")
         return value
 
 

@@ -1,4 +1,4 @@
-# RomM backend
+# RomM-CN backend
 
 ## Commands (`cd backend`)
 

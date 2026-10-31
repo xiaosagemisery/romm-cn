@@ -247,7 +247,7 @@ export const UserRow: Story = {
         <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
           <RAvatar image="/assets/isotipo.svg" size="36" />
           <div style="display:flex;flex-direction:column;gap:2px">
-            <span style="font-weight:600">RomM Admin</span>
+            <span style="font-weight:600">RomM-CN Admin</span>
             <span style="color:var(--r-color-fg-muted);font-size:11px">admin · last seen 3 min ago</span>
           </div>
         </div>

@@ -30,12 +30,12 @@ const PHOTO_TALL = "https://picsum.photos/seed/romm-tall/300/600";
 // ── Basic ────────────────────────────────────────────────────────────
 
 export const Default: Story = {
-  args: { src: LOGO, width: 80, alt: "RomM logo" },
+  args: { src: LOGO, width: 80, alt: "RomM-CN logo" },
 };
 
 export const NaturalSize: Story = {
   name: "Natural size (no width / height)",
-  args: { src: LOGO, alt: "RomM logo" },
+  args: { src: LOGO, alt: "RomM-CN logo" },
 };
 
 // ── Sizing ───────────────────────────────────────────────────────────

@@ -28,7 +28,7 @@
 #     # Multi files games section
 #     # Will apply to files that are in sub-folders (multi-disc ROMs, games with updates, DLC, patches, etc.)
 #     multi_file:
-#       # Exclude matched 'folder' names to be scanned (RomM identifies folders as multi file games)
+#       # Exclude matched 'folder' names to be scanned (RomM-CN identifies folders as multi file games)
 #       # Common ES-DE media folders are listed below
 #       names:
 #         - 3dboxes
@@ -48,7 +48,7 @@
 #       # Exclude files within sub-folders.
 #       parts:
 #         # Exclude matched file names to be scanned from multi file roms
-#         # Keep in mind that RomM doesn't scan folders inside multi files games,
+#         # Keep in mind that RomM-CN doesn't scan folders inside multi files games,
 #         # so there is no need to exclude folders from inside of multi files games.
 #         names:
 #           - 'data.xml'
@@ -61,7 +61,7 @@
 
 # system:
 #   # Asociate different platform names to your current file system platform names
-#   # [your custom platform folder name]: [RomM platform name]
+#   # [your custom platform folder name]: [RomM-CN platform name]
 #   # Case-insensitive. Batocera, RetroBat and ES-DE folders are already recognised.
 #   platforms:
 #     ps1: psx

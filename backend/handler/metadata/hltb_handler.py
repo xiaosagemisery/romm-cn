@@ -220,7 +220,7 @@ GITHUB_FILE_URL = "https://raw.githubusercontent.com/rommapp/romm/refs/heads/mas
 # Raised where the page parsed but did not carry the shape we read, so a
 # rewrite upstream surfaces as itself instead of as a game with no times.
 HLTB_FORMAT_CHANGED_DETAIL: Final[str] = (
-    "HowLongToBeat changed their game page, RomM could not read the game data"
+    "HowLongToBeat changed their game page, RomM-CN could not read the game data"
 )
 
 
@@ -244,7 +244,7 @@ def _unavailable_detail(status_code: int) -> str:
     if status_code == status.HTTP_404_NOT_FOUND:
         return (
             "HowLongToBeat search endpoint not found, it has likely rotated and "
-            "RomM could not fetch the current one"
+            "RomM-CN could not fetch the current one"
         )
     return f"HowLongToBeat API returned HTTP {status_code}"
 

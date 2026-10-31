@@ -198,7 +198,7 @@ export const AuthCardSim: Story = {
         <div style="display:flex;flex-direction:column;align-items:center;gap:18px;padding:24px">
           <div style="width:80px;height:80px;border-radius:18px;background:var(--r-color-brand-primary);display:flex;align-items:center;justify-content:center;color:white;font:700 22px/1 sans-serif">R</div>
           <h2 style="margin:0;font:600 18px/1.2 sans-serif">Welcome back</h2>
-          <p style="margin:0;color:var(--r-color-fg-muted);font:13px/1.4 sans-serif;text-align:center">Sign in to your RomM library</p>
+          <p style="margin:0;color:var(--r-color-fg-muted);font:13px/1.4 sans-serif;text-align:center">Sign in to your RomM-CN library</p>
         </div>
       </RCard>
     `,

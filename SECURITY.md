@@ -1,8 +1,8 @@
 # Reporting Security Issues
 
-Thanks for helping make RomM safer for everyone.
+Thanks for helping make RomM-CN safer for everyone.
 
-If you believe you have found a security vulnerability in RomM, please report it to us through coordinated disclosure.
+If you believe you have found a security vulnerability in RomM-CN, please report it to us through coordinated disclosure.
 
 **Do not report security vulnerabilities through public GitHub issues, discussions, pull requests, or on our public Discord server.**
 

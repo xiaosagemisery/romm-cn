@@ -401,9 +401,9 @@ def write_report(
     out: list[str] = [
         "<!doctype html><html lang=en><head><meta charset=utf-8>",
         '<meta name="viewport" content="width=device-width,initial-scale=1">',
-        "<title>RomM recommendations sample</title>",
+        "<title>RomM-CN recommendations sample</title>",
         f"<style>{REPORT_CSS}</style></head><body>",
-        "<h1>RomM recommendations sample</h1>",
+        "<h1>RomM-CN recommendations sample</h1>",
         f"<p class=sub>{len(rom_ids)} games, "
         f"{'capped as the UI renders them' if capped else 'raw index, uncapped'}. "
         f"Reproduce with <code>{esc(command)}</code></p>",

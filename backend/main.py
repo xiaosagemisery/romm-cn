@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 init_sentry()
 
 app = FastAPI(
-    title="RomM API",
+    title="RomM-CN API",
     version=get_version(),
     lifespan=lifespan,
     docs_url="/api/docs",

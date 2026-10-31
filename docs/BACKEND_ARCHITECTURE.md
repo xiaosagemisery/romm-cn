@@ -1,6 +1,6 @@
-# RomM Backend Architecture
+# RomM-CN Backend Architecture
 
-Comprehensive documentation of the RomM backend: a FastAPI-based server powering the self-hosted retro gaming platform.
+Comprehensive documentation of the RomM-CN backend: a FastAPI-based server powering the self-hosted retro gaming platform.
 
 ---
 
@@ -41,7 +41,7 @@ Comprehensive documentation of the RomM backend: a FastAPI-based server powering
 | **ASGI Server**    | Uvicorn / Gunicorn               |
 | **Error Tracking** | Sentry                           |
 
-RomM's backend is responsible for:
+RomM-CN's backend is responsible for:
 
 - **Library scanning**: detecting platforms and ROMs from the filesystem
 - **Metadata enrichment**: pulling game info from 10+ external providers
@@ -926,7 +926,7 @@ Facet endpoints (`/artists`, `/albums`, `/genres`, `/years`) return `{value, cou
 
 | Method | Path                       | Scope           | Description              |
 | ------ | -------------------------- | --------------- | ------------------------ |
-| GET    | `/`                        | None            | Get RomM configuration   |
+| GET    | `/`                        | None            | Get RomM-CN configuration   |
 | POST   | `/system/platforms`        | PLATFORMS_WRITE | Add platform binding     |
 | DELETE | `/system/platforms/{slug}` | PLATFORMS_WRITE | Remove platform binding  |
 | POST   | `/system/versions`         | PLATFORMS_WRITE | Add version mapping      |
@@ -960,7 +960,7 @@ It answers 503 when no worker listens on the scan queue.
 | DELETE | `/{id}` | ME_WRITE | Dismiss one for good                                        |
 | DELETE | `/`     | ME_WRITE | Dismiss all                                                 |
 
-A client's notification carries its own `title`, `body`, `icon` (`mdi-*`) and `link`, which must be a path inside RomM. RomM's own `kind`s are reserved; any other (`custom`, `argosy.sync_done`) is shown as sent.
+A client's notification carries its own `title`, `body`, `icon` (`mdi-*`) and `link`, which must be a path inside RomM-CN. RomM-CN's own `kind`s are reserved; any other (`custom`, `argosy.sync_done`) is shown as sent.
 
 ```bash
 curl -X POST "$ROMM/api/notifications" -H "Authorization: Bearer $TOKEN" \
@@ -973,7 +973,7 @@ curl -X POST "$ROMM/api/notifications" -H "Authorization: Bearer $TOKEN" \
 Each user forwards their own notifications to other services. A channel is one of three types:
 
 - `apprise`: any of the 100+ services [Apprise](https://github.com/caronc/apprise#supported-notifications) reaches (Discord, Telegram, ntfy, Slack, Gotify…), set up through that service's own fields. **Admins only**, since Apprise opens its own connections, past the SSRF guard. The owner's role is checked again at every delivery, so a demoted admin's channel fails until it turns off.
-- `webhook`: RomM's own JSON payload (below), POSTed to an http(s) URL.
+- `webhook`: RomM-CN's own JSON payload (below), POSTed to an http(s) URL.
 - `email`: a plain-text email over the server's SMTP, to an address confirmed with a 6-digit code first.
 
 A channel filters by minimum level and by topic (`scans`, `tasks`, `account`, `custom`); every stored notification that passes goes out in its own RQ job, retried at 30 s, 2 min and 10 min. A channel that fails 10 deliveries in a row turns itself off and tells its owner.
@@ -990,9 +990,9 @@ A channel filters by minimum level and by topic (`scans`, `tasks`, `account`, `c
 | POST   | `/{id}/confirm`           | ME_WRITE | Confirm an email address with its code                                                         |
 | POST   | `/{id}/resend-code`       | ME_WRITE | Email a new code (once a minute)                                                               |
 
-The Apprise catalog comes from Apprise's own plugin details: URL tokens become fields, options become advanced fields, and a field is required only when every URL template of its service needs it. A token is a secret when Apprise marks it so or its name is a credential's (`token`, `key`, `webhook`…). A channel stores its service and fields, sealed, and each delivery builds the URL from the template those fields fill. Not offered: schemas that act on the host (`syslog`, `dbus`, `windows`…), FCM (it opens its key file itself), the options Apprise reads from a local file (`template`, `keyfile`, `subfile`, `pgp*`) and the ones RomM sets. Apprise follows no redirects and doesn't retry, its timeouts are capped at 10 s to connect and 15 s to read, a list takes at most 20 items, and `@everyone`, `@here` and `<@…>` ping nobody. A failure's error carries Apprise's warning and the start of the service's reply. Each service links its setup guide on Apprise's wiki. A pasted URL is read back into fields by matching the URL Apprise writes for it against the service's templates. The API returns the fields that aren't secret and names the secrets; on edit, a secret left out stays and an empty one goes, but a kept secret never follows the channel to another destination, as Apprise's `url_identifier` tells them apart. A test gets 60 s, like a queued delivery.
+The Apprise catalog comes from Apprise's own plugin details: URL tokens become fields, options become advanced fields, and a field is required only when every URL template of its service needs it. A token is a secret when Apprise marks it so or its name is a credential's (`token`, `key`, `webhook`…). A channel stores its service and fields, sealed, and each delivery builds the URL from the template those fields fill. Not offered: schemas that act on the host (`syslog`, `dbus`, `windows`…), FCM (it opens its key file itself), the options Apprise reads from a local file (`template`, `keyfile`, `subfile`, `pgp*`) and the ones RomM-CN sets. Apprise follows no redirects and doesn't retry, its timeouts are capped at 10 s to connect and 15 s to read, a list takes at most 20 items, and `@everyone`, `@here` and `<@…>` ping nobody. A failure's error carries Apprise's warning and the start of the service's reply. Each service links its setup guide on Apprise's wiki. A pasted URL is read back into fields by matching the URL Apprise writes for it against the service's templates. The API returns the fields that aren't secret and names the secrets; on edit, a secret left out stays and an empty one goes, but a kept secret never follows the channel to another destination, as Apprise's `url_identifier` tells them apart. A test gets 60 s, like a queued delivery.
 
-Only an admin's webhooks may reach private addresses; everyone else's go through the SSRF guard. A kept webhook secret doesn't follow the channel to another origin. A webhook delivery gets 15 s in all, and only the start of a refusal's body is read. Text for RomM's own kinds is English until outbound messages are translated. Links are absolute only when `ROMM_BASE_URL` is shareable.
+Only an admin's webhooks may reach private addresses; everyone else's go through the SSRF guard. A kept webhook secret doesn't follow the channel to another origin. A webhook delivery gets 15 s in all, and only the start of a refusal's body is read. Text for RomM-CN's own kinds is English until outbound messages are translated. Links are absolute only when `ROMM_BASE_URL` is shareable.
 
 ```json
 {
@@ -1121,7 +1121,7 @@ Endpoints also check the caller's permission group (`handler/auth/permissions.py
 
 ### 8.1 Scan Handler (`handler/scan_handler.py`)
 
-The core of RomM. Orchestrates library scanning and metadata enrichment.
+The core of RomM-CN. Orchestrates library scanning and metadata enrichment.
 
 **Scan Types:**
 
@@ -1734,7 +1734,7 @@ Exception
 ### Format
 
 ```text
-[LEVEL]: [RomM][module] [timestamp] message
+[LEVEL]: [RomM-CN][module] [timestamp] message
 ```
 
 ### Color Coding

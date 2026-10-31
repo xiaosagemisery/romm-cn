@@ -170,9 +170,9 @@ def platforms_webrcade_feed(request: Request) -> WebrcadeFeedSchema:
         )
 
     return WebrcadeFeedSchema(
-        title="RomM Feed",
-        longTitle="Custom RomM Feed",
-        description="Custom feed from your RomM library",
+        title="RomM-CN Feed",
+        longTitle="Custom RomM-CN Feed",
+        description="Custom feed from your RomM-CN library",
         thumbnail="https://raw.githubusercontent.com/rommapp/romm/release/.github/resources/isotipo.svg",
         background="https://raw.githubusercontent.com/rommapp/romm/release/.github/resources/screenshots/gallery.png",
         categories=categories,
@@ -612,7 +612,7 @@ def fpkgi_item_names(rom: Rom, files: list[RomFile]) -> dict[int, str]:
 
 
 def fpkgi_title_id(rom: Rom, files: list[RomFile]) -> str:
-    """The game's real title id when a file name carries one, else a RomM one.
+    """The game's real title id when a file name carries one, else a RomM-CN one.
 
     Resolved per rom so a base game and its updates/DLC stay grouped, the way
     FPKGi searches and sorts content.
@@ -753,7 +753,7 @@ def kekatsu_ds_feed(request: Request, platform_slug: str) -> Response:
             platform=platform.slug,
             region=rom.regions[0] if rom.regions else "ANY",
             version=rom.revision or "1.0.0",
-            author="RomM",
+            author="RomM-CN",
             download_url=download_url,
             filename=rom.fs_name,
             size=rom.fs_size_bytes,

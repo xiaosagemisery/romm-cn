@@ -58,7 +58,7 @@ def reset_link_base_url() -> str | None:
 
 
 def _romm_username(provided: str, fallback: str) -> str:
-    """A valid, unused RomM username for the name an identity provider chose.
+    """A valid, unused RomM-CN username for the name an identity provider chose.
 
     Args:
         provided (str): The username as the provider sent it
@@ -78,7 +78,7 @@ def _romm_username(provided: str, fallback: str) -> str:
     username = sanitize_username(provided, fallback=fallback)
     if username != provided:
         log.info(
-            "OIDC username '%s' is not a valid RomM username, registering as '%s'",
+            "OIDC username '%s' is not a valid RomM-CN username, registering as '%s'",
             hl(provided, color=CYAN),
             hl(username, color=CYAN),
         )
@@ -231,8 +231,8 @@ class AuthHandler:
         try:
             send_email(
                 user.email,
-                "Reset your RomM password",
-                f"Someone asked to reset the password of your RomM account, "
+                "Reset your RomM-CN password",
+                f"Someone asked to reset the password of your RomM-CN account, "
                 f"{user.username}.\n\nChoose a new one within "
                 f"{self.reset_passwd_token_expires_in_minutes} minutes here:\n"
                 f"{base_url}/reset-password?token={token}\n\n"

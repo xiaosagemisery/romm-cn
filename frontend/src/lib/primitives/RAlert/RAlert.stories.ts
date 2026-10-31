@@ -117,7 +117,7 @@ export const TitleAndBody: Story = {
       <div style="display:flex;flex-direction:column;gap:12px;width:480px">
         <RAlert type="error">
           <template #title>Config file not mounted</template>
-          The RomM container couldn't read its config file. Settings changes
+          The RomM-CN container couldn't read its config file. Settings changes
           made here won't persist until the volume is mounted.
         </RAlert>
         <RAlert type="warning">

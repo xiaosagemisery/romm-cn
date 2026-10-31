@@ -4,17 +4,17 @@ import { MINIMAL_VIEWPORTS, type ViewportMap } from "storybook/viewport";
 export const ROMM_STORYBOOK_VIEWPORTS = {
   ...MINIMAL_VIEWPORTS,
   rommPhoneXs: {
-    name: "390×844 · RomM phone (xs)",
+    name: "390×844 · RomM-CN phone (xs)",
     styles: { width: "390px", height: "844px" },
     type: "mobile",
   },
   rommTabletSm: {
-    name: "768×1024 · RomM tablet (sm)",
+    name: "768×1024 · RomM-CN tablet (sm)",
     styles: { width: "768px", height: "1024px" },
     type: "tablet",
   },
   rommDesktopMd: {
-    name: "1024×768 · RomM desktop (md)",
+    name: "1024×768 · RomM-CN desktop (md)",
     styles: { width: "1024px", height: "768px" },
     type: "desktop",
   },

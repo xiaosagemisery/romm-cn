@@ -1,6 +1,6 @@
-# RomM (romm-cn) - Repository Guide for Contributors & Agents
+# RomM-CN (romm-cn) - Repository Guide for Contributors & Agents
 
-RomM is a self-hosted ROM manager: scan a game library off disk, enrich it with metadata from 10+ providers, and browse it in a web UI. This fork, romm-cn, removes the in-browser players and the features built on them, and translates scanned game names and summaries to Simplified Chinese. `README.md` and `ChangeFromUpstream.md` list every difference from upstream.
+RomM-CN is a self-hosted ROM manager: scan a game library off disk, enrich it with metadata from 10+ providers, and browse it in a web UI. This fork, romm-cn, removes the in-browser players and the features built on them, and translates scanned game names and summaries to Simplified Chinese. `README.md` and `ChangeFromUpstream.md` list every difference from upstream.
 
 ---
 

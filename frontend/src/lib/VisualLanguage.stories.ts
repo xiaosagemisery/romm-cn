@@ -36,7 +36,7 @@ const tokenSwatches = [
     ],
   },
   {
-    title: "Romm brand",
+    title: "RomM-CN brand",
     vars: [
       "--r-color-romm-red",
       "--r-color-romm-green",
@@ -62,7 +62,7 @@ const VisualLanguage = defineComponent({
           },
         },
         [
-          h("h1", { style: { margin: 0 } }, "RomM v2 Design System"),
+          h("h1", { style: { margin: 0 } }, "RomM-CN v2 Design System"),
           h(
             "p",
             { style: { margin: 0, color: "var(--r-color-fg-muted)" } },

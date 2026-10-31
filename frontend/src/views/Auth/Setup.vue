@@ -209,7 +209,7 @@ onMounted(loadLibraryInfo);
         src="/assets/isotipo.svg"
         :width="56"
         class="r-setup__logo"
-        alt="RomM"
+        alt="RomM-CN"
       />
       <RSteps :current="step" :total="TOTAL_STEPS" :direction="stepDirection" />
       <div class="r-setup__title">
@@ -471,7 +471,7 @@ html[data-bp~="xs"] .r-setup__body {
 html[data-bp~="xs"] .r-setup__footer {
   padding: var(--r-space-3) var(--r-space-4);
 }
-/* The RomM isotype eats vertical room in the phone header; the step dots and
+/* The RomM-CN isotype eats vertical room in the phone header; the step dots and
    title carry the wizard identity, so drop it on xs. */
 html[data-bp~="xs"] .r-setup__logo {
   display: none;

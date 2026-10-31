@@ -15,7 +15,7 @@ defineOptions({ inheritAttrs: false });
         src="/assets/isotipo.svg"
         :width="80"
         class="auth-card__logo"
-        alt="RomM"
+        alt="RomM-CN"
       />
       <slot />
     </div>

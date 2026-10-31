@@ -1,10 +1,10 @@
 <!-- trunk-ignore-all(markdownlint/MD024) -->
 
-# Setting up RomM for development
+# Setting up RomM-CN for development
 
 ## Option 1: Using Docker
 
-If you prefer to use Docker for development, you can set up RomM using the provided Docker Compose configuration. This method simplifies the setup process by encapsulating all dependencies within Docker containers.
+If you prefer to use Docker for development, you can set up RomM-CN using the provided Docker Compose configuration. This method simplifies the setup process by encapsulating all dependencies within Docker containers.
 
 ### Environment setup
 
@@ -52,7 +52,7 @@ Authentik, for OIDC work, sits in its own file since most work doesn't need it. 
 docker compose -f docker-compose.oidc.yml up -d
 ```
 
-Authentik listens on `http://localhost:9001`; point RomM at it with the `OIDC_*` variables in `.env`.
+Authentik listens on `http://localhost:9001`; point RomM-CN at it with the `OIDC_*` variables in `.env`.
 
 ## Option 2: Manual setup
 
@@ -186,9 +186,9 @@ npm run storybook:test   # play() + axe on every story, in headless Chromium
 
 For responsive layouts, use the viewport toolbar presets from `.storybook/rommViewports.ts`.
 
-#### - Optional: local frontend against a remote RomM
+#### - Optional: local frontend against a remote RomM-CN
 
-To run `npm run dev` or `npm run preview` against another RomM instance (for example a home server with a full library), set `DEV_PROXY_TARGET` in the repo-root `.env` to its origin, such as `https://romm.example.com`. Vite then proxies `/api`, `/ws` and `/assets/romm` there instead of the local backend. Leave it empty to keep the default `http://127.0.0.1:${DEV_PORT}`. The remote's TLS certificate must be valid. Sign in with a username and password: OIDC login does not work through the proxy, because the identity provider redirects to the remote's `OIDC_REDIRECT_URI`, so the session never reaches localhost.
+To run `npm run dev` or `npm run preview` against another RomM-CN instance (for example a home server with a full library), set `DEV_PROXY_TARGET` in the repo-root `.env` to its origin, such as `https://romm.example.com`. Vite then proxies `/api`, `/ws` and `/assets/romm` there instead of the local backend. Leave it empty to keep the default `http://127.0.0.1:${DEV_PORT}`. The remote's TLS certificate must be valid. Sign in with a username and password: OIDC login does not work through the proxy, because the identity provider redirects to the remote's `OIDC_REDIRECT_URI`, so the session never reaches localhost.
 
 ## Setting up the linter
 

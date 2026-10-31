@@ -41,12 +41,12 @@ target_metadata = BaseModel.metadata
 
 # Ten revisions install triggers, so a denial blocks the upgrade outright.
 TRIGGER_DDL_DENIED = (
-    "The database user is not allowed to create triggers, which RomM's migrations "
+    "The database user is not allowed to create triggers, which RomM-CN's migrations "
     "need: MariaDB and MySQL deny trigger statements while binary logging is on and "
     "the user does not hold SUPER (error 1419). Ask an admin database user to run "
     "SET GLOBAL log_bin_trust_function_creators = 1, adding it under [mysqld] in "
     "my.cnf so it survives a restart, or to run "
-    "GRANT SUPER ON *.* TO '<romm database user>'@'%', then start RomM again. "
+    "GRANT SUPER ON *.* TO '<romm database user>'@'%', then start RomM-CN again. "
     "See https://docs.romm.app/latest/install/databases/"
 )
 

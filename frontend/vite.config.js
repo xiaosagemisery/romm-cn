@@ -102,6 +102,8 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         injectRegister: null,
         manifest: {
+          name: "RomM-CN",
+          short_name: "RomM-CN",
           icons: [
             {
               src: "favicon.ico",

@@ -12,7 +12,7 @@ export type NotificationCreatePayload = {
     level?: NotificationLevel;
     kind?: string;
     /**
-     * A path inside RomM, such as `/rom/12`.
+     * A path inside RomM-CN, such as `/rom/12`.
      */
     link?: (string | null);
     /**

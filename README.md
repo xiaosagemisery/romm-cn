@@ -1,7 +1,7 @@
 <!-- trunk-ignore-all(markdownlint/MD033) -->
 <!-- trunk-ignore(markdownlint/MD041) -->
 <div align="center">
-  <img src=".github/resources/isotipo.png" height="180px" width="auto" alt="RomM 标志">
+  <img src=".github/resources/isotipo.png" height="180px" width="auto" alt="RomM-CN 标志">
 
   <h3 style="font-size: 25px;">
     一款可自行托管、支持游戏元数据简体中文翻译的 ROM 管理工具。
@@ -77,6 +77,7 @@ docker compose -f examples/docker-compose.romm-cn.yml up -d --build
 - **文档与 Agent 规则：** `AGENTS.md` 成为唯一的指令文件（`CLAUDE.md` 只导入它），新增 `project.md`、`test_method.md`、`test_troubleshooting.md`，架构文档和 skills 去掉已删功能。
 - **README：** 移除顶部徽章，以及「参与贡献」「官方应用」「社区项目」「支持本项目」「友好项目」「支持方」章节及其链接。
 - **数据库解析：** 修复了布尔值、浮点数和整数转换辅助函数中的异常元组语法。
+- **品牌名称：** 界面中所有显示为 “RomM” 的位置（全部语言文件、网页标题、PWA 名称、导航栏文字标志、API 文档标题、邮件与通知、日志前缀等）改为 “RomM-CN”；环境变量、镜像名、User-Agent 和代码标识符保持不变。
 
 各文件的具体改动请参阅 [ChangeFromUpstream.md](ChangeFromUpstream.md)。
 

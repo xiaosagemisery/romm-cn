@@ -56,17 +56,17 @@ const scrolled = computed(
       <router-link to="/" class="r-nav__logo" :aria-label="t('common.home')">
         <RImg
           src="/assets/isotipo.svg"
-          alt="RomM isotipo"
+          alt="RomM-CN isotipo"
           aria-hidden="true"
           class="r-nav__logo-mark"
           :width="32"
         />
         <RImg
           src="/assets/logotipo.svg"
-          alt="RomM logotipo"
+          alt="RomM-CN logotipo"
           aria-hidden="true"
           class="r-nav__logo-word"
-          :width="70"
+          :width="112"
         />
       </router-link>
 

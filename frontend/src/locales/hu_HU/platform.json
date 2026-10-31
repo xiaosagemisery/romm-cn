@@ -28,7 +28,7 @@
   "firmware-deleted-successfully": "Firmware sikeresen törölve! | {count} firmware sikeresen törölve!",
   "firmware-dropzone-description": "Húzd ide a firmware fájlokat, vagy kattints a tallózáshoz",
   "firmware-remove-warning": "El fogsz távolítani {count} firmware-t a fájlrendszerből. Ez a művelet nem vonható vissza! | El fogsz távolítani {count} firmware-eket a fájlrendszerből. Ez a művelet nem vonható vissza!",
-  "firmware-select-to-remove": "Válasszd ki a fájlrendszerből eltávolítani kívánt firmware fájlokat, ellenkező esetben azok csak a RomM adatbázisból lesznek törölve.",
+  "firmware-select-to-remove": "Válasszd ki a fájlrendszerből eltávolítani kívánt firmware fájlokat, ellenkező esetben azok csak a RomM-CN adatbázisból lesznek törölve.",
   "firmware-uploaded-successfully": "{count} fájl sikeresen feltöltve. | {count} fájlok sikeresen feltöltve.",
   "firmware-uploading": "Feltöltesz {count} firmware fájlt a {platform}... | Feltöltesz {count} firmware fájlokat a {platform}...",
   "firmware-verified": "Ellenőrzött",

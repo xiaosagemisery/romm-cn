@@ -108,7 +108,10 @@ async def send_to_channel(
             )
         case NotificationChannelType.EMAIL:
             await asyncio.to_thread(
-                send_email, config["address"], f"[RomM] {message.title}", message.text
+                send_email,
+                config["address"],
+                f"[RomM-CN] {message.title}",
+                message.text,
             )
         case _:
             await webhook.send(
@@ -125,7 +128,7 @@ def sample_message() -> OutboundMessage:
             id=0,
             kind=NotificationKind.CUSTOM,
             level=NotificationLevel.INFO,
-            title="Test notification from RomM",
+            title="Test notification from RomM-CN",
             body="If you can read this, the channel works.",
             link="/notifications",
             icon=None,

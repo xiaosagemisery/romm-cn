@@ -524,7 +524,7 @@ async function setVisibility(next: boolean) {
       :hint="
         t(
           'collection.delete-collection-hint',
-          'Removes the collection from RomM. The ROM files themselves are not deleted.',
+          'Removes the collection from RomM-CN. The ROM files themselves are not deleted.',
         )
       "
     >

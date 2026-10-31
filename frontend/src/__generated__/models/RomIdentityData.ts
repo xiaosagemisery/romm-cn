@@ -4,7 +4,7 @@
 /* eslint-disable */
 import type { SaveTargetLayout } from './SaveTargetLayout';
 /**
- * Binary identity a client extracted for a ROM that RomM cannot read itself.
+ * Binary identity a client extracted for a ROM that RomM-CN cannot read itself.
  */
 export type RomIdentityData = {
     /**

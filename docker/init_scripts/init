@@ -52,20 +52,20 @@ print_banner() {
 debug_log() {
 	# print debug log output if enabled
 	if [[ ${LOGLEVEL} == "DEBUG" ]]; then
-		echo -e "${LIGHTMAGENTA}DEBUG:    ${BLUE}[RomM]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
+		echo -e "${LIGHTMAGENTA}DEBUG:    ${BLUE}[RomM-CN]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
 	fi
 }
 
 info_log() {
-	echo -e "${GREEN}INFO:     ${BLUE}[RomM]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
+	echo -e "${GREEN}INFO:     ${BLUE}[RomM-CN]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
 }
 
 warn_log() {
-	echo -e "${YELLOW}WARNING:  ${BLUE}[RomM]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
+	echo -e "${YELLOW}WARNING:  ${BLUE}[RomM-CN]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
 }
 
 error_log() {
-	echo -e "${RED}ERROR:    ${BLUE}[RomM]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
+	echo -e "${RED}ERROR:    ${BLUE}[RomM-CN]${LIGHTMAGENTA}[init]${CYAN}[$(date +"%Y-%m-%d %T")]${RESET}" "${@}" || true
 	exit 1
 }
 
@@ -166,7 +166,7 @@ start_bin_nginx() {
 	fi
 
 	: "${ROMM_BASE_URL:=http://0.0.0.0:${ROMM_PORT:-8080}}"
-	info_log "🚀 RomM is now available at ${ROMM_BASE_URL}"
+	info_log "🚀 RomM-CN is now available at ${ROMM_BASE_URL}"
 }
 
 # Commands to start valkey-server (handling PID creation internally)

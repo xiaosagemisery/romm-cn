@@ -250,7 +250,7 @@ def test_export_gamelist_xml_scrap_element(platform_with_roms):
 
     scrap = game.find("scrap")
     assert scrap is not None
-    assert scrap.get("name") == "RomM"
+    assert scrap.get("name") == "RomM-CN"
 
 
 @pytest.mark.parametrize("tag", ["thumbnail", "image", "video", "screenshot", "manual"])
@@ -664,7 +664,7 @@ async def test_export_platform_to_file_keeps_unmanaged_tags(
     platform_with_roms, isolated_filesystem
 ):
     """Favorites, play stats and emulator overrides survive a re-export, while
-    the tags RomM owns are replaced rather than duplicated."""
+    the tags RomM-CN owns are replaced rather than duplicated."""
     platform, _ = platform_with_roms
     gamelist = _write_gamelist(
         isolated_filesystem,
@@ -699,7 +699,7 @@ async def test_export_platform_to_file_keeps_unmanaged_tags(
     assert game.get("source") == "ScreenScraper.fr"
     assert [e.text for e in game.findall("name")] == ["Super Mario World"]
     assert [e.text for e in game.findall("desc")] == ["A classic platformer game."]
-    assert [s.get("name") for s in game.findall("scrap")] == ["RomM"]
+    assert [s.get("name") for s in game.findall("scrap")] == ["RomM-CN"]
 
     preserved = {
         "favorite": "true",
@@ -718,7 +718,7 @@ async def test_export_platform_to_file_keeps_unmanaged_tags(
 async def test_export_platform_to_file_keeps_unmatched_entries(
     platform_with_roms, isolated_filesystem
 ):
-    """Entries RomM knows nothing about, folders and scraper blocks stay put."""
+    """Entries RomM-CN knows nothing about, folders and scraper blocks stay put."""
     platform, _ = platform_with_roms
     gamelist = _write_gamelist(
         isolated_filesystem,
@@ -838,7 +838,7 @@ async def test_export_platform_to_file_keeps_colliding_filenames(
     platform_with_roms, isolated_filesystem
 ):
     """Two entries whose paths share a filename are both kept: the first is
-    merged with RomM's data, the second is carried over untouched."""
+    merged with RomM-CN's data, the second is carried over untouched."""
     platform, _ = platform_with_roms
     gamelist = _write_gamelist(
         isolated_filesystem,

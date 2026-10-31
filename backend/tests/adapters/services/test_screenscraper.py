@@ -395,7 +395,7 @@ class TestScreenScraperServiceUnit:
                 )
 
         assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-        assert "RomM developer credentials" in exc_info.value.detail
+        assert "RomM-CN developer credentials" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_request_connection_error(self, service):
@@ -1359,17 +1359,17 @@ class TestScreenScraperServiceEdgeCases:
                 )
 
         assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-        assert "RomM developer credentials" in exc_info.value.detail
+        assert "RomM-CN developer credentials" in exc_info.value.detail
         assert mock_session.get.call_count == 2
 
 
 class TestCredentialErrors:
-    """ScreenScraper refuses a bad credential set with HTTP 403. RomM has to say
+    """ScreenScraper refuses a bad credential set with HTTP 403. RomM-CN has to say
     which set, rather than the bare "403, message='Forbidden'" that sends users
     looking at their quota.
 
     Only the account endpoint checks the account password, so a refusal from a
-    scraping endpoint is always about RomM's own credentials, whatever the body
+    scraping endpoint is always about RomM-CN's own credentials, whatever the body
     happens to say."""
 
     @pytest.mark.asyncio
@@ -1396,7 +1396,7 @@ class TestCredentialErrors:
                 )
 
         assert exc_info.value.credential_set is SSCredentialSet.DEVELOPER
-        assert "RomM developer credentials" in exc_info.value.detail
+        assert "RomM-CN developer credentials" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_the_developer_credentials_are_never_named(self, service):
@@ -1439,7 +1439,7 @@ class TestCredentialErrors:
                 await service._request(ACCOUNT_URL, object)
 
         response.text.assert_awaited()
-        # ScreenScraper's own wording, carried through under RomM's summary.
+        # ScreenScraper's own wording, carried through under RomM-CN's summary.
         assert "identifiants utilisateurs" in exc_info.value.detail
 
     @pytest.mark.asyncio
@@ -1529,7 +1529,7 @@ class TestCredentialErrors:
                     )
 
         assert mock_log.error.call_count == 1
-        assert "RomM developer credentials" in _rendered(mock_log.error.call_args)
+        assert "RomM-CN developer credentials" in _rendered(mock_log.error.call_args)
 
     @pytest.mark.asyncio
     async def test_a_new_scan_asks_again(self, service):

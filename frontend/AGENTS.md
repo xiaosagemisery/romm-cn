@@ -1,4 +1,4 @@
-# RomM frontend
+# RomM-CN frontend
 
 ## Layout
 

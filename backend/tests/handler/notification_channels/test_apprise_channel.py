@@ -487,7 +487,7 @@ class TestSend:
 
         [(apprise, _)] = calls
         plugin = apprise[0]
-        assert plugin.app_id == "RomM"
+        assert plugin.app_id == "RomM-CN"
         assert plugin.image_url(NotifyType.INFO) == apprise_channel.ROMM_ICON_URL
 
     def test_holds_a_service_to_its_own_limits(self, notify):

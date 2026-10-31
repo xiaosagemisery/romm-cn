@@ -57,7 +57,7 @@ XML_DECLARATION_RE: Final = re.compile(r"^\s*<\?xml\b[^>]*\?>")
 
 @dataclass
 class ExistingGamelist:
-    """What an on-disk gamelist.xml holds that RomM did not generate."""
+    """What an on-disk gamelist.xml holds that RomM-CN did not generate."""
 
     games: dict[str, Element] = field(default_factory=dict)
     others: list[Element] = field(default_factory=list)
@@ -65,7 +65,7 @@ class ExistingGamelist:
 
 
 def parse_existing_gamelist(content: str) -> ExistingGamelist:
-    """Index a gamelist.xml by ROM path, keeping every element RomM does not own.
+    """Index a gamelist.xml by ROM path, keeping every element RomM-CN does not own.
 
     ES-DE writes <alternativeEmulator> beside <gameList>, so the document is
     parsed under a wrapper root to accept those siblings.
@@ -107,7 +107,7 @@ def parse_existing_gamelist(content: str) -> ExistingGamelist:
 
 
 def merge_existing_game(game: Element, existing: Element) -> None:
-    """Carry attributes and children RomM did not emit over from the old entry."""
+    """Carry attributes and children RomM-CN did not emit over from the old entry."""
     for name, value in existing.attrib.items():
         game.attrib.setdefault(name, value)
 
@@ -116,7 +116,7 @@ def merge_existing_game(game: Element, existing: Element) -> None:
 
 
 class GamelistExporter:
-    """Export RomM collections to ES-DE gamelist.xml format"""
+    """Export RomM-CN collections to ES-DE gamelist.xml format"""
 
     def __init__(self, local_export: bool = False):
         self.local_export = local_export
@@ -336,7 +336,7 @@ class GamelistExporter:
 
         # Add scraping info
         scrap = SubElement(game, "scrap")
-        scrap.set("name", "RomM")
+        scrap.set("name", "RomM-CN")
         scrap.set("date", datetime.now().strftime("%Y%m%dT%H%M%S"))
 
         return game
@@ -350,7 +350,7 @@ class GamelistExporter:
     ) -> tuple[str, int]:
         """Build gamelist XML, optionally copying media into ``platform_dir``.
 
-        Entries in ``existing`` keep whatever RomM does not emit itself, and
+        Entries in ``existing`` keep whatever RomM-CN does not emit itself, and
         entries with no ROM in the database are carried over untouched.
         """
         platform = db_platform_handler.get_platform(platform_id)

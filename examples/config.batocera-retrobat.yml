@@ -17,7 +17,7 @@ exclude:
 filesystem: {}
 system:
   # Batocera and RetroBat folder names are recognised automatically. The entries
-  # below override folders RomM would otherwise match to their own platform.
+  # below override folders RomM-CN would otherwise match to their own platform.
   platforms:
     atari800: atari8bit
     model2: arcade

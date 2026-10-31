@@ -44,7 +44,7 @@ def test_emails_a_link_built_from_the_base_url(sent, logged, redis):
 
     to, subject, text = sent.call_args.args
     assert to == "player@example.com"
-    assert subject == "Reset your RomM password"
+    assert subject == "Reset your RomM-CN password"
     assert "https://romm.example.com/reset-password?token=" in text
     assert not _logged_link(logged)
     assert len(redis.keys("reset-jti:*")) == 1

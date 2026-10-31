@@ -58,7 +58,7 @@
   "channel-topics-all": "Minden téma",
   "channel-type": "Típus",
   "channel-type-email": "E-mail",
-  "channel-type-webhook": "RomM webhook (JSON)",
+  "channel-type-webhook": "RomM-CN webhook (JSON)",
   "channel-update-failed": "Nem sikerült frissíteni a csatornát",
   "channel-url": "URL",
   "channel-url-invalid": "http:// vagy https:// kezdetűnek kell lennie",
