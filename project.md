@@ -5,7 +5,7 @@ romm-cn is a fork of [RomM](https://github.com/rommapp/romm), a self-hosted ROM 
 The fork targets Chinese-speaking users and a smaller feature set than upstream:
 
 - It removes everything that runs or tracks games in the browser: the EmulatorJS, Ruffle, js-dos, PICO-8 and EasyRPG players, streaming, netplay, saves, states and user screenshots, firmware, play sessions, memory cards, device save sync and device push install. It also drops upstream's age limits.
-- It translates each scanned game's name and summary to Simplified Chinese through Google Translate.
+- It translates each scanned game's name and summary to Simplified Chinese through Microsoft Translator or Google Translate, in the order set by `TRANSLATION_PROVIDERS`.
 - It follows upstream otherwise. `master` mirrors upstream, `sync/upstream-all` carries the fork on top of it, and `ChangeFromUpstream.md` lists every difference.
 
 ## Components

@@ -46,7 +46,7 @@ docker compose -f examples/docker-compose.romm-cn.yml up -d --build
 
 - **使用全新数据库。** 被上游 RomM 镜像迁移过的数据库无法再迁移到本分支，启动时会报 `Can't locate revision`。
 - **ScreenScraper 需要开发者凭据。** 自行构建的镜像不含官方 CI 注入的 ScreenScraper 开发者凭据，所有请求都会被拒绝。如有自己的凭据，构建前在环境变量中设置 `SCREENSCRAPER_DEV_ID`、`SCREENSCRAPER_DEV_PASSWORD`；否则请改用 IGDB 等其他元数据源。
-- **翻译需要访问 Google。** 服务器无法访问 `translate.googleapis.com` 时，每个 ROM 扫描都会等待超时并保留原文；可以在 compose 中设置 `HTTPS_PROXY`（会作用于所有对外请求）。
+- **翻译需要可访问的翻译服务。** 默认依次尝试微软翻译（需要 `MICROSOFT_TRANSLATOR_KEY`，Azure 翻译免费档，大陆用户可设 `MICROSOFT_TRANSLATOR_ENDPOINT=https://api.translator.azure.cn`）和 Google；谷歌在大陆无法访问。某个服务失败后会暂停 5 分钟，所有服务都不可用时保留原文。可以用 `TRANSLATION_PROVIDERS` 调整顺序，也可以在 compose 中设置 `HTTPS_PROXY`（会作用于所有对外请求）。
 
 开发环境的搭建见 [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)。
 
@@ -62,7 +62,7 @@ docker compose -f examples/docker-compose.romm-cn.yml up -d --build
 | 游戏元数据翻译 | 游戏名不再机器翻译：优先用 `backend/utils/official_names_zh.json` 里手动列出的官方中文名，其次用 [Bangumi 番组计划](https://bgm.tv) 的中文名（用 IGDB 给出的日文名或原名精确比对，忽略大小写、全半角、空格和标点，但保留“+”等版本标记；命中多个时取与中文文件名最接近的），再次用 Wikidata 上该游戏的简体中文名（按 IGDB slug 自动查询），再次把 Wikidata 的繁体标签或数据源给的繁体名用 OpenCC 转成简体（只换字形，台译名如“萨尔达”会保留），最后用去掉“英文版”“汉化版”等标签的中文文件名；都没有就保留数据源给的原名；简介翻译为简体中文，其中的游戏名与标题保持一致。网页手动“匹配 ROM”与扫描走同一流程，编辑表单里手动填写的名称和简介保留原值。 |
 | 中文文件名搜索 | 文件名含中文时，按名称搜索 IGDB、MobyGames、ScreenScraper 前先译成英文（去掉“英文版”“汉化版”等标签、`DiscA`/`DiscB` 光盘标记和标题末尾表示第一作的“1”）；`backend/utils/search_titles_en.json` 里已列出的标题直接使用对应英文名（如“斑鸠”→ *Ikaruga*）。GameCube、3DS、N64 会先读文件头里的产品码：GameCube 和 3DS 按产品码在 [GameTDB](https://www.gametdb.com) 查英文名（日版卡带优先用同一游戏欧美版条目的正式英文名，没有时再到 IGDB 别名里查，比对时忽略空格和标点；New 3DS 专用游戏也能识别；标题以 “Shonen Jump's” 开头且搜不到时，会去掉这个前缀再搜一次）（数据库由你的实例在运行时下载并每周刷新，不随本仓库分发），N64 用文件头里的英文名，神游中国版用内置对照表；查不到时才机器翻译文件名；去掉标签后不含中文的（如“P.N.03 英文版”）直接按原名搜索。IGDB 搜不到时，会保留标点再搜一次（像 P.N.03 这种带点的标题，去掉标点后 IGDB 搜不到）。 |
 
-元数据翻译通过 Google 的公开翻译接口进行，需要服务器能够访问 `translate.googleapis.com`；自动查官方中文名需要能访问 `query.wikidata.org` 和 `api.bgm.tv`，访问不了时跳过这一步。成功结果缓存在进程内存中，进程重启后缓存失效；请求失败时保留原文。此功能翻译游戏名称和简介，不会翻译 ROM 文件内容，也不会自动批量翻译数据库中已有的所有记录。中文文件名是机器翻译成英文后再搜索的，官方英文名与直译差别较大的游戏，可以往 `search_titles_en.json` 里添加“中文标题 → 英文标题”；没有添加的仍可能匹配不到，这类文件请改用英文名。
+元数据翻译按 `TRANSLATION_PROVIDERS` 的顺序调用微软翻译（官方接口，需要密钥）和 Google 的公开翻译接口（`translate.googleapis.com`，不需要密钥）；自动查官方中文名需要能访问 `query.wikidata.org` 和 `api.bgm.tv`，访问不了时跳过这一步。成功结果缓存在进程内存中，进程重启后缓存失效；请求失败时保留原文。此功能翻译游戏名称和简介，不会翻译 ROM 文件内容，也不会自动批量翻译数据库中已有的所有记录。中文文件名是机器翻译成英文后再搜索的，官方英文名与直译差别较大的游戏，可以往 `search_titles_en.json` 里添加“中文标题 → 英文标题”；没有添加的仍可能匹配不到，这类文件请改用英文名。
 
 ## 相对于分叉基线的改动
 

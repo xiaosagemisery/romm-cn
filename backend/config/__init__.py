@@ -142,6 +142,20 @@ REFRESH_RETROACHIEVEMENTS_CACHE_DAYS: Final[int] = safe_int(
     _get_env("REFRESH_RETROACHIEVEMENTS_CACHE_DAYS"), 30
 )
 
+# TRANSLATION
+# Ordered, comma-separated providers for name and summary translation.
+TRANSLATION_PROVIDERS: Final[tuple[str, ...]] = tuple(
+    name.strip().lower()
+    for name in _get_env("TRANSLATION_PROVIDERS", "microsoft,google").split(",")
+    if name.strip()
+)
+MICROSOFT_TRANSLATOR_KEY: Final[str | None] = _get_env("MICROSOFT_TRANSLATOR_KEY")
+MICROSOFT_TRANSLATOR_REGION: Final[str | None] = _get_env("MICROSOFT_TRANSLATOR_REGION")
+# Set to https://api.translator.azure.cn for Azure China.
+MICROSOFT_TRANSLATOR_ENDPOINT: Final[str] = _get_env(
+    "MICROSOFT_TRANSLATOR_ENDPOINT", "https://api.cognitive.microsofttranslator.com"
+).rstrip("/")
+
 # LAUNCHBOX
 LAUNCHBOX_BASE_PATH: Final[str] = f"{ROMM_BASE_PATH}/launchbox"
 LAUNCHBOX_API_ENABLED: Final[bool] = safe_str_to_bool(_get_env("LAUNCHBOX_API_ENABLED"))

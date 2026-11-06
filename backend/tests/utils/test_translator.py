@@ -7,6 +7,7 @@ import pytest
 
 from utils.translator import (
     _BANGUMI_CACHE,
+    _PROVIDER_PAUSED_UNTIL,
     _TRANSLATION_CACHE,
     _WIKIDATA_CACHE,
     TITLE_PLACEHOLDER,
@@ -27,10 +28,12 @@ from utils.translator import (
 @pytest.fixture(autouse=True)
 def clear_cache():
     _TRANSLATION_CACHE.clear()
+    _PROVIDER_PAUSED_UNTIL.clear()
     _WIKIDATA_CACHE.clear()
     _BANGUMI_CACHE.clear()
     yield
     _TRANSLATION_CACHE.clear()
+    _PROVIDER_PAUSED_UNTIL.clear()
     _WIKIDATA_CACHE.clear()
     _BANGUMI_CACHE.clear()
 
@@ -536,3 +539,155 @@ async def test_listed_official_name_wins_over_wikidata():
     assert name == "光明之魂"
     wikidata.assert_not_awaited()
     bangumi.assert_not_awaited()
+
+
+def _microsoft_response(text: str) -> MagicMock:
+    response = MagicMock()
+    response.json = lambda: [{"translations": [{"text": text, "to": "zh-Hans"}]}]
+    return response
+
+
+def _patch_client(*, get=None, post=None):
+    client = AsyncMock()
+    if get is not None:
+        client.get = get
+    if post is not None:
+        client.post = post
+    patcher = patch("httpx.AsyncClient")
+    patcher.start().return_value.__aenter__.return_value = client
+    return patcher, client
+
+
+@pytest.fixture
+def microsoft_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("utils.translator.TRANSLATION_PROVIDERS", ("microsoft",))
+    monkeypatch.setattr("utils.translator.MICROSOFT_TRANSLATOR_KEY", "secret")
+    monkeypatch.setattr("utils.translator.MICROSOFT_TRANSLATOR_REGION", None)
+    monkeypatch.setattr(
+        "utils.translator.MICROSOFT_TRANSLATOR_ENDPOINT",
+        "https://api.cognitive.microsofttranslator.com",
+    )
+
+
+@pytest.mark.asyncio
+async def test_microsoft_provider_sends_the_documented_request(
+    microsoft_key, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("utils.translator.MICROSOFT_TRANSLATOR_REGION", "eastasia")
+    post = AsyncMock(return_value=_microsoft_response("你好"))
+    patcher, _client = _patch_client(post=post)
+    try:
+        assert await translate_text("Hello", target_lang="zh-CN") == "你好"
+    finally:
+        patcher.stop()
+
+    post.assert_awaited_once()
+    assert post.await_args.args == (
+        "https://api.cognitive.microsofttranslator.com/translate",
+    )
+    assert post.await_args.kwargs["params"] == {"api-version": "3.0", "to": "zh-Hans"}
+    assert post.await_args.kwargs["headers"] == {
+        "Ocp-Apim-Subscription-Key": "secret",
+        "Ocp-Apim-Subscription-Region": "eastasia",
+    }
+    assert post.await_args.kwargs["json"] == [{"Text": "Hello"}]
+
+
+@pytest.mark.asyncio
+async def test_microsoft_provider_maps_chinese_source_and_leaves_other_codes(
+    microsoft_key,
+):
+    post = AsyncMock(return_value=_microsoft_response("Hello"))
+    patcher, _client = _patch_client(post=post)
+    try:
+        await translate_text("你好", target_lang="en", source_lang="zh-CN")
+    finally:
+        patcher.stop()
+
+    assert post.await_args.kwargs["params"] == {
+        "api-version": "3.0",
+        "to": "en",
+        "from": "zh-Hans",
+    }
+
+
+@pytest.mark.asyncio
+async def test_microsoft_provider_without_a_key_is_skipped_without_a_request(
+    microsoft_key, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("utils.translator.MICROSOFT_TRANSLATOR_KEY", None)
+    with patch("httpx.AsyncClient") as mock_cls:
+        assert await translate_text("Hello") == "Hello"
+
+    mock_cls.assert_not_called()
+    assert "microsoft" not in _PROVIDER_PAUSED_UNTIL
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_microsoft_body_falls_through_without_a_pause(
+    microsoft_key,
+):
+    response = MagicMock()
+    response.json = lambda: {"error": "nope"}
+    patcher, _client = _patch_client(post=AsyncMock(return_value=response))
+    try:
+        assert await translate_text("Hello") == "Hello"
+    finally:
+        patcher.stop()
+
+    assert "microsoft" not in _PROVIDER_PAUSED_UNTIL
+
+
+@pytest.mark.asyncio
+async def test_the_chain_falls_back_to_the_next_provider_and_pauses_the_failed_one(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        "utils.translator.TRANSLATION_PROVIDERS", ("microsoft", "google")
+    )
+    monkeypatch.setattr("utils.translator.MICROSOFT_TRANSLATOR_KEY", "secret")
+    google_response = MagicMock()
+    google_response.json = lambda: [[["谷歌", "Google", None, None]]]
+    post = AsyncMock(side_effect=Exception("unreachable"))
+    get = AsyncMock(return_value=google_response)
+    patcher, _client = _patch_client(get=get, post=post)
+    try:
+        assert await translate_text("Google") == "谷歌"
+        assert "microsoft" in _PROVIDER_PAUSED_UNTIL
+        assert await translate_text("Other text") == "谷歌"
+    finally:
+        patcher.stop()
+
+    assert post.await_count == 1
+    assert get.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_paused_provider_is_tried_again_after_the_pause(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("utils.translator.TRANSLATION_PROVIDERS", ("microsoft",))
+    monkeypatch.setattr("utils.translator.MICROSOFT_TRANSLATOR_KEY", "secret")
+    clock = {"now": 1000.0}
+    monkeypatch.setattr("utils.translator.time.monotonic", lambda: clock["now"])
+    post = AsyncMock(side_effect=[Exception("down"), _microsoft_response("好")])
+    patcher, _client = _patch_client(post=post)
+    try:
+        assert await translate_text("Fine") == "Fine"
+        assert await translate_text("Fine") == "Fine"
+        assert post.await_count == 1
+        clock["now"] += 301.0
+        assert await translate_text("Fine") == "好"
+    finally:
+        patcher.stop()
+
+    assert post.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_provider_name_is_ignored(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("utils.translator.TRANSLATION_PROVIDERS", ("nonsense",))
+    with patch("httpx.AsyncClient") as mock_cls:
+        assert await translate_text("Hello") == "Hello"
+
+    mock_cls.assert_not_called()

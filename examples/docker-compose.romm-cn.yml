@@ -42,9 +42,15 @@ services:
       - HASHEOUS_API_ENABLED=true # https://docs.romm.app/latest/Getting-Started/Metadata-Providers/#hasheous
       - SCAN_WORKERS=4 # How many ROMs to scan at once
       - WEB_SERVER_CONCURRENCY=4 # Workers for API calls, raise for several concurrent users
-      # Name and summary translation calls translate.googleapis.com. If the
-      # server can't reach it, each scanned ROM waits for the timeout and keeps
-      # its original text; a proxy here applies to every outbound request.
+      # Name and summary translation tries the providers in order. Google is
+      # blocked in mainland China, so set a Microsoft Azure Translator key (free
+      # F0 tier) and, for Azure China, the endpoint. A provider that fails is
+      # skipped for five minutes, and a game keeps its original text when none
+      # answers. A proxy here applies to every outbound request.
+      - TRANSLATION_PROVIDERS=microsoft,google
+      - MICROSOFT_TRANSLATOR_KEY=
+      - MICROSOFT_TRANSLATOR_REGION=
+      # - MICROSOFT_TRANSLATOR_ENDPOINT=https://api.translator.azure.cn
       # - HTTPS_PROXY=http://proxy.example:7890
     volumes:
       - romm_resources:/romm/resources # Resources fetched from metadata providers (covers, screenshots, etc.)

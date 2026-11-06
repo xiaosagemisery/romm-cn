@@ -1,5 +1,7 @@
 # Translation provider plan
 
+Status: the provider chain, the failure pause, the `microsoft` provider and the `google` provider are implemented in `backend/utils/translator.py`. The `microsoft` provider has only been tested against a mocked HTTP client, because no key was available. The keyless Edge route and any keyed Tencent, Baidu or Alibaba provider are not built.
+
 Replace the Google Translate step with a free provider that works from mainland China, without making every user create an account first.
 
 ## Problem

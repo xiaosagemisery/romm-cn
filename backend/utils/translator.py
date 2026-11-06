@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 import unicodedata
 from collections.abc import Sequence
 from difflib import SequenceMatcher
@@ -13,10 +14,21 @@ from typing import Any
 import httpx
 from opencc import OpenCC
 
+from config import (
+    MICROSOFT_TRANSLATOR_ENDPOINT,
+    MICROSOFT_TRANSLATOR_KEY,
+    MICROSOFT_TRANSLATOR_REGION,
+    TRANSLATION_PROVIDERS,
+)
 from logger.logger import log
 
 _TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
 GOOGLE_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+# Microsoft names Chinese by script.
+MICROSOFT_LANGS = {"zh-cn": "zh-Hans", "zh-tw": "zh-Hant"}
+# A failing provider is skipped this long so a scan doesn't wait on its timeout.
+PROVIDER_PAUSE_SECONDS = 300.0
+_PROVIDER_PAUSED_UNTIL: dict[str, float] = {}
 OFFICIAL_NAMES_PATH = Path(__file__).with_name("official_names_zh.json")
 SEARCH_TITLES_PATH = Path(__file__).with_name("search_titles_en.json")
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
@@ -113,20 +125,13 @@ def official_name(name: str, target_lang: str = "zh-CN") -> str | None:
     return _official_names().get(normalize_title(name))
 
 
-async def translate_text(
-    text: str | None,
-    target_lang: str = "zh-CN",
-    source_lang: str = "auto",
-    timeout: float = 10.0,
+class ProviderUnavailable(Exception):
+    """The provider isn't configured, so it is skipped without a pause."""
+
+
+async def _translate_google(
+    text: str, target_lang: str, source_lang: str, timeout: float
 ) -> str | None:
-    """Translate text to target language using public Google Translate API with fallback."""
-    if not text or not text.strip():
-        return text
-
-    cache_key = (text.strip(), target_lang)
-    if cache_key in _TRANSLATION_CACHE:
-        return _TRANSLATION_CACHE[cache_key]
-
     params = {
         "client": "dict-chrome-ex",
         "sl": source_lang,
@@ -141,31 +146,94 @@ async def translate_text(
             "Chrome/120.0.0.0 Safari/537.36"
         )
     }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.get(
+            GOOGLE_TRANSLATE_URL, params=params, headers=headers
+        )
+        response.raise_for_status()
+        data = response.json()
+
+    if not (data and isinstance(data, list) and isinstance(data[0], list)):
+        return None
+    segments = [
+        seg[0] for seg in data[0] if isinstance(seg, list) and len(seg) > 0 and seg[0]
+    ]
+    return "".join(segments) or None
+
+
+async def _translate_microsoft(
+    text: str, target_lang: str, source_lang: str, timeout: float
+) -> str | None:
+    if not MICROSOFT_TRANSLATOR_KEY:
+        raise ProviderUnavailable("MICROSOFT_TRANSLATOR_KEY is not set")
+
+    params = {
+        "api-version": "3.0",
+        "to": MICROSOFT_LANGS.get(target_lang.lower(), target_lang),
+    }
+    if source_lang != "auto":
+        params["from"] = MICROSOFT_LANGS.get(source_lang.lower(), source_lang)
+    headers = {"Ocp-Apim-Subscription-Key": MICROSOFT_TRANSLATOR_KEY}
+    if MICROSOFT_TRANSLATOR_REGION:
+        headers["Ocp-Apim-Subscription-Region"] = MICROSOFT_TRANSLATOR_REGION
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
+            f"{MICROSOFT_TRANSLATOR_ENDPOINT}/translate",
+            params=params,
+            headers=headers,
+            json=[{"Text": text}],
+        )
+        response.raise_for_status()
+        data = response.json()
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(
-                GOOGLE_TRANSLATE_URL, params=params, headers=headers
-            )
-            response.raise_for_status()
-            data = response.json()
-            if (
-                data
-                and isinstance(data, list)
-                and len(data) > 0
-                and isinstance(data[0], list)
-            ):
-                translated_segments = [
-                    seg[0]
-                    for seg in data[0]
-                    if isinstance(seg, list) and len(seg) > 0 and seg[0]
-                ]
-                translated = "".join(translated_segments)
-                if translated:
-                    _TRANSLATION_CACHE[cache_key] = translated
-                    return translated
-    except Exception as exc:
-        log.warning(f"Translation failed for {text[:30]!r}: {exc}")
+        return data[0]["translations"][0]["text"] or None
+    except (IndexError, KeyError, TypeError):
+        return None
+
+
+_PROVIDERS = {"microsoft": _translate_microsoft, "google": _translate_google}
+
+
+async def translate_text(
+    text: str | None,
+    target_lang: str = "zh-CN",
+    source_lang: str = "auto",
+    timeout: float = 10.0,
+) -> str | None:
+    """Translate text with the first configured provider that answers.
+
+    Returns the original text when no provider does.
+    """
+    if not text or not text.strip():
+        return text
+
+    cache_key = (text.strip(), target_lang)
+    if cache_key in _TRANSLATION_CACHE:
+        return _TRANSLATION_CACHE[cache_key]
+
+    for name in TRANSLATION_PROVIDERS:
+        provider = _PROVIDERS.get(name)
+        if provider is None:
+            log.warning(f"Unknown translation provider {name!r}, skipping it")
+            continue
+        if _PROVIDER_PAUSED_UNTIL.get(name, 0.0) > time.monotonic():
+            continue
+
+        try:
+            translated = await provider(text, target_lang, source_lang, timeout)
+        except ProviderUnavailable as exc:
+            log.debug(f"Translation provider {name} skipped: {exc}")
+            continue
+        except Exception as exc:
+            log.warning(f"Translation by {name} failed for {text[:30]!r}: {exc}")
+            _PROVIDER_PAUSED_UNTIL[name] = time.monotonic() + PROVIDER_PAUSE_SECONDS
+            continue
+
+        if translated:
+            _TRANSLATION_CACHE[cache_key] = translated
+            return translated
 
     return text
 
