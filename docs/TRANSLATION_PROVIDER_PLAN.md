@@ -17,7 +17,7 @@ Replace the Google Translate step with a free provider that works from mainland 
 
 | Provider | Key needed | Free allowance | Mainland access | Notes |
 | --- | --- | --- | --- | --- |
-| Microsoft Edge translate endpoint (`edge.microsoft.com/translate/auth` for a token, `api-edge.cognitive.microsofttranslator.com/translate`) | No | No published limit | Normally reachable | Not documented or supported by Microsoft. It is the service the Edge browser's built-in translator uses, and many open-source clients call it. It can change or be throttled without notice. |
+| Microsoft Edge translate endpoint (`edge.microsoft.com/translate/auth` for a token, `api-edge.cognitive.microsofttranslator.com/translate`) | No | No published limit | Normally reachable | Not documented or supported by Microsoft. The token endpoint answers 404 now (see the live check), so it is not usable. |
 | Azure Translator, official (F0 tier) | Yes (Azure account, key and region) | About 2 million characters per month | Global endpoint unverified; Azure China has its own endpoint (`api.translator.azure.cn`) | Same wire format as the Edge endpoint, so supporting it costs little. Sign-up reportedly needs an international card. |
 | Tencent Cloud TMT | Yes (real-name account) | Reported 5 million characters per month | Yes | Official, but every user needs their own keys. |
 | Baidu Fanyi | Yes (real-name account) | Reports disagree (50 thousand to 1 million per month) | Yes | Official, quota unclear. |
@@ -27,41 +27,48 @@ Replace the Google Translate step with a free provider that works from mainland 
 
 Quotas above come from secondary sources and must be checked on each vendor's pricing page before anyone depends on them. None of these hosts could be reached from the development sandbox, so reachability from China is based on how the services are generally used, not on a test run.
 
+## Findings from the live check
+
+Run on 2026-11-06 after the hosts were allowed in the development sandbox:
+
+- `api-edge.cognitive.microsofttranslator.com/translate` is reachable and answers 401 without a token, as expected.
+- `edge.microsoft.com/translate/auth`, the token endpoint the keyless route depends on, answers 404 with an empty body, with a plain client identifier and with a browser-style one. The keyless Edge route therefore cannot be used as planned, and no working keyless token source was found.
+- Faking an Edge browser identity to get past this was not pursued: the endpoint is internal to Edge and undocumented.
+
 ## Decision
 
-1. **Default: the Edge translate endpoint.** It is the only candidate that is free, keyless and normally reachable from mainland China, which is what the Google endpoint offered.
-2. **Official Azure Translator as the supported option.** Users who want a stable, documented service set a key. It reuses the same request code with a different endpoint and header, including the Azure China endpoint.
-3. **Google stays, off by default.** Users outside China can add it to the provider list.
-4. Keyed Tencent, Baidu and Alibaba providers are not built now. The provider interface leaves room for them if the Edge endpoint proves unreliable.
+1. **Provider chain with a failure pause.** Whatever provider is chosen, a failing one must not slow a scan down, and users must be able to swap providers by configuration.
+2. **Official Azure Translator (`microsoft`) is the first provider.** It is documented, free up to the F0 allowance, and has an Azure China endpoint (`api.translator.azure.cn`). It needs a key, so it is skipped when none is set.
+3. **Google stays as the next provider in the default chain,** so installs without a key behave as before. Users in mainland China set a key, or list only the providers they can reach.
+4. **The keyless Edge route is not built** because its token endpoint is gone (see the findings). A keyless, stable and mainland-reachable provider does not currently exist among the candidates, so the remaining choice is which keyed provider to support next. That is an open question for the project owner.
 
 ## Design
 
 ### Provider chain
 
-`TRANSLATION_PROVIDERS` is an ordered, comma-separated list. The default is `edge`. Valid names are `edge`, `microsoft` and `google`. `translate_text` tries them in order and returns the first successful result; if all fail it returns the original text, as today.
+`TRANSLATION_PROVIDERS` is an ordered, comma-separated list. The default is `microsoft,google`. Valid names are `microsoft` and `google`. `translate_text` tries them in order and returns the first successful result; if all fail it returns the original text, as today.
 
 ### Failure handling
 
 A provider that fails (timeout, HTTP error, malformed response) is skipped for five minutes. Without this, an unreachable provider would add its timeout to every game in a scan. After the pause it is tried again. If no provider is available the original text is returned immediately.
 
-### Microsoft wire format (edge and microsoft)
+### Microsoft wire format
 
-- Request: `POST {endpoint}/translate?api-version=3.0&to=<code>` with a JSON body `[{"Text": "..."}]`. `from` is omitted so the service detects the language.
+- Request: `POST {endpoint}/translate?api-version=3.0&to=<code>` with a JSON body `[{"Text": "..."}]`. `from` is omitted when the source is detected automatically.
 - Response: `[{"translations": [{"text": "...", "to": "zh-Hans"}]}]`.
 - Language codes map from the app's codes: `zh-CN` to `zh-Hans`, `zh-TW` to `zh-Hant`, `en` stays `en`.
-- `edge`: the bearer token comes from `GET https://edge.microsoft.com/translate/auth`, is cached in memory until shortly before it expires, and is fetched again after a 401.
-- `microsoft`: the `Ocp-Apim-Subscription-Key` and `Ocp-Apim-Subscription-Region` headers carry the user's key and region.
+- Headers: `Ocp-Apim-Subscription-Key` carries the key and `Ocp-Apim-Subscription-Region` the region when one is set.
 
 ### Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TRANSLATION_PROVIDERS` | `edge` | Ordered provider list. |
+| `TRANSLATION_PROVIDERS` | `microsoft,google` | Ordered provider list. |
 | `MICROSOFT_TRANSLATOR_KEY` | empty | Key for the official Azure Translator. Required when `microsoft` is listed. |
 | `MICROSOFT_TRANSLATOR_REGION` | empty | Azure resource region. Required for multi-service and regional resources. |
 | `MICROSOFT_TRANSLATOR_ENDPOINT` | `https://api.cognitive.microsofttranslator.com` | Set to `https://api.translator.azure.cn` for Azure China. |
 
-`microsoft` without a key is skipped with a warning.
+`microsoft` without a key is skipped with a warning and does not start the failure pause.
 
 ### Unchanged
 
@@ -72,19 +79,19 @@ The title placeholder (`ZQX0ZQX`), the in-memory cache, the Wikidata title looku
 - Unit tests per provider with a mocked HTTP client: success, HTTP error, malformed body, token reuse and refresh, language code mapping.
 - Chain tests: first provider fails and the second answers, all fail and the original text comes back, a failed provider is skipped for five minutes and retried after.
 - The autouse test fixture keeps patching `translate_text`, so no test reaches the network.
-- A live check against the real endpoints, once the hosts are reachable from the sandbox: translate a sentence containing the placeholder and confirm the placeholder survives.
+- A live check of the official endpoint needs a key and has not been run; the placeholder check stays open until one is available.
 
 ## Risks
 
-- The Edge endpoint is undocumented. It may change, require different headers or be throttled. Mitigation: the five-minute pause keeps scans fast, the `microsoft` provider is the supported path, and the chain can fall back to another provider.
-- Reachability from mainland China is not tested here. Mitigation: the chain and pause behavior, plus the `microsoft` option with the Azure China endpoint.
+- Without a key, users in mainland China still hit Google, which is blocked or slow there. Mitigation: the failure pause limits the cost to one timeout every five minutes, and the README says to set a key.
+- Azure sign-up may need an international card, and the quota figures come from secondary sources. Mitigation: they are listed as unverified, and the provider interface leaves room for Tencent, Baidu or Alibaba.
 - The placeholder may not survive on a new provider. Mitigation: the existing fallback translates the summary without it.
 
 ## Documentation and rollout
 
-Update `README.md`, `ChangeFromUpstream.md`, `project.md`, `env.template` and `examples/docker-compose.romm-cn.yml` in the same change, replacing the "needs Google" notes. Existing deployments get Edge by default with no action. Anyone who wants Google back sets `TRANSLATION_PROVIDERS=google`.
+Update `README.md`, `ChangeFromUpstream.md`, `project.md`, `env.template` and `examples/docker-compose.romm-cn.yml` in the same change, replacing the "needs Google" notes. Existing deployments keep working with no action, because the default chain ends in Google. Anyone in mainland China sets `MICROSOFT_TRANSLATOR_KEY` (and the Azure China endpoint if needed), or sets `TRANSLATION_PROVIDERS` to the providers they can reach.
 
 ## Open questions
 
-- Whether the Edge endpoint works from the user's mainland network (needs a check there).
-- Whether to add a keyed Tencent or Baidu provider if the Edge endpoint turns out to be unreliable.
+- Which keyed provider to add next for mainland users who have no Azure account (Tencent Cloud TMT, Baidu Fanyi or Alibaba Cloud), since no keyless route works.
+- Whether to run a keyless route that depends on a Bing web page token. It is fragile and not allowed to be tested from the sandbox, so it is not planned.
